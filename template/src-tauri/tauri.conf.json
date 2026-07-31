@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
+  "productName": "AppKit 模板",
+  "version": "0.1.0",
+  "identifier": "com.appkit.template",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5170",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AppKit 模板",
+        "width": 1100,
+        "height": 720,
+        "center": true,
+        "minWidth": 800,
+        "minHeight": 500,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "../../shared/ui/public/fonts/MapleMono-VF.ttf": "fonts/MapleMono-VF.ttf",
+      "../../shared/ui/public/fonts/MapleMono-Italic-VF.ttf": "fonts/MapleMono-Italic-VF.ttf"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "../../shared/nsis/install-fonts.nsh"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {}
+}

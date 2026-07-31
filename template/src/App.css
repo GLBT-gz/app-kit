@@ -1,0 +1,5 @@
+/* 顶栏左侧区域不阻挡滚轮事件，且撑满剩余空间使滚轮覆盖整个顶栏 */
+.topbar-left {
+  flex: 1;
+  -webkit-app-region: no-drag;
+}

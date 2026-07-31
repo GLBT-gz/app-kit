@@ -1,0 +1,211 @@
+/* ========================================
+   Shortcuts Panel
+   ======================================== */
+.settings-section {
+  padding: 28px 32px;
+}
+
+.settings-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.settings-section-header .settings-section-title,
+.settings-section-header .settings-section-desc {
+  margin: 0;
+}
+
+.settings-section-header .btn-sm {
+  font-size: 12px;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+
+.settings-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--text-primary);
+}
+
+.settings-section-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+}
+
+.shortcuts-panel {
+  max-width: 500px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.shortcut-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shortcut-input {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.shortcut-input kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  min-width: 48px;
+  justify-content: center;
+  transition: border-color 0.15s;
+}
+
+.shortcut-input:hover kbd {
+  border-color: var(--accent);
+}
+
+.shortcut-input.recording {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px dashed var(--accent);
+  border-radius: 4px;
+  animation: shortcuts-blink 1s step-end infinite;
+  width: auto;
+}
+
+@keyframes shortcuts-blink {
+  50% { opacity: 0.4; }
+}
+
+.shortcut-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.shortcut-reset:hover {
+  color: var(--accent);
+}
+
+/* 操作按钮（✕ / ↺） */
+.shortcut-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.shortcut-action-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 禁用的快捷键（空值） */
+.shortcut-disabled {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  min-width: 48px;
+  justify-content: center;
+}
+
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shortcuts-builtin {
+  margin-top: 24px;
+}
+
+.shortcuts-builtin > h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.shortcuts-builtin-inner {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shortcuts-builtin .shortcut-row {
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcuts-builtin .shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcuts-builtin .shortcut-row kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  opacity: 0.7;
+}

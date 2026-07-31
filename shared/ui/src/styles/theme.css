@@ -1,0 +1,118 @@
+/* ========================================
+   Theme Variables
+   ======================================== */
+:root,
+[data-theme="dark"] {
+  --bg-app: #0b0b0e;
+  --bg-topbar: #0b0b0e;
+  --bg-nav: #111115;
+  --bg-content: #0b0b0e;
+  --bg-card: #15161c;
+  --bg-card-hover: #1c1d26;
+  --bg-surface: #1c1d26;
+  --bg-input: #1c1d26;
+  --bg-modal: #15161c;
+  --bg-badge: #252736;
+  --bg-avatar-placeholder: #252736;
+
+  --border: #252736;
+  --border-input: #2e3044;
+  --border-input-focus: var(--accent);
+
+  --text-primary: #e6e6ee;
+  --text-secondary: #9496a8;
+  --text-muted: #5d5f74;
+  --text-badge: #b8b9cc;
+  --text-label: #9496a8;
+
+  --accent: hsl(210, 95%, 53%);
+  --accent-hover: hsl(210, 80%, 45%);
+  --accent-light: hsla(210, 95%, 53%, 0.15);
+
+  --success: #4caf88;
+  --error: #e05555;
+
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  --font-mono: "Maple Mono", Consolas, "Cascadia Code", "Fira Code", monospace;
+
+  --btn-text: #ffffff;
+
+  /* ── HSL 组件变量（支持动态主题） ── */
+  --bg-app-h:       240; --bg-app-s: 3%;  --bg-app-l: 5%;
+  --bg-nav-h:       240; --bg-nav-s: 5%;  --bg-nav-l: 7%;
+  --bg-card-h:      231; --bg-card-s: 14%; --bg-card-l: 10%;
+  --bg-card-hover-h: 234; --bg-card-hover-s: 16%; --bg-card-hover-l: 13%;
+  --bg-badge-h:     233; --bg-badge-s: 19%; --bg-badge-l: 18%;
+  --border-h:       233; --border-s: 19%; --border-l: 18%;
+  --border-input-h: 235; --border-input-s: 19%; --border-input-l: 22%;
+  --text-primary-h: 240; --text-primary-s: 19%; --text-primary-l: 92%;
+  --text-secondary-h: 234; --text-secondary-s: 11%; --text-secondary-l: 62%;
+  --text-muted-h:   234; --text-muted-s: 11%; --text-muted-l: 41%;
+  --success-h:      158; --success-s: 39%; --success-l: 49%;
+  --error-h:        0;   --error-s: 69%;  --error-l: 61%;
+
+  /* ── CebianDesktop 兼容别名 ── */
+  --background: var(--bg-app-h) var(--bg-app-s) var(--bg-app-l);
+  --foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
+  --muted-foreground: var(--text-secondary-h) var(--text-secondary-s) var(--text-secondary-l);
+  --card: var(--bg-card-h) var(--bg-card-s) var(--bg-card-l);
+  --border-clr: var(--border-h) var(--border-s) var(--border-l);
+  --input: var(--border-input-h) var(--border-input-s) var(--border-input-l);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-app: #f5f5fa;
+  --bg-topbar: #ffffff;
+  --bg-nav: #eeeeee;
+  --bg-content: #f5f5fa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f0f8;
+  --bg-surface: #f0f0f8;
+  --bg-input: #ffffff;
+  --bg-modal: #ffffff;
+  --bg-badge: #e8e8f0;
+  --bg-avatar-placeholder: #e0e0e8;
+
+  --border: #d0d0de;
+  --border-input: #c0c0d0;
+  --border-input-focus: var(--accent);
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #6a6a88;
+  --text-muted: #9a9ab8;
+  --text-badge: #6a6a88;
+  --text-label: #8a8aa8;
+
+  --accent: hsl(210, 95%, 53%);
+  --accent-hover: hsl(210, 80%, 45%);
+  --accent-light: hsla(210, 95%, 53%, 0.1);
+
+  --success: #4caf88;
+  --error: #e05555;
+
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  --btn-text: #ffffff;
+
+  /* ── HSL 组件变量（支持动态主题） ── */
+  --bg-app-h:       240; --bg-app-s: 33%; --bg-app-l: 97%;
+  --bg-nav-h:       0;   --bg-nav-s: 0%;  --bg-nav-l: 93%;
+  --bg-card-h:      0;   --bg-card-s: 0%;  --bg-card-l: 100%;
+  --bg-card-hover-h: 240; --bg-card-hover-s: 36%; --bg-card-hover-l: 96%;
+  --bg-badge-h:     240; --bg-badge-s: 26%; --bg-badge-l: 93%;
+  --border-h:       240; --border-s: 18%; --border-l: 84%;
+  --border-input-h: 240; --border-input-s: 18%; --border-input-l: 78%;
+  --text-primary-h: 240; --text-primary-s: 27%; --text-primary-l: 14%;
+  --text-secondary-h: 240; --text-secondary-s: 12%; --text-secondary-l: 47%;
+  --text-muted-h:   240; --text-muted-s: 15%; --text-muted-l: 66%;
+  --success-h:      158; --success-s: 39%; --success-l: 49%;
+  --error-h:        0;   --error-s: 69%;  --error-l: 61%;
+
+  /* ── CebianDesktop 兼容别名 ── */
+  --background: var(--bg-app-h) var(--bg-app-s) var(--bg-app-l);
+  --foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
+  --muted-foreground: var(--text-secondary-h) var(--text-secondary-s) var(--text-secondary-l);
+  --card: var(--bg-card-h) var(--bg-card-s) var(--bg-card-l);
+  --border-clr: var(--border-h) var(--border-s) var(--border-l);
+  --input: var(--border-input-h) var(--border-input-s) var(--border-input-l);
+}

@@ -1,0 +1,223 @@
+/* ========================================
+   Top Bar
+   ======================================== */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 0;
+  height: 40px;
+  min-height: 40px;
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  align-self: stretch;
+}
+
+/* 顶栏内的 TabBar 不需要底部边框（topbar 自带），滑块对齐顶栏底部 */
+.topbar .tb-bar {
+  border-bottom: none;
+  align-self: stretch;
+}
+
+.topbar .tb-btn {
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+}
+
+.topbar .tb-indicator {
+  bottom: 0;
+}
+
+.topbar-center {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.theme-toggle,
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theme-toggle:hover,
+.settings-btn:hover,
+.settings-btn.active {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+}
+
+/* 置顶按钮 */
+.pin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pin-btn:hover {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+}
+
+.pin-btn.active {
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+/* ========================================
+   Skin Popover
+   ======================================== */
+.skin-popover-wrapper {
+  position: relative;
+}
+
+.skin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.skin-btn:hover,
+.skin-btn.active {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+}
+
+.skin-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 100;
+  width: 280px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skin-popover-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.skin-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.skin-preset-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.skin-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.skin-swatch.active {
+  border-color: var(--text-primary) !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--accent);
+}
+
+.skin-preset-item:hover .skin-swatch {
+  border-color: var(--text-muted);
+}
+
+.skin-swatch-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.skin-hue-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skin-hue-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.skin-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--text-primary);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.skin-hue-value {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-secondary);
+  width: 32px;
+  text-align: right;
+}

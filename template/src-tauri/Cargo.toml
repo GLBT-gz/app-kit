@@ -1,0 +1,27 @@
+[package]
+name = "appkit-template"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "appkit_template_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-log = "2"
+tokio = { version = "1", features = ["fs", "io-util"] }
+futures-util = "0.3"
+# 运行时解码 PNG 图标
+reqwest = { version = "0.12", features = ["stream"] }
+serde.workspace = true
+serde_json.workspace = true
+appkit-core = { path = "../../shared/core", features = ["bridge"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+opener = "0.7"
+log = "0.4"
