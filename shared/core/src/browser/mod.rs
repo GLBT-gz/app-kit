@@ -12,6 +12,8 @@ use std::path::PathBuf;
 pub enum BrowserType {
     Edge,
     Chrome,
+    /// 易得客（Chromium 内核商业浏览器，公司专用）
+    EDecker,
 }
 
 impl BrowserType {
@@ -19,6 +21,7 @@ impl BrowserType {
         match self {
             BrowserType::Edge => "edge",
             BrowserType::Chrome => "chrome",
+            BrowserType::EDecker => "edecker",
         }
     }
 
@@ -26,6 +29,7 @@ impl BrowserType {
         match self {
             BrowserType::Edge => "msedge.exe",
             BrowserType::Chrome => "chrome.exe",
+            BrowserType::EDecker => "edecker.exe",
         }
     }
 
@@ -34,6 +38,7 @@ impl BrowserType {
         match self {
             BrowserType::Edge => local.join("Microsoft").join("Edge").join("User Data"),
             BrowserType::Chrome => local.join("Google").join("Chrome").join("User Data"),
+            BrowserType::EDecker => local.join("eDecker6").join("User Data"),
         }
     }
 }
