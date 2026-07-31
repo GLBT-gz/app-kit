@@ -1,3 +1,4 @@
+pub mod icons;
 pub mod launch;
 pub mod management;
 pub mod profile;
@@ -40,9 +41,50 @@ impl BrowserType {
 /// 浏览器检测结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserInfo {
-    pub browser_type: BrowserType,
-    pub exe_path: PathBuf,
-    pub version: Option<String>,
+    pub browser_type: String,
+    pub browser_name: String,
+    pub browser_icon_base64: String,
+    pub installed: bool,
+    pub exe_paths: Vec<String>,
+    pub user_data_dirs: Vec<String>,
+    pub default_user_data_dir: String,
+    pub default_debug_port: u16,
+    pub browser_version: String,
+    pub suggested_user_data_dirs: Vec<String>,
+    pub profiles: Vec<ProfileInfo>,
+    pub children: Vec<ChildBrowserConfig>,
+}
+
+/// 用户配置信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileInfo {
+    pub id: String,
+    pub name: String,
+    pub user_name: String,
+    pub email: String,
+    pub path: String,
+    pub user_data_dir: String,
+    pub download_dir: String,
+    pub avatar_base64: String,
+    pub avatar_has_icon: bool,
+}
+
+/// 子浏览器配置（店铺窗口等特殊浏览器使用）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChildBrowserConfig {
+    pub user_data_dir: PathBuf,
+    pub name: String,
+    pub proxy_ip: Option<String>,
+    pub enabled: bool,
+}
+
+/// 启动命令
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaunchInfo {
+    pub exe_path: String,
+    pub args: Vec<String>,
+    pub command_line: String,
+    pub debug_port: u16,
 }
 
 /// 浏览器用户Profile

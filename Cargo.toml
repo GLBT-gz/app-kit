@@ -25,5 +25,6 @@ aes-gcm = "0.10"
 rand = "0.8"
 sha2 = "0.10"
 opener = "0.7"
+winreg = "0.52"
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 futures-util = "0.3"

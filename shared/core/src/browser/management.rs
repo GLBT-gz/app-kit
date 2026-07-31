@@ -6,10 +6,17 @@
 // 由公司层（glbt-apps）的平台库提供。
 // ============================================================
 
+use crate::browser::{BrowserInfo, LaunchInfo, ProfileInfo};
 use crate::config::PortEntry;
 use crate::encoding::decode_windows_stdout;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+use super::icons::{CHROME_ICO, EDGE_ICO};
+use winreg::enums::*;
+use winreg::RegKey;
 
 /// 扫描正在运行的浏览器实例（含调试端口）
 pub fn scan_running_browser_instances(exe_name: &str) -> HashMap<String, u16> {
@@ -561,4 +568,1105 @@ pub fn detect_and_assign_ports(profiles: &[(String, String)]) -> Vec<PortEntry> 
         });
     }
     entries
+}
+
+// ═══════════════════════════════════════════════════════
+// 浏览器配置管理（检测 / 配置 / 启动 / 快捷方式）
+// ═══════════════════════════════════════════════════════
+
+/// read_profiles 进程级缓存：避免同一 Local State 文件被重复读取/解析
+/// key = (user_data_dir, is_edge), value = read_profiles 返回值
+static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), Vec<ProfileInfo>>>> = OnceLock::new();
+
+fn profile_cache() -> &'static Mutex<HashMap<(String, bool), Vec<ProfileInfo>>> {
+    PROFILE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+// ============ 注册表检测 ============
+
+fn find_exe_in_registry(key_path: &str, value_name: &str) -> Option<String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    if let Ok(key) = hklm.open_subkey_with_flags(key_path, KEY_READ) {
+        if let Ok(val) = key.get_value::<String, _>(value_name) {
+            if Path::new(&val).exists() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+fn check_standard_paths(paths: &[&str]) -> Vec<String> {
+    paths
+        .iter()
+        .filter(|p| Path::new(p).exists())
+        .map(|p| p.to_string())
+        .collect()
+}
+
+fn get_system_download_dir() -> String {
+    dirs::download_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\")))
+        .to_string_lossy()
+        .to_string()
+}
+
+// ============ 头像读取 ============
+
+/// 在 JSON 中递归搜索 data:image/ 开头的字符串（头像 base64 数据）
+fn find_image_data_url(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) if s.starts_with("data:image/") && !s.is_empty() => {
+            Some(s.clone())
+        }
+        serde_json::Value::Object(obj) => {
+            for val in obj.values() {
+                if let Some(found) = find_image_data_url(val) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        serde_json::Value::Array(arr) => {
+            for val in arr {
+                if let Some(found) = find_image_data_url(val) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// 读取的图片数据
+#[derive(Debug)]
+pub struct ImageData {
+    pub base64: String,
+    pub is_icon: bool,
+}
+
+/// 读取头像图片为 base64
+fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageData {
+    // 1. 尝试读取 PNG 头像（从 screenshot 目录获取）
+    let screenshot_dir = profile_path.join("Screenshots");
+    if screenshot_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&screenshot_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "png" || ext == "jpg" || ext == "jpeg" {
+                        if let Ok(data) = fs::read(&path) {
+                            let mime = if ext == "png" { "image/png" } else { "image/jpeg" };
+                            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                            return ImageData {
+                                base64: format!("data:{};base64,{}", mime, b64),
+                                is_icon: false,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. 尝试读取 Google/Edge Profile Picture.png
+    for name in &["Google Profile Picture.png", "Edge Profile Picture.png", "Profile Picture.png", "avatar.jpg", "avatar.png"] {
+        let img_path = profile_path.join(name);
+        if img_path.exists() {
+            if let Ok(data) = fs::read(&img_path) {
+                let ext = img_path.extension().and_then(|e| e.to_str()).unwrap_or("png");
+                let mime = if ext == "jpg" || ext == "jpeg" { "image/jpeg" } else { "image/png" };
+                let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                return ImageData {
+                    base64: format!("data:{};base64,{}", mime, b64),
+                    is_icon: false,
+                };
+            }
+        }
+    }
+
+    // 3. 尝试读取 ico 图标
+    for name in &["Edge Profile.ico", "Google Profile.ico", "Profile.ico", "avatar.ico"] {
+        let ico_path = profile_path.join(name);
+        if ico_path.exists() {
+            if let Ok(data) = fs::read(&ico_path) {
+                let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                return ImageData {
+                    base64: format!("data:image/x-icon;base64,{}", b64),
+                    is_icon: true,
+                };
+            }
+        }
+    }
+
+    // 4. 尝试读取 Avatar 目录下的图片
+    let avatar_dir = profile_path.join("Avatar");
+    if avatar_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&avatar_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" {
+                        if let Ok(data) = fs::read(&path) {
+                            let mime = match ext.to_str().unwrap_or("png") {
+                                "jpg" | "jpeg" => "image/jpeg",
+                                "webp" => "image/webp",
+                                _ => "image/png",
+                            };
+                            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                            return ImageData {
+                                base64: format!("data:{};base64,{}", mime, b64),
+                                is_icon: false,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. 尝试从 Preferences 递归搜索头像数据
+    let prefs_path = profile_path.join("Preferences");
+    if let Ok(content) = fs::read_to_string(&prefs_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            // 搜索 data:image/ 开头的值
+            if let Some(pic_data) = find_image_data_url(&json) {
+                return ImageData {
+                    base64: pic_data,
+                    is_icon: false,
+                };
+            }
+            // 搜索 profile/gaia_info_picture_url
+            if let Some(url) = json.pointer("/profile/gaia_info_picture_url")
+                .and_then(|v| v.as_str())
+                .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
+            {
+                return ImageData {
+                    base64: url.to_string(),
+                    is_icon: false,
+                };
+            }
+        }
+    }
+
+    // 6. 检查用户数据目录根层的 Avatars 目录（Edge 可能缓存主题头像）
+    if is_edge {
+        for av_dir_name in &["Avatars", "Profile Avatars", "GAIAPicture"] {
+            let av_dir = profile_path.parent().map(|p| p.join(av_dir_name));
+            if let Some(av_dir) = av_dir {
+                if av_dir.exists() {
+                    if let Ok(entries) = fs::read_dir(&av_dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if let Some(ext) = path.extension() {
+                                if ext == "png" || ext == "jpg" || ext == "webp" || ext == "ico" {
+                                    if let Ok(data) = fs::read(&path) {
+                                        let mime = match ext.to_str().unwrap_or("png") {
+                                            "jpg" | "jpeg" => "image/jpeg",
+                                            "webp" => "image/webp",
+                                            "ico" => "image/x-icon",
+                                            _ => "image/png",
+                                        };
+                                        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                                        return ImageData {
+                                            base64: format!("data:{};base64,{}", mime, b64),
+                                            is_icon: ext == "ico",
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ImageData {
+        base64: String::new(),
+        is_icon: false,
+    }
+}
+
+// ============ 浏览器版本 ============
+
+/// 从注册表读取浏览器版本（支持多个备选路径）
+fn get_browser_version(browser_type: &str) -> String {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+    // 尝试从指定注册表路径读取版本
+    let try_read = |subkey: &str, value: &str| -> Option<String> {
+        if let Ok(key) = hklm.open_subkey_with_flags(subkey, KEY_READ | KEY_WOW64_64KEY) {
+            if let Ok(ver) = key.get_value::<String, _>(value) {
+                if !ver.is_empty() {
+                    return Some(ver);
+                }
+            }
+        }
+        // 尝试从 32 位注册表读取（WOW6432Node）
+        if let Ok(key) = hklm.open_subkey_with_flags(subkey, KEY_READ | KEY_WOW64_32KEY) {
+            if let Ok(ver) = key.get_value::<String, _>(value) {
+                if !ver.is_empty() {
+                    return Some(ver);
+                }
+            }
+        }
+        None
+    };
+
+    match browser_type {
+        "edge" => {
+            // 主路径：BLBeacon
+            if let Some(ver) = try_read(
+                r"SOFTWARE\Microsoft\Edge\BLBeacon",
+                "version",
+            ) {
+                return ver;
+            }
+            // 备选：Uninstall 注册表
+            if let Some(ver) = try_read(
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft Edge",
+                "DisplayVersion",
+            ) {
+                return ver;
+            }
+        }
+        "chrome" => {
+            // Chrome Stable
+            if let Some(ver) = try_read(
+                r"SOFTWARE\Google\Update\Clients\{8A69D345-D564-463c-AFF1-A69D9E530F96}",
+                "pv",
+            ) {
+                return ver;
+            }
+            // 备选：Uninstall 注册表
+            if let Some(ver) = try_read(
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome",
+                "DisplayVersion",
+            ) {
+                return ver;
+            }
+        }
+        _ => {}
+    }
+    String::new()
+}
+
+// ============ 读取用户配置 ============
+
+/// 读取浏览器用户配置（增强版）
+/// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合仅读取一次磁盘
+fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
+    // 进程级缓存：同一目录 + 同一 is_edge 参数仅读取一次
+    {
+        let cache = profile_cache().lock().unwrap();
+        if let Some(cached) = cache.get(&(user_data_dir.to_string(), is_edge)) {
+            return cached.clone();
+        }
+    }
+
+    let local_state_path = Path::new(user_data_dir).join("Local State");
+    if !local_state_path.exists() {
+        // 用户数据目录不存在 → 未安装该浏览器，无需报错
+        if !Path::new(user_data_dir).exists() {
+            return vec![];
+        }
+        eprintln!(
+            "[read_profiles] 失败: Local State 文件不存在: {}",
+            local_state_path.display()
+        );
+        return vec![];
+    }
+
+    let content = match fs::read_to_string(&local_state_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "[read_profiles] 失败: 无法读取 Local State 文件 (可能被浏览器锁定): {} | 错误: {}",
+                local_state_path.display(),
+                e
+            );
+            return vec![];
+        }
+    };
+
+    let json: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "[read_profiles] 失败: Local State JSON 解析错误: {} | 错误: {}",
+                local_state_path.display(),
+                e
+            );
+            return vec![];
+        }
+    };
+
+    let info_cache = match json
+        .pointer("/profile/info_cache")
+        .and_then(|v| v.as_object())
+    {
+        Some(c) => c,
+        None => {
+            // 诊断：列出 /profile 下实际存在的 key
+            let available_keys: Vec<&str> = json
+                .pointer("/profile")
+                .and_then(|v| v.as_object())
+                .map(|obj| obj.keys().map(|k| k.as_str()).collect())
+                .unwrap_or_default();
+            eprintln!(
+                "[read_profiles] 失败: Local State 中缺少 /profile/info_cache: {} | /profile 下实际 key: {:?}",
+                local_state_path.display(),
+                available_keys
+            );
+            return vec![];
+        }
+    };
+
+    eprintln!(
+        "[read_profiles] 成功: {} 找到 {} 个 profile entry",
+        local_state_path.display(),
+        info_cache.len()
+    );
+
+    let system_download = get_system_download_dir();
+    let mut profiles = Vec::new();
+
+    for (profile_id, info) in info_cache {
+        let name = info
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(profile_id);
+
+        // 从 info_cache 中获取更多信息
+        let user_name = info
+            .get("user_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let email = info
+            .get("email")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let profile_path = Path::new(user_data_dir).join(profile_id);
+        let profile_path_str = profile_path.to_string_lossy().to_string();
+
+        // 读取头像（先尝试文件系统，再尝试 info_cache 条目中的 avatar_icon 等字段）
+        let mut avatar = read_avatar_base64(&profile_path, is_edge);
+        if avatar.base64.is_empty() {
+            // 在 info_cache 中递归搜索 data:image/ 开头的值
+            if let Some(pic_data) = find_image_data_url(info) {
+                avatar = ImageData {
+                    base64: pic_data,
+                    is_icon: false,
+                };
+            }
+        }
+        if avatar.base64.is_empty() {
+            // 检查 info_cache 中的 avatar_icon 是否为 HTTP URL
+            if let Some(icon_url) = info
+                .get("avatar_icon")
+                .and_then(|v| v.as_str())
+                .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
+            {
+                avatar = ImageData {
+                    base64: icon_url.to_string(),
+                    is_icon: false,
+                };
+            }
+        }
+        if avatar.base64.is_empty() {
+            // 最后检查 Preferences 中的 gaia_info_picture_url
+            let prefs_path = profile_path.join("Preferences");
+            if let Ok(content) = fs::read_to_string(&prefs_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(url) = json.pointer("/profile/gaia_info_picture_url")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
+                    {
+                        avatar = ImageData {
+                            base64: url.to_string(),
+                            is_icon: false,
+                        };
+                    }
+                }
+            }
+        }
+
+        // 从 Preferences 读取下载目录
+        let download_dir = super::profile::read_download_dir_from_prefs(&profile_path.join("Preferences"))
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| system_download.clone());
+
+        profiles.push(ProfileInfo {
+            id: profile_id.clone(),
+            name: name.to_string(),
+            user_name: user_name.to_string(),
+            email: email.to_string(),
+            path: profile_path_str,
+            user_data_dir: user_data_dir.to_string(),
+            download_dir,
+            avatar_base64: avatar.base64,
+            avatar_has_icon: avatar.is_icon,
+        });
+    }
+
+    // 按 profile id 排序（Default 排第一）
+    profiles.sort_by(|a, b| {
+        if a.id == "Default" {
+            std::cmp::Ordering::Less
+        } else if b.id == "Default" {
+            std::cmp::Ordering::Greater
+        } else {
+            a.id.cmp(&b.id)
+        }
+    });
+
+    // 写入缓存，后续相同参数的调用直接命中
+    profile_cache()
+        .lock()
+        .unwrap()
+        .insert((user_data_dir.to_string(), is_edge), profiles.clone());
+
+    profiles
+}
+
+// ============ 可执行文件路径 ============
+
+fn get_exe_paths(browser_type: &str) -> Vec<String> {
+    match browser_type {
+        "edge" => {
+            let mut paths = Vec::new();
+            // 注册表
+            if let Some(p) = find_exe_in_registry(
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+                "",
+            ) {
+                paths.push(p);
+            }
+            if let Some(p) = find_exe_in_registry(
+                r"SOFTWARE\Microsoft\Edge\BLBeacon",
+                "version",
+            ) {
+                // 注册表中的 version 值的父键可能有 exe 路径
+                let exe = format!(
+                    r"{}\msedge.exe",
+                    std::path::Path::new(&p)
+                        .parent()
+                        .map(|d| d.to_string_lossy())
+                        .unwrap_or(std::borrow::Cow::Borrowed(""))
+                );
+                if Path::new(&exe).exists() {
+                    paths.push(exe);
+                }
+            }
+            // 标准安装路径
+            let standard = check_standard_paths(&[
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                &format!(
+                    r"{}\Microsoft\Edge\Application\msedge.exe",
+                    dirs::data_local_dir()
+                        .map(|d| d.to_string_lossy().to_string())
+                        .unwrap_or_default()
+                ),
+            ]);
+            paths.extend(standard);
+            paths.sort();
+            paths.dedup();
+            // 未安装时提供默认路径以便用户自行填写
+            if paths.is_empty() {
+                paths.push(
+                    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+                        .to_string(),
+                );
+            }
+            paths
+        }
+        "chrome" => {
+            let mut paths = Vec::new();
+            if let Some(p) = find_exe_in_registry(
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe",
+                "",
+            ) {
+                paths.push(p);
+            }
+            let standard = check_standard_paths(&[
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                &format!(
+                    r"{}\Google\Chrome\Application\chrome.exe",
+                    dirs::data_local_dir()
+                        .map(|d| d.to_string_lossy().to_string())
+                        .unwrap_or_default()
+                ),
+            ]);
+            paths.extend(standard);
+            paths.sort();
+            paths.dedup();
+            // 未安装时提供默认路径以便用户自行填写
+            if paths.is_empty() {
+                paths.push(
+                    r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                        .to_string(),
+                );
+            }
+            paths
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn get_user_data_dir(browser_type: &str) -> Option<String> {
+    let local_app_data = dirs::data_local_dir()?;
+    match browser_type {
+        "edge" => Some(
+            format!(
+                r"{}\Microsoft\Edge\User Data",
+                local_app_data.to_string_lossy()
+            ),
+        ),
+        "chrome" => Some(
+            format!(
+                r"{}\Google\Chrome\User Data",
+                local_app_data.to_string_lossy()
+            ),
+        ),
+        _ => None,
+    }
+}
+
+fn scan_peer_user_data_dirs(default_user_data_dir: &str) -> Vec<String> {
+    if default_user_data_dir.is_empty() {
+        return vec![];
+    }
+    let parent = Path::new(default_user_data_dir)
+        .parent()
+        .map(|p| p.to_path_buf());
+    let Some(parent) = parent else { return vec![] };
+    if !parent.exists() {
+        return vec![];
+    }
+    let default_name = Path::new(default_user_data_dir)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    let mut result = Vec::new();
+    if let Ok(entries) = fs::read_dir(&parent) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name == default_name {
+                continue;
+            }
+            // 检查是否为有效的用户数据目录（含有 Local State）
+            let ls = path.join("Local State");
+            if ls.exists() {
+                result.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+    result
+}
+
+/// 扫描品牌目录下的大小写不敏感 RPA 变体目录（如 "Edge Rpa"、"Chrome RPA"）
+/// 返回其下所有含 Local State 的子目录
+fn scan_brand_rpa_dirs(brand: &str, default_user_data_dir: &str) -> Vec<String> {
+    // default_user_data_dir = "...\Microsoft\Edge\User Data"
+    // parent = "...\Microsoft\Edge"
+    // parent.parent = "...\Microsoft" → 遍历找到 "...\Microsoft\Edge Rpa"
+    let parent_parent = match Path::new(default_user_data_dir)
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+    {
+        Some(p) => p,
+        None => return vec![],
+    };
+    let rpa_target = format!("{} rpa", brand).to_lowercase();
+    let mut result = Vec::new();
+    if let Ok(entries) = fs::read_dir(&parent_parent) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if name != rpa_target {
+                continue;
+            }
+            // 找到了 RPA 目录，扫描其下所有含 Local State 的子目录
+            if let Ok(subs) = fs::read_dir(&path) {
+                for sub in subs.flatten() {
+                    let sub_path = sub.path();
+                    if !sub_path.is_dir() {
+                        continue;
+                    }
+                    if sub_path.join("Local State").exists() {
+                        result.push(sub_path.to_string_lossy().to_string());
+                    }
+                }
+            }
+            break;
+        }
+    }
+    result
+}
+
+/// 从可执行文件读取版本号
+fn get_file_version(exe_path: &str) -> String {
+    if exe_path.is_empty() {
+        return String::new();
+    }
+    #[cfg(windows)]
+    if let Ok(output) = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(format!("(Get-Item '{}').VersionInfo.FileVersion", exe_path.replace('\'', "''")))
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+    } {
+        let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !ver.is_empty() { ver } else { String::new() }
+    } else {
+        String::new()
+    }
+}
+
+/// 读取用户配置 avatar 图片路径
+pub fn get_profile_avatar_path(profile_path: &str, is_edge: bool) -> Option<String> {
+    let pp = Path::new(profile_path);
+
+    // 检查各种头像文件
+    for name in &["Google Profile Picture.png", "Profile Picture.png"] {
+        let img_path = pp.join(name);
+        if img_path.exists() {
+            return Some(img_path.to_string_lossy().to_string());
+        }
+    }
+
+    let ico_name = if is_edge {
+        "Edge Profile.ico"
+    } else {
+        "Google Profile.ico"
+    };
+    let ico_path = pp.join(ico_name);
+    if ico_path.exists() {
+        return Some(ico_path.to_string_lossy().to_string());
+    }
+
+    None
+}
+
+// ============ 检测 Edge ============
+
+fn detect_edge() -> BrowserInfo {
+    let exe_paths = get_exe_paths("edge");
+    let installed = !exe_paths.is_empty();
+    let default_user_data = get_user_data_dir("edge").unwrap_or_default();
+    let user_data_dirs = if !default_user_data.is_empty() {
+        vec![default_user_data.clone()]
+    } else {
+        Vec::new()
+    };
+    let mut suggested = scan_peer_user_data_dirs(&default_user_data);
+    suggested.extend(scan_brand_rpa_dirs("Edge", &default_user_data));
+    let version = get_file_version(exe_paths.first().map_or("", |p| p.as_str()));
+    let default_dir = default_user_data.clone();
+    let profiles = if !default_dir.is_empty() {
+        read_profiles(&default_dir, true)
+    } else {
+        Vec::new()
+    };
+
+    BrowserInfo {
+        browser_type: "edge".to_string(),
+        browser_name: "Microsoft Edge".to_string(),
+        browser_icon_base64: EDGE_ICO.to_string(),
+        installed,
+        exe_paths,
+        user_data_dirs,
+        default_user_data_dir: default_user_data,
+        default_debug_port: 0,
+        browser_version: version,
+        suggested_user_data_dirs: suggested,
+        profiles,
+        children: vec![],
+    }
+}
+
+// ============ 检测 Chrome ============
+
+fn detect_chrome() -> BrowserInfo {
+    let exe_paths = get_exe_paths("chrome");
+    let installed = !exe_paths.is_empty();
+    let default_user_data = get_user_data_dir("chrome").unwrap_or_default();
+    let user_data_dirs = if !default_user_data.is_empty() {
+        vec![default_user_data.clone()]
+    } else {
+        Vec::new()
+    };
+    let mut suggested = scan_peer_user_data_dirs(&default_user_data);
+    suggested.extend(scan_brand_rpa_dirs("Chrome", &default_user_data));
+    let version = get_file_version(exe_paths.first().map_or("", |p| p.as_str()));
+    let default_dir = default_user_data.clone();
+    let profiles = if !default_dir.is_empty() {
+        read_profiles(&default_dir, false)
+    } else {
+        Vec::new()
+    };
+
+    BrowserInfo {
+        browser_type: "chrome".to_string(),
+        browser_name: "Google Chrome".to_string(),
+        browser_icon_base64: CHROME_ICO.to_string(),
+        installed,
+        exe_paths,
+        user_data_dirs,
+        default_user_data_dir: default_user_data,
+        default_debug_port: 0,
+        browser_version: version,
+        suggested_user_data_dirs: suggested,
+        profiles,
+        children: vec![],
+    }
+}
+
+// ============ 公共 API ============
+
+/// 检测所有已安装浏览器
+pub fn detect_all_browsers() -> Vec<BrowserInfo> {
+    let mut browsers = Vec::new();
+    browsers.push(detect_edge());
+    browsers.push(detect_chrome());
+    browsers
+}
+
+/// 根据自定义路径检测浏览器配置
+pub fn detect_profiles_from(
+    browser_type: &str,
+    custom_exe_path: Option<&str>,
+    user_data_dirs: &[String],
+) -> BrowserInfo {
+    let icons: HashMap<&str, (&str, &str)> = HashMap::from([
+        ("edge", ("Microsoft Edge", EDGE_ICO)),
+        ("chrome", ("Google Chrome", CHROME_ICO)),
+    ]);
+    let (browser_name, icon_b64) = icons
+        .get(browser_type)
+        .copied()
+        .unwrap_or(("浏览器", EDGE_ICO));
+
+    let exe_paths = if let Some(exe) = custom_exe_path {
+        if Path::new(exe).exists() {
+            vec![exe.to_string()]
+        } else {
+            get_exe_paths(browser_type)
+        }
+    } else {
+        get_exe_paths(browser_type)
+    };
+
+    let mut all_profiles = Vec::new();
+    for udd in user_data_dirs {
+        if Path::new(udd).exists() {
+            let profiles = read_profiles(udd, browser_type == "edge");
+            all_profiles.extend(profiles);
+        }
+    }
+
+    // 去重：同 id + 同目录才视为重复
+    all_profiles.sort_by(|a, b| a.id.cmp(&b.id).then(a.user_data_dir.cmp(&b.user_data_dir)));
+    all_profiles.dedup_by(|a, b| a.id == b.id && a.user_data_dir == b.user_data_dir);
+
+    let version = get_browser_version(browser_type);
+
+    // 扫描同级目录作为 suggested（不包含默认目录）
+    let default_user_data = user_data_dirs.first().map(|s| s.as_str()).unwrap_or("");
+    let mut suggested = scan_peer_user_data_dirs(default_user_data);
+    // 对 Edge / Chrome 同时扫描 RPA 变体目录
+    if browser_type == "edge" || browser_type == "chrome" {
+        let brand = if browser_type == "edge" { "Edge" } else { "Chrome" };
+        suggested.extend(scan_brand_rpa_dirs(brand, default_user_data));
+    }
+
+    BrowserInfo {
+        browser_type: browser_type.to_string(),
+        browser_name: browser_name.to_string(),
+        browser_icon_base64: icon_b64.to_string(),
+        installed: !exe_paths.is_empty(),
+        exe_paths,
+        user_data_dirs: user_data_dirs.to_vec(),
+        default_user_data_dir: user_data_dirs
+            .first()
+            .cloned()
+            .unwrap_or_default(),
+        default_debug_port: 9222,
+        browser_version: version,
+        suggested_user_data_dirs: suggested,
+        profiles: all_profiles,
+        children: vec![],
+    }
+}
+
+/// 生成启动命令信息
+pub fn generate_launch_cmd(
+    browser_type: &str,
+    profile_id: &str,
+    user_data_dir: &str,
+    debug_port: u16,
+) -> LaunchInfo {
+    let exe_paths = get_exe_paths(browser_type);
+    let exe_path = exe_paths
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "chrome.exe".to_string());
+
+    let args = vec![
+        format!("--profile-directory=\"{}\"", profile_id),
+        format!("--user-data-dir=\"{}\"", user_data_dir),
+    ];
+
+    let cmd_args: Vec<String> = args
+        .iter()
+        .map(|a| a.clone())
+        .collect();
+    let command_line = format!("\"{}\" {}", exe_path, cmd_args.join(" "));
+
+    LaunchInfo {
+        exe_path: exe_path.clone(),
+        args: cmd_args,
+        command_line,
+        debug_port,
+    }
+}
+
+/// 启动浏览器指定配置
+pub fn launch_profile(
+    browser_type: &str,
+    profile_id: &str,
+    user_data_dir: &str,
+    debug_port: u16,
+) -> Result<String, String> {
+    let exe_paths = get_exe_paths(browser_type);
+    let exe_path = exe_paths
+        .first()
+        .ok_or_else(|| format!("未找到 {} 浏览器可执行文件", browser_type))?;
+
+    let mut cmd = std::process::Command::new(exe_path);
+    cmd.arg(format!("--profile-directory={}", profile_id))
+        .arg(format!("--user-data-dir={}", user_data_dir));
+
+    // 仅当明确指定了调试端口时才添加 --remote-debugging-port
+    if debug_port > 0 {
+        cmd.arg(format!("--remote-debugging-port={}", debug_port));
+    }
+
+    let status = cmd.spawn().map_err(|e| format!("启动失败: {}", e))?;
+
+    Ok(format!("PID:{}", status.id()))
+}
+
+/// 创建桌面快捷方式
+pub fn create_shortcut(browser_type: &str, profile_id: &str, user_data_dir: &str, profile_name: &str, _avatar_path: &str, _debug_port: u16) -> Result<String, String> {
+    let exe_paths = get_exe_paths(browser_type);
+    let exe_path = exe_paths.first().ok_or_else(|| "未找到浏览器可执行文件".to_string())?;
+    let desktop = dirs::desktop_dir().ok_or_else(|| "未找到桌面目录".to_string())?;
+    let safe_name = sanitize_filename(profile_name);
+    let lnk_path = desktop.join(format!("{}.lnk", safe_name));
+
+    // 检查快捷方式是否已存在
+    let is_overwrite = lnk_path.exists();
+
+    // 使用 PowerShell 创建快捷方式
+    let ps_script = format!(
+        r#"
+$WScriptShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WScriptShell.CreateShortcut("{}")
+$Shortcut.TargetPath = "{}"
+$Shortcut.Arguments = '--profile-directory="{}" --user-data-dir="{}"'
+$Shortcut.Description = "Browser - {} {}"
+$Shortcut.Save()
+"#,
+        lnk_path.display(),
+        exe_path,
+        profile_id,
+        user_data_dir,
+        browser_type,
+        profile_name,
+    );
+
+    let _ = {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            std::process::Command::new("powershell")
+                .arg("-NoProfile")
+                .arg("-Command")
+                .arg(&ps_script)
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .map_err(|e| format!("创建快捷方式失败: {}", e))?
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new("powershell")
+                .arg("-NoProfile")
+                .arg("-Command")
+                .arg(&ps_script)
+                .output()
+                .map_err(|e| format!("创建快捷方式失败: {}", e))?
+        }
+    };
+
+    if is_overwrite {
+        Ok(format!("overwrite:{}", lnk_path.to_string_lossy()))
+    } else {
+        Ok(lnk_path.to_string_lossy().to_string())
+    }
+}
+
+fn sanitize_filename(name: &str) -> String {
+    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    name.chars()
+        .map(|c| if invalid.contains(&c) { '_' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// 创建新的用户数据目录并自动初始化
+/// 1. 创建独立用户数据目录（避免 Profile 1/2/... 编号问题）
+/// 2. 静默启动浏览器让浏览器自动生成完整的配置结构
+/// 3. 等待初始化完成后关闭浏览器
+/// 4. 返回初始化完成的目录路径
+pub fn create_new_user_data_dir(
+    browser_type: &str,
+    parent_dir: &str,
+    dir_name: &str,
+) -> Result<String, String> {
+    let dir_name = sanitize_dir_name(dir_name);
+    let new_dir = std::path::Path::new(parent_dir).join(&dir_name);
+
+    if new_dir.exists() {
+        return Err(format!("目录已存在: {}", new_dir.display()));
+    }
+
+    // 1. 创建空目录
+    std::fs::create_dir_all(&new_dir)
+        .map_err(|e| format!("创建目录失败: {}", e))?;
+
+    // 2. 获取浏览器可执行文件路径
+    let exe_paths = get_exe_paths(browser_type);
+    let exe = exe_paths.into_iter().next()
+        .ok_or_else(|| "未找到浏览器可执行文件".to_string())?;
+
+    // 3. 启动浏览器进行初始化（最小化窗口，无首次运行向导）
+    let mut child = std::process::Command::new(&exe)
+        .arg(format!("--user-data-dir={}", new_dir.display()))
+        .arg("--no-first-run")
+        .arg("--disable-features=HideUserDataDirInUse")
+        .arg("--window-size=1,1")
+        .arg("--hide-crash-restore-bubble")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("启动浏览器失败: {}", e))?;
+
+    // 4. 等待浏览器初始化完成（分两阶段）
+    let default_dir = new_dir.join("Default");
+    let local_state = new_dir.join("Local State");
+    let prefs = default_dir.join("Preferences");
+
+    let timeout = std::time::Duration::from_secs(30);
+    let poll_interval = std::time::Duration::from_millis(500);
+    let start = std::time::Instant::now();
+
+    // 阶段一：等待基本文件（Default/Preferences 和 Local State）生成
+    let files_ready = loop {
+        if default_dir.exists() && local_state.exists() && prefs.exists() {
+            break true;
+        }
+        if start.elapsed() > timeout {
+            break false;
+        }
+        std::thread::sleep(poll_interval);
+    };
+
+    if !files_ready {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(
+            "浏览器初始化超时(30秒)，请手动启动一次浏览器完成配置。\n\
+            目录已创建，打开浏览器后工具会自动识别。".to_string()
+        );
+    }
+
+    // 阶段二：等待 Local State 中的 profile.info_cache 写入完整数据
+    // 浏览器被 kill 前需要把 profile 信息写入 info_cache，否则 read_profiles 读取为空
+    let info_cache_ready = loop {
+        if let Ok(content) = std::fs::read_to_string(&local_state) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(cache) = json
+                    .pointer("/profile/info_cache")
+                    .and_then(|v| v.as_object())
+                {
+                    if !cache.is_empty() {
+                        break true;
+                    }
+                }
+            }
+        }
+        if start.elapsed() > timeout {
+            break false;
+        }
+        std::thread::sleep(poll_interval);
+    };
+
+    // 5. 关闭浏览器
+    let _ = child.kill();
+    let _ = child.wait();
+
+    if !info_cache_ready {
+        return Err(
+            "浏览器初始化完成但 profile 信息尚未写入，请手动启动一次浏览器完成配置。\n\
+            目录已创建，打开浏览器后工具会自动识别。".to_string()
+        );
+    }
+
+    Ok(new_dir.to_string_lossy().to_string())
+}
+
+fn sanitize_dir_name(name: &str) -> String {
+    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '\n', '\r'];
+    name.chars()
+        .map(|c| if invalid.contains(&c) { '_' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// 杀死指定配置的浏览器进程（先通过 WMI 查找 PID，再用 taskkill 精确杀死）
+pub fn kill_browser_profile_process(
+    browser_type: &str,
+    profile_id: &str,
+    user_data_dir: &str,
+) -> Result<String, String> {
+    let exe_name = match browser_type {
+        "edge" => "msedge.exe",
+        "chrome" => "chrome.exe",
+        _ => return Err(format!("不支持的浏览器类型: {}", browser_type)),
+    };
+    kill_browser_process_inner(exe_name, profile_id, user_data_dir)
 }

@@ -2,7 +2,7 @@
 import "./data/framework";
 
 // Types
-export type { AppConfig, ThemeConfig, AppData } from "./types";
+export type { AppConfig, ThemeConfig, AppData, BrowserInfo, LaunchInfo, DirDiagnostic, PortEntry, BrowserProcessState, BrowserTestParams, BrowserTestResult, ProfileInfo, ChildBrowserConfig, BrowserConfig, ProfileEntry } from "./types";
 
 // API
 export {
@@ -21,16 +21,32 @@ export {
   clearDbTable,
   deleteDataFiles,
   saveFile,
+  detectBrowsers,
+  detectCustomProfiles,
+  getLaunchCommand,
+  launchBrowserProfile,
+  createDesktopShortcut,
+  createNewUserDataDir,
+  detectDebugPorts,
+  detectBrowserRunningProcesses,
+  testBrowserAutomation,
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";
 export type { AppLayoutProps, SettingsTab } from "./components/AppLayout";
+export { BrowserConfigPanel } from "./components/BrowserConfigPanel";
+export type { BrowserConfigPanelProps, BCPBrowser, BCPProfile } from "./components/BrowserConfigPanel";
+export { BrowserConfigSection } from "./components/BrowserConfigSection";
+export type { BrowserConfigSectionProps } from "./components/BrowserConfigSection";
 export { TopBar } from "./components/TopBar";
 export { SettingsSidebar } from "./components/SettingsSidebar";
 export { AboutPanel } from "./components/AboutPanel";
 export { ShortcutsPanel, getEffectiveShortcuts } from "./components/ShortcutsPanel";
+export { CurrentBrowserCards } from "./components/CurrentBrowserCards";
+export type { LaunchStatus, ConnectionStatus } from "./components/CurrentBrowserCards";
+export { LAUNCH_LABELS, CONNECTION_LABELS } from "./components/CurrentBrowserCards";
 export { TabBar } from "./components/TabBar";
 export type { TabItem } from "./components/TabBar";
 export { ClearButton } from "./components/ClearButton";
@@ -38,6 +54,13 @@ export { LogPanel, useLog } from "./components/LogPanel";
 export type { LogLevel, LogTable, LogEntry, UseLogReturn, LogPanelProps } from "./components/LogPanel";
 export { HomePage } from "./components/HomePage";
 export type { HomePageCard, HomePageProps } from "./components/HomePage";
+
+// Hooks（浏览器配置）
+export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
+export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
+export { usePlatformOptions } from "./hooks/usePlatformOptions";
+export { usePlatformSelections } from "./hooks/usePlatformSelections";
+export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";
 
 // 工具
 export {
@@ -49,6 +72,7 @@ export {
   safeRemoveJSON,
   clearAllAppkitCache,
 } from "./localStorageKeys";
+export { populateBrowserIcons, getBrowserIcon, stripBrowserCache } from "./utils/browser-icons";
 
 // 数据管理
 export { DataManagerPanel } from "./components/DataManagerPanel";
@@ -83,3 +107,16 @@ export type {
   DbKeyRef,
   RegisteredDataItem,
 } from "./data";
+
+// ── 平台-浏览器绑定 ──
+export {
+  PlatformConfigPanel,
+  PlatformProfileSelector,
+  registerPlatforms,
+  getRegisteredPlatforms,
+} from "./components/PlatformConfigPanel";
+export type { PlatformDef, BrowserOption, PlatformConfigPanelProps } from "./components/PlatformConfigPanel";
+
+// ── 自动化设置 ──
+export { AutomationSettings } from "./components/AutomationSettings";
+export type { AutomationSettingsProps } from "./components/AutomationSettings";

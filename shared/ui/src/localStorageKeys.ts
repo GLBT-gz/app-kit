@@ -9,6 +9,10 @@ export const LS_KEYS = {
   NAV_LOCATION: "core-nav-location",
   /** 设置面板侧边栏宽度 */
   SIDEBAR_WIDTH: "core-sidebar-width",
+  /** 浏览器配置面板侧边栏宽度 */
+  BCP_SIDEBAR_WIDTH: "core-bcp-sidebar-width",
+  /** 是否隐藏不可控 Profile */
+  HIDE_UNCONTROLLABLE: "core-hide-uncontrollable",
   /** 快捷键映射 */
   SHORTCUTS: "core-shortcuts",
   /** 主题配置（深色/浅色模式、强调色、窗口置顶） */

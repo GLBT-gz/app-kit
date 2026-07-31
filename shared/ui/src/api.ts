@@ -1,5 +1,5 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
-import type { AppConfig } from "./types";
+import type { AppConfig, BrowserInfo, LaunchInfo, PortEntry, BrowserProcessState, BrowserTestParams, BrowserTestResult } from "./types";
 
 // ── 插件命令前缀 ──
 const PLUGIN_PREFIX = "plugin:appkit-core|";
@@ -126,4 +126,118 @@ export async function deleteDataFiles(files: string[]): Promise<void> {
 /** 保存 Base64 编码的文件到指定路径 */
 export async function saveFile(path: string, dataB64: string): Promise<void> {
   return pluginInvoke("save_file", { path, dataB64 });
+}
+
+// ── 浏览器配置管理 ──
+
+/** 检测所有已安装的浏览器 */
+export async function detectBrowsers(): Promise<BrowserInfo[]> {
+  return pluginInvoke("detect_browsers");
+}
+
+/** 使用自定义路径检测浏览器配置 */
+export async function detectCustomProfiles(
+  browserType: string,
+  customExePath: string | null,
+  userDataDirs: string[]
+): Promise<BrowserInfo> {
+  return pluginInvoke("detect_custom_profiles", {
+    browserType,
+    customExePath,
+    userDataDirs,
+  });
+}
+
+/** 生成启动命令 */
+export async function getLaunchCommand(
+  browserType: string,
+  profileId: string,
+  userDataDir: string,
+  debugPort: number
+): Promise<LaunchInfo> {
+  return pluginInvoke("get_launch_command", {
+    browserType,
+    profileId,
+    userDataDir,
+    debugPort,
+  });
+}
+
+/** 启动浏览器指定配置 */
+export async function launchBrowserProfile(
+  browserType: string,
+  profileId: string,
+  userDataDir: string,
+  debugPort: number
+): Promise<string> {
+  return pluginInvoke("launch_browser_profile", {
+    browserType,
+    profileId,
+    userDataDir,
+    debugPort,
+  });
+}
+
+/** 查找可用端口（用于调试启动浏览器） */
+export async function findAvailablePort(start: number, end: number): Promise<number> {
+  return pluginInvoke("find_available_port", { start, end });
+}
+
+/** 杀死指定配置的浏览器进程（调试启动前清理已有实例） */
+export async function killBrowserProfileProcess(browserType: string, profileId: string, userDataDir: string): Promise<string> {
+  return pluginInvoke("kill_browser_profile_process", { browserType, profileId, userDataDir });
+}
+
+/** 杀死指定浏览器的所有进程（Edge → msedge.exe, Chrome → chrome.exe, EDecker → edecker.exe） */
+export async function killAllBrowserProcesses(browserType: string): Promise<string> {
+  return pluginInvoke("kill_all_browser_processes", { browserType });
+}
+
+/** 创建桌面快捷方式 */
+export async function createDesktopShortcut(
+  browserType: string,
+  profileId: string,
+  userDataDir: string,
+  profileName: string,
+  avatarPath: string,
+  debugPort: number
+): Promise<string> {
+  return pluginInvoke("create_desktop_shortcut", {
+    browserType,
+    profileId,
+    userDataDir,
+    profileName,
+    avatarPath,
+    debugPort,
+  });
+}
+
+/** 创建新的浏览器用户数据目录 */
+export async function createNewUserDataDir(
+  browserType: string,
+  parentDir: string,
+  dirName: string
+): Promise<string> {
+  return pluginInvoke("create_new_user_data_dir", {
+    browserType,
+    parentDir,
+    dirName,
+  });
+}
+
+/** 检测浏览器调试端口（返回 profile 到端口的映射） */
+export async function detectDebugPorts(profiles: { user_data_dir: string; profile_id: string }[]): Promise<PortEntry[]> {
+  return pluginInvoke("detect_debug_ports", { profiles: profiles.map(p => [p.user_data_dir, p.profile_id]) });
+}
+
+/** 检测浏览器进程运行状态（不分配端口，仅检测是否运行） */
+export async function detectBrowserRunningProcesses(profiles: { user_data_dir: string; profile_id: string }[]): Promise<BrowserProcessState[]> {
+  return pluginInvoke("detect_browser_running_processes", { profiles: profiles.map(p => [p.user_data_dir, p.profile_id]) });
+}
+
+// ── 浏览器自动化测试（000 模板项目专用） ──
+
+/** 批量浏览器自动化测试：启动/连接 → 打开百度 → 获取页面内容前500字符 */
+export async function testBrowserAutomation(browsers: BrowserTestParams[]): Promise<BrowserTestResult[]> {
+  return tauriInvoke("test_browser_automation", { browsers });
 }
