@@ -74,7 +74,10 @@ async function main() {
   }
 
   const { cmd, prefixArgs } = resolveTauriCommand();
-  const fullArgs = [...prefixArgs, ...args, ...(tmpConfig ? ["--config", tmpConfig] : [])];
+  // dev 子命令归一化：默认 subcommand 也需显式注入，否则 clap 将 --config 当顶层参数报错
+  const fullArgs = isDev
+    ? [...prefixArgs, subcommand, ...(tmpConfig ? ["--config", tmpConfig] : [])]
+    : [...prefixArgs, ...args];
   const child = spawn(cmd, fullArgs, {
     env,
     stdio: "inherit",
