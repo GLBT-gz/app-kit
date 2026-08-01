@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-appkit-core = { path = "../core" }
+appkit-core = { path = "../core", features = ["cmd-browser"] }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

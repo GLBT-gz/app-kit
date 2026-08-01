@@ -25,3 +25,7 @@ tauri = { version = "2", optional = true }
 [features]
 default = []
 bridge = ["dep:tauri"]
+# 命令组（未启用的命令不参与编译）
+cmd-browser = ["bridge"]
+cmd-files = ["bridge"]
+cmd-utils = ["bridge"]
