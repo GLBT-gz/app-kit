@@ -32,3 +32,9 @@ cmd-browser = ["bridge"]
 cmd-files = ["bridge"]
 cmd-utils = ["bridge"]
 cmd-db = ["bridge", "dep:rusqlite"]
+# 预设组合（项目直接选用，避免逐个配置出错）
+#   cmd-full：浏览器 + 文件 + 工具（多数业务项目）
+#   cmd-lite：仅文件 + 工具（005/900 等纯数据类项目）
+# 若还需数据库表管理，额外追加 cmd-db
+cmd-full = ["cmd-browser", "cmd-files", "cmd-utils"]
+cmd-lite = ["cmd-files", "cmd-utils"]
