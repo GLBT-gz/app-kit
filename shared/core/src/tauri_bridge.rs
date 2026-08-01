@@ -20,7 +20,7 @@
 use crate::browser::management;
 #[cfg(feature = "cmd-browser")]
 use crate::config::PortEntry;
-#[cfg(any(feature = "cmd-browser", feature = "cmd-files"))]
+#[cfg(any(feature = "cmd-browser", feature = "cmd-files", feature = "cmd-db"))]
 use serde::Serialize;
 
 // ── 浏览器检测与配置（cmd-browser）──
@@ -397,6 +397,59 @@ fn save_file(path: String, data_b64: String) -> Result<(), String> {
     std::fs::write(&path, &bytes).map_err(|e| format!("保存文件失败: {}", e))
 }
 
+// ── 数据库表管理（cmd-db）──
+
+/// SQLite 数据库表信息
+#[cfg(feature = "cmd-db")]
+#[derive(Serialize)]
+pub struct DbTableInfo {
+    pub name: String,
+    pub row_count: u32,
+}
+
+/// 读取 config_dir 下数据库文件的表列表及行数
+/// （db_rel_path 为相对 config_dir 的路径，与 list_database_files 返回的 rel_path 一致）
+#[cfg(feature = "cmd-db")]
+#[tauri::command]
+fn get_db_tables(db_rel_path: String) -> Result<Vec<DbTableInfo>, String> {
+    let dir = crate::config::store::config_dir();
+    let db_path = dir.join(&db_rel_path);
+    if !db_path.exists() {
+        return Ok(vec![]);
+    }
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("打开数据库失败: {}", e))?;
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        .map_err(|e| format!("查询表名失败: {}", e))?;
+    let table_names: Vec<String> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("查询表名失败: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+    let mut tables = Vec::new();
+    for name in table_names {
+        let count: u32 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM \"{}\"", name), [], |row| row.get(0))
+            .map_err(|e| format!("查询 {} 行数失败: {}", name, e))?;
+        tables.push(DbTableInfo { name, row_count: count });
+    }
+    Ok(tables)
+}
+
+/// 清空 config_dir 下数据库文件中指定表的数据
+#[cfg(feature = "cmd-db")]
+#[tauri::command]
+fn clear_db_table(db_rel_path: String, table_name: String) -> Result<(), String> {
+    let dir = crate::config::store::config_dir();
+    let db_path = dir.join(&db_rel_path);
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("打开数据库失败: {}", e))?;
+    conn.execute(&format!("DELETE FROM \"{}\"", table_name), [])
+        .map_err(|e| format!("清空表 {} 失败: {}", table_name, e))?;
+    Ok(())
+}
+
 /// 注册通用 Tauri 命令（按 feature 门控）
 ///
 /// # 用法
@@ -460,6 +513,11 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             check_path_exists,
             #[cfg(feature = "cmd-utils")]
             save_file,
+            // ── 数据库表管理（cmd-db）──
+            #[cfg(feature = "cmd-db")]
+            get_db_tables,
+            #[cfg(feature = "cmd-db")]
+            clear_db_table,
         ])
         .build()
 }

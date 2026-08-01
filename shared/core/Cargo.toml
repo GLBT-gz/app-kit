@@ -21,6 +21,8 @@ rand.workspace = true
 opener.workspace = true
 winreg.workspace = true
 tauri = { version = "2", optional = true }
+# SQLite 数据库表管理（仅 cmd-db 启用时编译，项目按需启用）
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [features]
 default = []
@@ -29,3 +31,4 @@ bridge = ["dep:tauri"]
 cmd-browser = ["bridge"]
 cmd-files = ["bridge"]
 cmd-utils = ["bridge"]
+cmd-db = ["bridge", "dep:rusqlite"]
