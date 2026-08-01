@@ -154,7 +154,7 @@ export interface ViteConfigOptions {
 
 export function createViteConfig(options: ViteConfigOptions) {
   const {
-    port,
+    port: defaultPort,
     enableTailwind = true,
     enableFonts = true,
     strictPort = true,
@@ -163,6 +163,12 @@ export function createViteConfig(options: ViteConfigOptions) {
     extraAliases = {},
     extraPublicDirs = [],
   } = options;
+
+  // 动态端口：由 app-kit/scripts/tauri-dev.mjs 注入 PORT 时优先使用，
+  // 并强制 strictPort，避免 vite 静默换端口导致 tauri devUrl 失配。
+  const injectedPort = Number(process.env.PORT);
+  const port = Number.isInteger(injectedPort) && injectedPort > 0 ? injectedPort : defaultPort;
+  const effectiveStrictPort = process.env.PORT ? true : strictPort;
 
   const root = realpathSync(process.cwd());
   const host = process.env.TAURI_DEV_HOST || false;
@@ -195,7 +201,7 @@ export function createViteConfig(options: ViteConfigOptions) {
       : undefined,
     server: {
       port,
-      strictPort,
+      strictPort: effectiveStrictPort,
       host,
       fs: {
         allow: [root, resolve(root, ".."), resolve(root, "../..")],
