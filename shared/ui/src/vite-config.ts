@@ -17,8 +17,8 @@ import type { Plugin } from "vite";
 
 // ── copyFontsPlugin（从原 vite-plugins.ts 抽取，保持向后兼容） ──
 
-import { copyFileSync, mkdirSync, readdirSync, existsSync } from "fs";
-import { resolve as pathResolve } from "path";
+import { copyFileSync, mkdirSync, readdirSync, existsSync, statSync, readFileSync } from "fs";
+import { resolve as pathResolve, extname } from "path";
 
 // 以本文件自身位置（shared/ui/src/vite-config.ts）定位 shared/ui 根目录，
 // 无论被哪个目录下的项目引用，路径都正确。
@@ -49,6 +49,88 @@ function copyFontsPlugin(): Plugin {
   };
 }
 
+// ── extraPublicDirsPlugin（外部目录构建时复制到 dist / 开发时中间件服务） ──
+
+export interface ExtraPublicDir {
+  /** 源目录，相对项目根目录，如 "../../../app-icons/icons" */
+  src: string;
+  /** URL 访问前缀，如 "/icons"，构建时复制到 dist/<前缀>，开发时按 /<前缀>/* 提供静态服务 */
+  prefix: string;
+}
+
+const MIME_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+function copyDirRecursive(src: string, dest: string) {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = pathResolve(src, entry.name);
+    const destPath = pathResolve(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else if (entry.isFile()) {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function extraPublicDirsPlugin(root: string, extraDirs: ExtraPublicDir[]): Plugin {
+  const dirs = extraDirs.map((d) => ({
+    src: pathResolve(root, d.src),
+    prefix: d.prefix.startsWith("/") ? d.prefix : `/${d.prefix}`,
+  }));
+
+  return {
+    name: "appkit-extra-public-dirs",
+    configureServer(server) {
+      for (const { src, prefix } of dirs) {
+        if (!existsSync(src)) {
+          console.warn(`[extra-dirs] 源目录不存在: ${src}`);
+          continue;
+        }
+        const srcRoot = pathResolve(src);
+        server.middlewares.use((req, res, next) => {
+          const rawUrl = (req.url || "").split("?")[0];
+          if (!rawUrl.startsWith(prefix)) return next();
+          const relPath = decodeURIComponent(rawUrl.slice(prefix.length)).replace(/^[/\\]+/, "");
+          if (!relPath) return next();
+          const filePath = pathResolve(srcRoot, relPath);
+          if (!filePath.startsWith(srcRoot)) return next();
+          let stat;
+          try {
+            stat = statSync(filePath);
+          } catch {
+            return next();
+          }
+          if (!stat.isFile()) return next();
+          res.statusCode = 200;
+          res.setHeader("Content-Type", MIME_TYPES[extname(filePath).toLowerCase()] || "application/octet-stream");
+          res.end(readFileSync(filePath));
+        });
+      }
+    },
+    closeBundle() {
+      const projectRoot = realpathSync(process.cwd());
+      for (const { src, prefix } of dirs) {
+        if (!existsSync(src)) {
+          console.warn(`[extra-dirs] 源目录不存在: ${src}`);
+          continue;
+        }
+        const dest = pathResolve(projectRoot, "dist", prefix.replace(/^\/+/, ""));
+        copyDirRecursive(src, dest);
+        console.log(`[extra-dirs] ✓ 已复制 ${src} -> ${dest}`);
+      }
+    },
+  };
+}
+
 // ── 工厂函数 ──
 
 export interface ViteConfigOptions {
@@ -66,6 +148,8 @@ export interface ViteConfigOptions {
   extraPlugins?: Plugin[];
   /** 额外的 Vite resolve alias */
   extraAliases?: Record<string, string>;
+  /** 额外的 public 目录（如 app-icons 图标库），构建时复制到 dist、开发时中间件服务 */
+  extraPublicDirs?: ExtraPublicDir[];
 }
 
 export function createViteConfig(options: ViteConfigOptions) {
@@ -77,6 +161,7 @@ export function createViteConfig(options: ViteConfigOptions) {
     watchSrcTauri = false,
     extraPlugins = [],
     extraAliases = {},
+    extraPublicDirs = [],
   } = options;
 
   const root = realpathSync(process.cwd());
@@ -84,12 +169,10 @@ export function createViteConfig(options: ViteConfigOptions) {
 
   const plugins: any[] = [react(), ...extraPlugins];
   if (enableFonts) plugins.push(copyFontsPlugin());
+  if (extraPublicDirs.length > 0) plugins.push(extraPublicDirsPlugin(root, extraPublicDirs));
 
   return defineConfig({
     root,
-    publicDir: (enableFonts
-      ? [resolve(root, "public"), resolve(UI_ROOT, "public")]
-      : resolve(root, "public")) as unknown as string | false | undefined,
     plugins,
     resolve: {
       alias: {
