@@ -9,7 +9,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve, dirname } from "path";
-import { realpathSync } from "fs";
+import { realpathSync, rmSync } from "fs";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
@@ -124,6 +124,8 @@ function extraPublicDirsPlugin(root: string, extraDirs: ExtraPublicDir[]): Plugi
           continue;
         }
         const dest = pathResolve(projectRoot, "dist", prefix.replace(/^\/+/, ""));
+        // 先清空目标再复制（同步语义），避免删除/移动的图标残留在 dist
+        rmSync(dest, { recursive: true, force: true });
         copyDirRecursive(src, dest);
         console.log(`[extra-dirs] ✓ 已复制 ${src} -> ${dest}`);
       }
