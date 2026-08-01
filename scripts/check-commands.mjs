@@ -17,7 +17,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CORE_BRIDGE = join(ROOT, "shared/core/src/tauri_bridge.rs");
 const API_TS = join(ROOT, "shared/ui/src/api.ts");
-const PROJECTS = resolve(ROOT, "../glbt-apps/projects");
+// 项目扫描范围：glbt-apps、my-apps 的子目录 + template 单项目
+const PROJECT_ROOTS = [resolve(ROOT, "../glbt-apps/projects"), resolve(ROOT, "../my-apps/projects")];
+const SINGLE_PROJECTS = [resolve(ROOT, "template")];
 
 let errors = 0;
 let warnings = 0;
@@ -112,8 +114,18 @@ for (const c of coreAll) {
 
 // [2] 各项目 build.rs vs core / feature
 console.log("\n[2] 各项目 build.rs 注册 vs core 定义 / Cargo.toml feature");
-for (const name of readdirSync(PROJECTS)) {
-  const dir = join(PROJECTS, name);
+const projectDirs = [];
+for (const root of PROJECT_ROOTS) {
+  if (!existsSync(root)) continue;
+  for (const name of readdirSync(root)) {
+    const dir = join(root, name);
+    if (existsSync(join(dir, "src-tauri/build.rs"))) projectDirs.push({ dir, name });
+  }
+}
+for (const p of SINGLE_PROJECTS) {
+  if (existsSync(join(p, "src-tauri/build.rs"))) projectDirs.push({ dir: p, name: p.split(/[\\/]/).pop() });
+}
+for (const { dir, name } of projectDirs) {
   const buildRs = join(dir, "src-tauri/build.rs");
   const cargoToml = join(dir, "src-tauri/Cargo.toml");
   if (!existsSync(buildRs) || !existsSync(cargoToml)) continue;

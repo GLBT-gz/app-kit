@@ -1,21 +1,31 @@
 fn main() {
     // ── 生成权限 TOML 文件 ──
+    // 注意：此列表必须与 src/tauri_bridge.rs 中 init() 注册的命令一致
     let commands = [
-        // 主题与配置
-        "get_all_data",
-        "set_app_theme",
-        "set_app_config",
-        // 数据文件管理
+        // 浏览器检测/配置/进程（cmd-browser）
+        "detect_browsers",
+        "detect_custom_profiles",
+        "get_launch_command",
+        "launch_browser_profile",
+        "create_desktop_shortcut",
+        "create_new_user_data_dir",
+        "detect_debug_ports",
+        "detect_browser_running_processes",
+        "find_available_port",
+        "kill_browser_profile_process",
+        "kill_all_browser_processes",
+        // 数据文件管理（cmd-files）
         "list_data_files",
         "delete_data_files",
-        "write_local_file",
         "read_all_local_files",
         "list_database_files",
-        // 通用工具
+        // 通用工具（cmd-utils）
         "open_directory",
         "check_path_exists",
-        "get_app_version",
         "save_file",
+        // 数据库表管理（cmd-db）
+        "get_db_tables",
+        "clear_db_table",
     ];
 
     let mut perm_lines = Vec::new();

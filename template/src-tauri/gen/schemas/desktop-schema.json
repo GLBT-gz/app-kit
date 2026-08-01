@@ -177,16 +177,22 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-get-all-data`\n- `allow-set-app-theme`\n- `allow-set-app-config`\n- `allow-delete-data-files`\n- `allow-write-local-file`\n- `allow-read-all-local-files`\n- `allow-list-data-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-get-app-version`\n- `allow-save-file`",
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`",
           "type": "string",
           "const": "appkit-core:default",
-          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-get-all-data`\n- `allow-set-app-theme`\n- `allow-set-app-config`\n- `allow-delete-data-files`\n- `allow-write-local-file`\n- `allow-read-all-local-files`\n- `allow-list-data-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-get-app-version`\n- `allow-save-file`"
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`"
         },
         {
           "description": "Enables the check_path_exists command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:allow-check-path-exists",
           "markdownDescription": "Enables the check_path_exists command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the clear_db_table command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:allow-clear-db-table",
+          "markdownDescription": "Enables the clear_db_table command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_data_files command without any pre-configured scope.",
@@ -205,6 +211,12 @@
           "type": "string",
           "const": "appkit-core:allow-get-app-version",
           "markdownDescription": "Enables the get_app_version command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_db_tables command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:allow-get-db-tables",
+          "markdownDescription": "Enables the get_db_tables command without any pre-configured scope."
         },
         {
           "description": "Enables the list_data_files command without any pre-configured scope.",
@@ -261,6 +273,12 @@
           "markdownDescription": "Denies the check_path_exists command without any pre-configured scope."
         },
         {
+          "description": "Denies the clear_db_table command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:deny-clear-db-table",
+          "markdownDescription": "Denies the clear_db_table command without any pre-configured scope."
+        },
+        {
           "description": "Denies the delete_data_files command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:deny-delete-data-files",
@@ -277,6 +295,12 @@
           "type": "string",
           "const": "appkit-core:deny-get-app-version",
           "markdownDescription": "Denies the get_app_version command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_db_tables command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:deny-get-db-tables",
+          "markdownDescription": "Denies the get_db_tables command without any pre-configured scope."
         },
         {
           "description": "Denies the list_data_files command without any pre-configured scope.",

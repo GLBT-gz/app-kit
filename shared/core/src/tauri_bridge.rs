@@ -4,41 +4,28 @@
 //! 项目只需 `.plugin(appkit_core::tauri_bridge::init())` 即可注册所需通用命令。
 //!
 //! 命令按 feature 分组门控（未启用的命令不参与编译）：
-//! - `cmd-browser`（浏览器检测/配置/进程，13 个）：
-//!   detect_browsers, detect_custom_profiles, diagnose_directory,
+//! - `cmd-browser`（浏览器检测/配置/进程，11 个）：
+//!   detect_browsers, detect_custom_profiles,
 //!   get_launch_command, launch_browser_profile, create_desktop_shortcut,
-//!   get_avatar_path, create_new_user_data_dir, detect_debug_ports,
+//!   create_new_user_data_dir, detect_debug_ports,
 //!   detect_browser_running_processes, find_available_port,
 //!   kill_browser_profile_process, kill_all_browser_processes
-//! - `cmd-files`（数据文件管理，5 个）：
-//!   delete_data_files, list_data_files, write_local_file,
+//! - `cmd-files`（数据文件管理，4 个）：
+//!   delete_data_files, list_data_files,
 //!   read_all_local_files, list_database_files
 //! - `cmd-utils`（通用工具，3 个）：
 //!   open_directory, check_path_exists, save_file
+//! - `cmd-db`（数据库表管理，2 个）：
+//!   get_db_tables, clear_db_table
 
 #[cfg(feature = "cmd-browser")]
 use crate::browser::management;
 #[cfg(feature = "cmd-browser")]
 use crate::config::PortEntry;
-#[cfg(any(feature = "cmd-browser", feature = "cmd-files", feature = "cmd-db"))]
+#[cfg(any(feature = "cmd-files", feature = "cmd-db"))]
 use serde::Serialize;
 
 // ── 浏览器检测与配置（cmd-browser）──
-
-/// 用户数据目录诊断结果
-#[cfg(feature = "cmd-browser")]
-#[derive(Debug, Serialize)]
-pub struct DirDiagnostic {
-    pub path: String,
-    pub exists: bool,
-    pub local_state_exists: bool,
-    pub local_state_file_size: u64,
-    pub local_state_readable: bool,
-    pub has_info_cache: bool,
-    pub profile_count: usize,
-    pub profile_keys: Vec<String>,
-    pub info_cache_keys: Vec<String>,
-}
 
 /// 检测所有已安装浏览器（Edge / Chrome / EDecker）
 #[cfg(feature = "cmd-browser")]
@@ -56,74 +43,6 @@ fn detect_custom_profiles(
     user_data_dirs: Vec<String>,
 ) -> crate::browser::BrowserInfo {
     management::detect_profiles_from(&browser_type, custom_exe_path.as_deref(), &user_data_dirs)
-}
-
-/// 诊断用户数据目录（用于排查 Local State 解析问题）
-#[cfg(feature = "cmd-browser")]
-#[tauri::command]
-fn diagnose_directory(path: String) -> DirDiagnostic {
-    use std::fs;
-    use std::path::Path;
-
-    let exists = Path::new(&path).exists();
-    let local_state_path = Path::new(&path).join("Local State");
-    let local_state_exists = local_state_path.exists();
-    let local_state_file_size = if local_state_exists {
-        fs::metadata(&local_state_path)
-            .map(|m| m.len())
-            .unwrap_or(0)
-    } else {
-        0
-    };
-
-    let (local_state_readable, has_info_cache, profile_count, profile_keys, info_cache_keys) =
-        if local_state_exists {
-            match fs::read_to_string(&local_state_path) {
-                Ok(content) => {
-                    let has_cache = content.contains("info_cache");
-                    let count = content.matches("\"info_cache\"").count();
-                    let (profile_keys, cache_keys) =
-                        if let Ok(json) =
-                            serde_json::from_str::<serde_json::Value>(&content)
-                        {
-                            let pkeys: Vec<String> = json
-                                .pointer("/profile")
-                                .and_then(|v| v.as_object())
-                                .map(|obj| obj.keys().cloned().collect())
-                                .unwrap_or_default();
-                            let ckeys: Vec<String> = json
-                                .pointer("/profile/info_cache")
-                                .and_then(|v| v.as_object())
-                                .map(|obj| obj.keys().cloned().collect())
-                                .unwrap_or_default();
-                            (pkeys, ckeys)
-                        } else {
-                            (vec![], vec![])
-                        };
-                    (true, has_cache, count, profile_keys, cache_keys)
-                }
-                Err(_) => (false, false, 0, vec![], vec![]),
-            }
-        } else {
-            (false, false, 0, vec![], vec![])
-        };
-
-    eprintln!(
-        "[diagnose] path={:?} exists={} local_state={} size={} readable={} info_cache={} count={} profile_keys={:?} info_cache_keys={:?}",
-        path, exists, local_state_exists, local_state_file_size, local_state_readable, has_info_cache, profile_count, profile_keys, info_cache_keys
-    );
-
-    DirDiagnostic {
-        path,
-        exists,
-        local_state_exists,
-        local_state_file_size,
-        local_state_readable,
-        has_info_cache,
-        profile_count,
-        profile_keys,
-        info_cache_keys,
-    }
 }
 
 /// 生成启动命令信息
@@ -169,13 +88,6 @@ fn create_desktop_shortcut(
         &avatar_path,
         debug_port,
     )
-}
-
-/// 读取 profile 头像图片路径
-#[cfg(feature = "cmd-browser")]
-#[tauri::command]
-fn get_avatar_path(profile_path: String, is_edge: bool) -> Option<String> {
-    management::get_profile_avatar_path(&profile_path, is_edge)
 }
 
 /// 创建新的用户数据目录并自动初始化
@@ -259,19 +171,6 @@ fn delete_data_files(files: Vec<String>) -> Result<(), String> {
     } else {
         Err(format!("部分文件删除失败: {}", errors.join("; ")))
     }
-}
-
-/// 写入本地文件（覆盖写入，自动创建目录）
-#[cfg(feature = "cmd-files")]
-#[tauri::command]
-fn write_local_file(path: String, content: String) -> Result<(), String> {
-    let p = std::path::Path::new(&path);
-    if let Some(parent) = p.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("创建目录失败: {}", e))?;
-    }
-    std::fs::write(&path, &content)
-        .map_err(|e| format!("写入文件失败: {}", e))
 }
 
 /// 批量读取多个本地文件内容（一次 IPC 调用，避免 N 次往返）
@@ -474,15 +373,11 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             #[cfg(feature = "cmd-browser")]
             detect_custom_profiles,
             #[cfg(feature = "cmd-browser")]
-            diagnose_directory,
-            #[cfg(feature = "cmd-browser")]
             get_launch_command,
             #[cfg(feature = "cmd-browser")]
             launch_browser_profile,
             #[cfg(feature = "cmd-browser")]
             create_desktop_shortcut,
-            #[cfg(feature = "cmd-browser")]
-            get_avatar_path,
             #[cfg(feature = "cmd-browser")]
             create_new_user_data_dir,
             #[cfg(feature = "cmd-browser")]
@@ -500,8 +395,6 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             delete_data_files,
             #[cfg(feature = "cmd-files")]
             list_data_files,
-            #[cfg(feature = "cmd-files")]
-            write_local_file,
             #[cfg(feature = "cmd-files")]
             read_all_local_files,
             #[cfg(feature = "cmd-files")]

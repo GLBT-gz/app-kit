@@ -1244,31 +1244,6 @@ fn get_file_version(exe_path: &str) -> String {
     }
 }
 
-/// 读取用户配置 avatar 图片路径
-pub fn get_profile_avatar_path(profile_path: &str, is_edge: bool) -> Option<String> {
-    let pp = Path::new(profile_path);
-
-    // 检查各种头像文件
-    for name in &["Google Profile Picture.png", "Profile Picture.png"] {
-        let img_path = pp.join(name);
-        if img_path.exists() {
-            return Some(img_path.to_string_lossy().to_string());
-        }
-    }
-
-    let ico_name = if is_edge {
-        "Edge Profile.ico"
-    } else {
-        "Google Profile.ico"
-    };
-    let ico_path = pp.join(ico_name);
-    if ico_path.exists() {
-        return Some(ico_path.to_string_lossy().to_string());
-    }
-
-    None
-}
-
 // ============ 检测 Edge ============
 
 fn detect_edge() -> BrowserInfo {

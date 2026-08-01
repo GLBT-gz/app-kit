@@ -21,7 +21,7 @@ futures-util = "0.3"
 reqwest = { version = "0.12", features = ["stream"] }
 serde.workspace = true
 serde_json.workspace = true
-appkit-core = { path = "../../shared/core", features = ["bridge"] }
+appkit-core = { path = "../../shared/core", features = ["bridge", "cmd-lite", "cmd-db"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 opener = "0.7"
 log = "0.4"
