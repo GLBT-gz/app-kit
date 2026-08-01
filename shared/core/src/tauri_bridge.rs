@@ -410,40 +410,56 @@ fn save_file(path: String, data_b64: String) -> Result<(), String> {
 ///     ])
 /// ```
 pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    let builder = tauri::plugin::Builder::<R>::new("appkit-core");
-
-    #[cfg(feature = "cmd-browser")]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        detect_browsers,
-        detect_custom_profiles,
-        diagnose_directory,
-        get_launch_command,
-        launch_browser_profile,
-        create_desktop_shortcut,
-        get_avatar_path,
-        create_new_user_data_dir,
-        detect_debug_ports,
-        detect_browser_running_processes,
-        find_available_port,
-        kill_browser_profile_process,
-        kill_all_browser_processes,
-    ]);
-
-    #[cfg(feature = "cmd-files")]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        delete_data_files,
-        list_data_files,
-        write_local_file,
-        read_all_local_files,
-        list_database_files,
-    ]);
-
-    #[cfg(feature = "cmd-utils")]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        open_directory,
-        check_path_exists,
-        save_file,
-    ]);
-
-    builder.build()
+    // 注意：plugin Builder 的 invoke_handler 是"替换"而非"追加"，
+    // 因此必须在一次 generate_handler! 中注册全部启用命令，
+    // 未启用命令通过每条前的 #[cfg] 属性在编译期裁剪。
+    tauri::plugin::Builder::<R>::new("appkit-core")
+        .invoke_handler(tauri::generate_handler![
+            // ── 浏览器检测/配置/进程（cmd-browser）──
+            #[cfg(feature = "cmd-browser")]
+            detect_browsers,
+            #[cfg(feature = "cmd-browser")]
+            detect_custom_profiles,
+            #[cfg(feature = "cmd-browser")]
+            diagnose_directory,
+            #[cfg(feature = "cmd-browser")]
+            get_launch_command,
+            #[cfg(feature = "cmd-browser")]
+            launch_browser_profile,
+            #[cfg(feature = "cmd-browser")]
+            create_desktop_shortcut,
+            #[cfg(feature = "cmd-browser")]
+            get_avatar_path,
+            #[cfg(feature = "cmd-browser")]
+            create_new_user_data_dir,
+            #[cfg(feature = "cmd-browser")]
+            detect_debug_ports,
+            #[cfg(feature = "cmd-browser")]
+            detect_browser_running_processes,
+            #[cfg(feature = "cmd-browser")]
+            find_available_port,
+            #[cfg(feature = "cmd-browser")]
+            kill_browser_profile_process,
+            #[cfg(feature = "cmd-browser")]
+            kill_all_browser_processes,
+            // ── 数据文件管理（cmd-files）──
+            #[cfg(feature = "cmd-files")]
+            delete_data_files,
+            #[cfg(feature = "cmd-files")]
+            list_data_files,
+            #[cfg(feature = "cmd-files")]
+            write_local_file,
+            #[cfg(feature = "cmd-files")]
+            read_all_local_files,
+            #[cfg(feature = "cmd-files")]
+            list_database_files,
+            // ── 通用工具（cmd-utils）──
+            #[cfg(feature = "cmd-utils")]
+            open_directory,
+            #[cfg(feature = "cmd-utils")]
+            check_path_exists,
+            #[cfg(feature = "cmd-utils")]
+            save_file,
+        ])
+        .build()
 }
