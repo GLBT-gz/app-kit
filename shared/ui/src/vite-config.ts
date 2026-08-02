@@ -152,6 +152,12 @@ export interface ViteConfigOptions {
   extraAliases?: Record<string, string>;
   /** 额外的 public 目录（如 app-icons 图标库），构建时复制到 dist、开发时中间件服务 */
   extraPublicDirs?: ExtraPublicDir[];
+  /**
+   * 预打包（optimizeDeps）排除的依赖。
+   * 用于需要 vite 插件处理（如 new Worker(new URL(...)) 的 worker 打包）的库，
+   * 例如 jassub（ESM 多文件 worker + wasm），排除后由 vite 即时转换。
+   */
+  optimizeDepsExclude?: string[];
 }
 
 export function createViteConfig(options: ViteConfigOptions) {
@@ -164,6 +170,7 @@ export function createViteConfig(options: ViteConfigOptions) {
     extraPlugins = [],
     extraAliases = {},
     extraPublicDirs = [],
+    optimizeDepsExclude = [],
   } = options;
 
   // 动态端口：由 app-kit/scripts/tauri-dev.mjs 注入 PORT 时优先使用，
@@ -218,6 +225,9 @@ export function createViteConfig(options: ViteConfigOptions) {
       watch: watchSrcTauri
         ? undefined
         : { ignored: ["**/src-tauri/**"] },
+    },
+    optimizeDeps: {
+      exclude: optimizeDepsExclude,
     },
     build: {
       outDir: resolve(root, "dist"),
