@@ -3,6 +3,19 @@ use crate::cdp::connection::CdpConnection;
 use anyhow::{Context, Result};
 use tracing::{debug, info};
 
+/// 在字符边界处安全地截断字符串，避免 UTF-8 字节边界 panic
+pub fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        s
+    } else {
+        let mut end = max_bytes;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+}
+
 /// 页面操作封装
 pub struct Page<'a> {
     cdp: &'a CdpConnection,
@@ -79,14 +92,14 @@ impl<'a> Page<'a> {
 
     /// 执行 JavaScript
     pub async fn evaluate(&self, js: &str) -> Result<serde_json::Value> {
-        let snippet = if js.len() > 60 { &js[..60] } else { js };
+        let snippet = truncate_at_char_boundary(js, 60);
         debug!("执行 JS: {}...", snippet);
         commands::runtime_evaluate(self.cdp, js).await
     }
 
     /// 执行异步 JavaScript（支持 Promise/async/await）
     pub async fn evaluate_async(&self, js: &str) -> Result<serde_json::Value> {
-        let snippet = if js.len() > 60 { &js[..60] } else { js };
+        let snippet = truncate_at_char_boundary(js, 60);
         info!("执行异步 JS: {}...", snippet);
         commands::runtime_evaluate_async(self.cdp, js).await
     }
@@ -184,7 +197,10 @@ impl<'a> Element<'a> {
 
     /// 输入文本（先清空再输入）
     pub async fn type_text(&self, text: &str) -> Result<()> {
-        let display_text = if text.len() > 20 { format!("{}...", &text[..20]) } else { text.to_string() };
+        let display_text = {
+            let snippet = truncate_at_char_boundary(text, 20);
+            if snippet.len() < text.len() { format!("{}...", snippet) } else { text.to_string() }
+        };
         info!("输入文本到 {}: {}", self.selector, display_text);
         // 选中元素并清空
         self.click().await?;

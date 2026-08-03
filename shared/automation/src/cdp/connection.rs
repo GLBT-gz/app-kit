@@ -128,7 +128,7 @@ impl CdpConnection {
                             }
                         } else if let Some(method) = msg.get("method").and_then(|v| v.as_str()) {
                             // 事件通知 → 转发到广播通道
-                            debug!("CDP 事件: {} ({})", method, &text[..text.len().min(120)]);
+                            debug!("CDP 事件: {} ({})", method, crate::page::truncate_at_char_boundary(&text, 120));
                             let _ = self.event_tx.send(msg);
                         }
                     }

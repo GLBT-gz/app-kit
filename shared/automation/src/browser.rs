@@ -383,7 +383,7 @@ impl BrowserInstance {
         }
 
         let info: serde_json::Value = serde_json::from_str(&body)
-            .with_context(|| format!("TCP 直连解析 JSON 失败 (body: {})", &body[..body.len().min(200)]))?;
+            .with_context(|| format!("TCP 直连解析 JSON 失败 (body: {})", crate::page::truncate_at_char_boundary(&body, 200)))?;
         info["webSocketDebuggerUrl"]
             .as_str()
             .map(|s| s.to_string())
