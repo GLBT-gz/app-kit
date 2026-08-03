@@ -201,18 +201,6 @@
           "markdownDescription": "Enables the delete_data_files command without any pre-configured scope."
         },
         {
-          "description": "Enables the get_all_data command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:allow-get-all-data",
-          "markdownDescription": "Enables the get_all_data command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_app_version command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:allow-get-app-version",
-          "markdownDescription": "Enables the get_app_version command without any pre-configured scope."
-        },
-        {
           "description": "Enables the get_db_tables command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:allow-get-db-tables",
@@ -249,24 +237,6 @@
           "markdownDescription": "Enables the save_file command without any pre-configured scope."
         },
         {
-          "description": "Enables the set_app_config command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:allow-set-app-config",
-          "markdownDescription": "Enables the set_app_config command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the set_app_theme command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:allow-set-app-theme",
-          "markdownDescription": "Enables the set_app_theme command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the write_local_file command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:allow-write-local-file",
-          "markdownDescription": "Enables the write_local_file command without any pre-configured scope."
-        },
-        {
           "description": "Denies the check_path_exists command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:deny-check-path-exists",
@@ -283,18 +253,6 @@
           "type": "string",
           "const": "appkit-core:deny-delete-data-files",
           "markdownDescription": "Denies the delete_data_files command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_all_data command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:deny-get-all-data",
-          "markdownDescription": "Denies the get_all_data command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_app_version command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:deny-get-app-version",
-          "markdownDescription": "Denies the get_app_version command without any pre-configured scope."
         },
         {
           "description": "Denies the get_db_tables command without any pre-configured scope.",
@@ -331,24 +289,6 @@
           "type": "string",
           "const": "appkit-core:deny-save-file",
           "markdownDescription": "Denies the save_file command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the set_app_config command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:deny-set-app-config",
-          "markdownDescription": "Denies the set_app_config command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the set_app_theme command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:deny-set-app-theme",
-          "markdownDescription": "Denies the set_app_theme command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the write_local_file command without any pre-configured scope.",
-          "type": "string",
-          "const": "appkit-core:deny-write-local-file",
-          "markdownDescription": "Denies the write_local_file command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
