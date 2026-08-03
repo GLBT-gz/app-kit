@@ -135,10 +135,20 @@ impl BrowserInstance {
         let exe_name = exe_path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("");
+            .unwrap_or("")
+            .to_string();
 
         // ── 检测已有实例 ──
-        let running = appkit_core::browser::management::scan_running_browser_processes(exe_name);
+        // 注意：进程扫描会启动 PowerShell 子进程（可能耗时数秒），
+        // 必须放到 spawn_blocking，避免阻塞 tokio 异步线程导致其他并行任务卡住
+        let running = {
+            let exe_name = exe_name.clone();
+            tokio::task::spawn_blocking(move || {
+                appkit_core::browser::management::scan_running_browser_processes(&exe_name)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("扫描浏览器进程失败: {}", e))?
+        };
         let target_key = format!(
             "{}\\{}",
             profile.user_data_dir.display(),
@@ -159,21 +169,39 @@ impl BrowserInstance {
                 // ── 情况 1: 已有实例 + 有调试端口 → 检查 headless 模式是否一致 ──
                 Some(existing_port) => {
                     // 检查 headless 模式是否匹配（用端口精确识别主进程，避免子进程干扰）
-                    let running_headless = appkit_core::browser::management::is_running_instance_headless(
-                        exe_name, &target_key, *existing_port,
-                    );
+                    let running_headless = {
+                        let exe_name = exe_name.clone();
+                        let target_key = target_key.clone();
+                        let existing_port = *existing_port;
+                        tokio::task::spawn_blocking(move || {
+                            appkit_core::browser::management::is_running_instance_headless(
+                                &exe_name, &target_key, existing_port,
+                            )
+                        })
+                        .await
+                        .map_err(|e| anyhow::anyhow!("检测 headless 模式失败: {}", e))?
+                    };
                     if running_headless != headless {
                         info!(
                             "检测到运行中的浏览器实例 headless 模式不一致 (已有: {} vs 请求: {}), 杀死旧进程后重新启动",
                             if running_headless { "headless" } else { "有头" },
                             if headless { "headless" } else { "有头" },
                         );
-                        appkit_core::browser::management::kill_browser_by_exe_name(
-                            exe_name,
-                            &profile.id,
-                            &profile.user_data_dir.to_string_lossy(),
-                        )
-                        .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?;
+                        {
+                            let exe_name = exe_name.clone();
+                            let profile_id = profile.id.clone();
+                            let ud = profile.user_data_dir.to_string_lossy().to_string();
+                            tokio::task::spawn_blocking(move || {
+                                appkit_core::browser::management::kill_browser_by_exe_name(
+                                    &exe_name,
+                                    &profile_id,
+                                    &ud,
+                                )
+                            })
+                            .await
+                            .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?
+                            .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?;
+                        }
                         // 等待进程退出后，继续往下走到启动逻辑
                     } else {
                         info!(
@@ -190,12 +218,21 @@ impl BrowserInstance {
                         "检测到 {} 已运行但无调试端口, 正在杀死旧进程后重新启动...",
                         target_key
                     );
-                    appkit_core::browser::management::kill_browser_by_exe_name(
-                        exe_name,
-                        &profile.id,
-                        &profile.user_data_dir.to_string_lossy(),
-                    )
-                    .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?;
+                    {
+                        let exe_name = exe_name.clone();
+                        let profile_id = profile.id.clone();
+                        let ud = profile.user_data_dir.to_string_lossy().to_string();
+                        tokio::task::spawn_blocking(move || {
+                            appkit_core::browser::management::kill_browser_by_exe_name(
+                                &exe_name,
+                                &profile_id,
+                                &ud,
+                            )
+                        })
+                        .await
+                        .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?
+                        .map_err(|e| anyhow::anyhow!("杀死旧浏览器进程失败: {}", e))?;
+                    }
                 }
             }
         } else {
@@ -208,13 +245,21 @@ impl BrowserInstance {
                     "检测到 user_data_dir 已被占用 ({}), 关闭后为新 profile 启动...",
                     ck
                 );
-                let conflict_profile = ck.split('\\').last().unwrap_or("");
-                appkit_core::browser::management::kill_browser_by_exe_name(
-                    exe_name,
-                    conflict_profile,
-                    &profile.user_data_dir.to_string_lossy(),
-                )
-                .map_err(|e| anyhow::anyhow!("杀死冲突浏览器进程失败: {}", e))?;
+                let conflict_profile = ck.split('\\').last().unwrap_or("").to_string();
+                {
+                    let exe_name = exe_name.clone();
+                    let ud = profile.user_data_dir.to_string_lossy().to_string();
+                    tokio::task::spawn_blocking(move || {
+                        appkit_core::browser::management::kill_browser_by_exe_name(
+                            &exe_name,
+                            &conflict_profile,
+                            &ud,
+                        )
+                    })
+                    .await
+                    .map_err(|e| anyhow::anyhow!("杀死冲突浏览器进程失败: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("杀死冲突浏览器进程失败: {}", e))?;
+                }
             } else {
                 // ── 兜底: 检查 SingletonLock 文件 ──
                 // 如果 WMI/wmic 都没检测到进程，但锁文件存在，说明确实有浏览器在运行
@@ -225,11 +270,19 @@ impl BrowserInstance {
                         lock_file
                     );
                     // 走 kill 逻辑，确保旧进程被清理
-                    let _ = appkit_core::browser::management::kill_browser_by_exe_name(
-                        exe_name,
-                        &profile.id,
-                        &profile.user_data_dir.to_string_lossy(),
-                    );
+                    {
+                        let exe_name = exe_name.clone();
+                        let profile_id = profile.id.clone();
+                        let ud = profile.user_data_dir.to_string_lossy().to_string();
+                        let _ = tokio::task::spawn_blocking(move || {
+                            appkit_core::browser::management::kill_browser_by_exe_name(
+                                &exe_name,
+                                &profile_id,
+                                &ud,
+                            )
+                        })
+                        .await;
+                    }
                     // 锁文件会在进程退出后自动消失，或我们手动清理
                     let _ = std::fs::remove_file(&lock_file);
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
