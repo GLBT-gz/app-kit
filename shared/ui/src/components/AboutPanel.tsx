@@ -63,8 +63,12 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
     setIsDownloading(true);
     try {
       const nameClean = appName.replace(/[^a-zA-Z\u4e00-\u9fff0-9]+/g, "-").replace(/^-|-$/g, "");
+      // 默认文件名直接取安装包原名（versions.json 的 url 最后一段），
+      // 与发布流程「安装包保持打包原名」一致，避免硬编码前缀导致命名不一致
+      const urlName = v.url.split("/").pop();
+      const defaultName = urlName ? decodeURIComponent(urlName) : `${nameClean}-${v.version}-x64-setup.exe`;
       const savePath = await save({
-        defaultPath: `AppKit-${nameClean}-${v.version}-x64-setup.exe`,
+        defaultPath: defaultName,
         filters: [{ name: "安装程序", extensions: ["exe"] }],
       });
       if (!savePath) { setInstalling(null); setIsDownloading(false); return; }
