@@ -15,8 +15,8 @@
  * 非 dev 子命令（build 等）直接透传，不注入端口（生产模式走 frontendDist，无需端口）。
  */
 import { createServer } from "node:net";
-import { spawn } from "node:child_process";
-import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -36,6 +36,31 @@ function getFreePort() {
       srv.close(() => resolvePort(port));
     });
   });
+}
+
+/**
+ * 结束正在运行的旧实例：Windows 下 debug 版 exe 被运行中的实例锁住时，
+ * cargo 无法覆盖（拒绝访问 / os error 5），导致 tauri dev 启动失败。
+ * 按当前项目 package.json 的 name（即 target/debug/<name>.exe）结束旧实例。
+ */
+function killRunningInstance() {
+  let pkgName = "";
+  try {
+    pkgName = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")).name ?? "";
+  } catch {
+    return;
+  }
+  if (!pkgName) return;
+  try {
+    if (process.platform === "win32") {
+      const r = spawnSync("taskkill", ["/IM", `${pkgName}.exe`, "/F", "/T"], { stdio: "ignore" });
+      if (r.status === 0) console.log(`[tauri-dev] 已结束旧实例 ${pkgName}.exe`);
+    } else {
+      spawnSync("pkill", ["-x", pkgName], { stdio: "ignore" });
+    }
+  } catch {
+    /* 无旧实例或权限不足时忽略 */
+  }
 }
 
 /** 定位 tauri CLI：优先本地 @tauri-apps/cli，退回 npx */
@@ -71,6 +96,8 @@ async function main() {
     );
     env.PORT = String(port);
     console.log(`[tauri-dev] 动态端口 = ${port}（devUrl=http://localhost:${port}）`);
+    // 先结束旧实例，避免 debug exe 被锁导致 cargo 无法覆盖（拒绝访问）
+    killRunningInstance();
   }
 
   const { cmd, prefixArgs } = resolveTauriCommand();
