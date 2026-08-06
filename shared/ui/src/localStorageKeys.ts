@@ -17,6 +17,8 @@ export const LS_KEYS = {
   SHORTCUTS: "core-shortcuts",
   /** 主题配置（深色/浅色模式、强调色、窗口置顶） */
   THEME: "core-theme-config",
+  /** 全局字体选择（"maple" | "maple-cn" | "system"） */
+  FONT: "core-font-config",
   /** 数据管理面板当前子标签（本地存储/本地文件），独立于 NAV_LOCATION */
   DATA_MGR_SUBTAB: "core-data-mgr-subtab",
 } as const;

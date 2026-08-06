@@ -49,6 +49,18 @@ function loadCachedTheme() {
   }
 }
 
+/** 从 localStorage 读取字体选择（默认 Maple Mono，非法值回退默认） */
+function loadCachedFont(): string {
+  try {
+    const raw = localStorage.getItem(LS_KEYS.FONT);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const f = typeof parsed?.font === "string" ? parsed.font : "";
+    return ["maple-cn", "system", "kaiti", "simsun", "yahei"].includes(f) ? f : "maple";
+  } catch {
+    return "maple";
+  }
+}
+
 export function AppLayout({
   children,
   settingsTabs = [],
@@ -68,6 +80,7 @@ export function AppLayout({
   const [theme, setTheme] = useState<"dark" | "light">(cached.mode);
   const [accentHue, setAccentHue] = useState(cached.accentHue);
   const [pinOnTop, setPinOnTop] = useState(cached.pinOnTop);
+  const [font, setFont] = useState(loadCachedFont);
 
   // ── 浏览位置：路径数组，如 ['设置','全局浏览器配置'] 或 ['首页'] ──
   const naviPath = safeGetJSON<string[]>(LS_KEYS.NAV_LOCATION) ?? [];
@@ -102,6 +115,18 @@ export function AppLayout({
     if (skipOnce.current) { skipOnce.current = false; return; }
     safeSetJSON(LS_KEYS.THEME, { mode: theme, accentHue, pinOnTop });
   }, [theme, accentHue, pinOnTop]);
+
+  // ── 字体选择持久化 ──
+  const skipFontOnce = useRef(true);
+  useEffect(() => {
+    if (skipFontOnce.current) { skipFontOnce.current = false; return; }
+    safeSetJSON(LS_KEYS.FONT, { font });
+  }, [font]);
+
+  // 字体选择应用到 <html data-font>（theme.css 根据它切换 --font-ui / --font-mono）
+  useEffect(() => {
+    document.documentElement.setAttribute("data-font", font);
+  }, [font]);
 
   // ── 置顶同步到窗口 ──
   useEffect(() => {
@@ -252,6 +277,8 @@ export function AppLayout({
         pinOnTop={pinOnTop}
         onTogglePin={() => setPinOnTop(v => !v)}
         setWindowPin={onSetWindowPin || (async () => {})}
+        font={font}
+        onChangeFont={setFont}
         tabBar={tabBar}
         onWheel={onTopBarWheel}
       />

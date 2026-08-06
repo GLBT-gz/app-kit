@@ -116,3 +116,57 @@
   --border-clr: var(--border-h) var(--border-s) var(--border-l);
   --input: var(--border-input-h) var(--border-input-s) var(--border-input-l);
 }
+
+/* ========================================
+   Global Font (--font-ui)
+   base.css 的 :root / input 等统一引用此变量，
+   顶栏字体按钮通过 data-font 属性切换字体。
+   ======================================== */
+:root {
+  --font-ui: "Maple Mono", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* Maple Mono CN（含中文字形，需用户自行安装；不可用时回退 Maple Mono） */
+:root[data-font="maple-cn"] {
+  --font-ui: "Maple Mono CN", "Maple Mono", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "Maple Mono CN", "Maple Mono", Consolas, "Cascadia Code", monospace;
+}
+
+/* 系统默认字体（Segoe UI / 微软雅黑） */
+:root[data-font="system"] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: Consolas, "Cascadia Code", monospace;
+}
+
+/* 楷体 */
+:root[data-font="kaiti"] {
+  --font-ui: "KaiTi", "STKaiti", "KaiTi_GB2312", serif;
+  --font-mono: "KaiTi", "STKaiti", serif;
+}
+
+/* 宋体 */
+:root[data-font="simsun"] {
+  --font-ui: "SimSun", "NSimSun", "Songti SC", serif;
+  --font-mono: "SimSun", "NSimSun", monospace;
+}
+
+/* 微软雅黑 */
+:root[data-font="yahei"] {
+  --font-ui: "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "Microsoft YaHei", Consolas, "Cascadia Code", monospace;
+}
+
+/* 非默认字体时强制覆盖共享 UI 中硬编码 "Maple Mono" 的元素，
+   默认（data-font 缺失）不动，保持现状零风险。
+   :not(.font-option-label) 排除字体选择弹窗的预览文字——
+   它需要用自己的字体栈（inline style）展示，不能被全局字体覆盖 */
+:root[data-font="maple-cn"] body *:not(.font-option-label),
+:root[data-font="system"] body *:not(.font-option-label),
+:root[data-font="kaiti"] body *:not(.font-option-label),
+:root[data-font="simsun"] body *:not(.font-option-label),
+:root[data-font="yahei"] body *:not(.font-option-label) {
+  font-family: inherit !important;
+}

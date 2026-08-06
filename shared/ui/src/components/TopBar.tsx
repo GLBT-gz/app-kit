@@ -7,6 +7,18 @@ const presetColors = [
   { hue: 280, name: "紫" }, { hue: 320, name: "粉" }, { hue: 350, name: "玫" },
 ];
 
+/** 字体选项（全局字体设置）。Maple Mono 随安装包；CN 版过大不打进安装包，需用户自行安装。
+ *  - family：该字体的原生字体栈（预览文字用它渲染，不受全局字体影响；未安装时自然回退默认）
+ *  - detect：true 时用 document.fonts.check 检测是否已安装，未安装置灰不可选 */
+export const FONT_OPTIONS: Array<{ id: string; label: string; desc: string; family: string; detect: boolean }> = [
+  { id: "maple", label: "Maple Mono", desc: "默认 · 随安装包", family: '"Maple Mono", Consolas, monospace', detect: false },
+  { id: "maple-cn", label: "Maple Mono CN", desc: "含中文字形 · 需自行安装", family: '"Maple Mono CN", "Maple Mono", Consolas, monospace', detect: true },
+  { id: "kaiti", label: "楷体", desc: "Windows 系统字体", family: '"KaiTi", "STKaiti", "KaiTi_GB2312", serif', detect: true },
+  { id: "simsun", label: "宋体", desc: "Windows 系统字体", family: '"SimSun", "NSimSun", "Songti SC", serif', detect: true },
+  { id: "yahei", label: "微软雅黑", desc: "Windows 系统字体", family: '"Microsoft YaHei", "PingFang SC", sans-serif', detect: true },
+  { id: "system", label: "系统默认", desc: "Segoe UI / 微软雅黑", family: 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif', detect: false },
+];
+
 export function TopBar({
   showSettings,
   onToggleSettings,
@@ -17,6 +29,8 @@ export function TopBar({
   pinOnTop,
   onTogglePin,
   setWindowPin,
+  font,
+  onChangeFont,
   tabBar,
   onWheel,
 }: {
@@ -29,26 +43,57 @@ export function TopBar({
   pinOnTop: boolean;
   onTogglePin: () => void;
   setWindowPin: (pin: boolean) => Promise<void>;
+  /** 全局字体选择（"maple" | "maple-cn" | "system"） */
+  font: string;
+  onChangeFont: (font: string) => void;
   /** 顶栏左侧的 tab 栏（项目自定义） */
   tabBar?: React.ReactNode;
   /** 顶栏滚轮事件（项目自定义，如切换 tab） */
   onWheel?: (e: React.WheelEvent) => void;
 }) {
   const [showSkinPopover, setShowSkinPopover] = useState(false);
+  const [showFontPopover, setShowFontPopover] = useState(false);
+  /** 各字体是否可用（未安装的置灰不可选）：{ id: boolean } */
+  const [fontAvailability, setFontAvailability] = useState<Record<string, boolean>>({});
   const skinRef = useRef<HTMLDivElement>(null);
+  const fontRef = useRef<HTMLDivElement>(null);
   const topbarRef = useRef<HTMLDivElement>(null);
 
   // 点击外部关闭皮肤弹窗
   useEffect(() => {
-    if (!showSkinPopover) return;
+    if (!showSkinPopover && !showFontPopover) return;
     const handleClick = (e: MouseEvent) => {
       if (skinRef.current && !skinRef.current.contains(e.target as Node)) {
         setShowSkinPopover(false);
       }
+      if (fontRef.current && !fontRef.current.contains(e.target as Node)) {
+        setShowFontPopover(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [showSkinPopover]);
+  }, [showSkinPopover, showFontPopover]);
+
+  // 检测各字体是否已安装（detect:true 的用 document.fonts.check；
+  // 等待 fonts.ready 保证 @font-face/系统字体都已就绪）
+  useEffect(() => {
+    if (!showFontPopover) return;
+    document.fonts.ready.then(() => {
+      const next: Record<string, boolean> = {};
+      for (const opt of FONT_OPTIONS) {
+        if (!opt.detect) {
+          next[opt.id] = true;
+          continue;
+        }
+        try {
+          next[opt.id] = document.fonts.check(`16px ${opt.family}`);
+        } catch {
+          next[opt.id] = false;
+        }
+      }
+      setFontAvailability(next);
+    });
+  }, [showFontPopover]);
 
   // 原生 wheel 监听（比 React onWheel 更可靠，避免合成事件 + data-tauri-drag-region 冲突）
   useEffect(() => {
@@ -84,6 +129,40 @@ export function TopBar({
             <path d="M12 17v-6a4 4 0 0 0 4-4V5H8v2a4 4 0 0 0 4 4v6" /><line x1="8" y1="21" x2="16" y2="21" />
           </svg>
         </button>
+        {/* 字体选择 */}
+        <div className="skin-popover-wrapper" ref={fontRef}>
+          <button className={`font-btn ${showFontPopover ? "active" : ""}`} onClick={() => setShowFontPopover(v => !v)} title="字体">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" />
+            </svg>
+          </button>
+          {showFontPopover && (
+            <div className="font-popover">
+              <div className="font-popover-title">字体</div>
+              {FONT_OPTIONS.map(opt => {
+                // 未安装 → 置灰不可选（选了也无效）
+                const available = fontAvailability[opt.id] !== false;
+                return (
+                  <button
+                    key={opt.id}
+                    className={`font-option ${font === opt.id ? "active" : ""} ${!available ? "disabled" : ""}`}
+                    disabled={!available}
+                    onClick={() => { onChangeFont(opt.id); setShowFontPopover(false); }}
+                  >
+                    <div className="font-option-main">
+                      {/* 预览文字用该字体自身的字体栈（不受全局字体影响）；未安装时自然回退默认 */}
+                      <span className="font-option-label" style={{ fontFamily: opt.family }}>{opt.label}</span>
+                      <span className="font-option-desc">
+                        {!available ? "未安装" : opt.desc}
+                      </span>
+                    </div>
+                    {font === opt.id && <span className="font-option-check">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         {/* 调色板 */}
         <div className="skin-popover-wrapper" ref={skinRef}>
           <button className="skin-btn" onClick={() => setShowSkinPopover(v => !v)} title="主题色">

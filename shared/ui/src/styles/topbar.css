@@ -221,3 +221,105 @@
   width: 32px;
   text-align: right;
 }
+
+/* ========================================
+   Font Popover
+   ======================================== */
+.font-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.font-btn:hover,
+.font-btn.active {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+}
+
+.font-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 100;
+  width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.font-popover-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px 8px;
+}
+
+.font-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.font-option:hover:not(.disabled) {
+  background: var(--bg-badge);
+}
+
+.font-option.active {
+  background: var(--accent-light);
+}
+
+.font-option.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.font-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.font-option-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.font-option-desc {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.font-option-check {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
