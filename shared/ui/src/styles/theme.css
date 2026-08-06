@@ -170,3 +170,10 @@
 :root[data-font="yahei"] body *:not(.font-option-label) {
   font-family: inherit !important;
 }
+
+/* Maple Mono CN 下全局禁止加粗：
+   CN 版为可变字体、带真实粗体字重，仅靠 font-synthesis 挡不住，
+   这里直接强制 400 字重。其余字体（含默认 Maple Mono）保持粗体。 */
+:root[data-font="maple-cn"] body * {
+  font-weight: 400 !important;
+}
