@@ -166,7 +166,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         <div className="about-section" style={{ padding: "12px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>正在下载...</span>
-            <span style={{ fontSize: 12, color: "var(--accent-color)" }}>{downloadPercent}%</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent-color)" }}>{downloadPercent}%</span>
           </div>
           <div style={{
             width: "100%",

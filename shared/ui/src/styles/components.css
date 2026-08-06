@@ -169,6 +169,7 @@
 .modal-header h3 {
   margin: 0;
   font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -392,6 +393,7 @@
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -407,6 +409,7 @@
 
 .platform-section-title {
   font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
   padding: 0 0 10px 4px;
   border-bottom: 1px solid var(--border);
@@ -427,6 +430,7 @@
 
 .platform-picker-label {
   font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
   min-width: 100px;
   flex-shrink: 0;
@@ -548,6 +552,7 @@
 .custom-select-option.active {
   background: var(--accent);
   color: var(--text-on-accent, #fff);
+  font-weight: 600;
 }
 
 .custom-select-option.disabled {
@@ -649,6 +654,7 @@
 
 .mode-switch-label {
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -730,6 +736,7 @@
 
 .home-header h1 {
   font-size: 24px;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 6px;
 }
@@ -789,6 +796,7 @@
 
 .home-card-title {
   font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -880,6 +888,7 @@
 
 .placeholder-title {
   font-size: 18px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -901,6 +910,7 @@
 
 .creds-section-title {
   font-size: 14px;
+  font-weight: 600;
   margin-bottom: 8px;
   color: var(--text-primary);
   display: flex;
@@ -939,6 +949,7 @@
 
 .creds-card-title {
   font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 10px;
   padding-bottom: 4px;
@@ -998,6 +1009,7 @@
 }
 .creds-status-saved {
   color: #22c55e;
+  font-weight: bold;
 }
 @keyframes creds-spin {
   from { transform: rotate(0deg); }

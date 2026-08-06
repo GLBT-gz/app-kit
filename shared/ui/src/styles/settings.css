@@ -178,6 +178,7 @@
   background: var(--accent-light);
   color: var(--accent);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .settings-kbd {
