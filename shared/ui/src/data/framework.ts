@@ -172,3 +172,13 @@ registerRawDataItem("log-cache:", {
   matchMode: "prefix",
   onDelete: "allowed",
 });
+
+/** 浏览器可见用户数据目录列表（BrowserConfigPanel 按 browser_type 动态生成） */
+registerRawDataItem("core-visible-dirs-", {
+  storage: "localStorage",
+  category: "cache",
+  desc: "浏览器可见用户数据目录列表（core-visible-dirs-{browser_type}）",
+  default: null,
+  matchMode: "prefix",
+  onDelete: "allowed",
+});
