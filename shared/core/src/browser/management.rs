@@ -1376,14 +1376,6 @@ pub fn detect_profiles_from(
         suggested.extend(scan_brand_rpa_dirs(brand, default_user_data));
     }
 
-    // 建议目录（如 "Chrome Rpa" 下的各平台 user data dir）的 profiles 自动并入，
-    // 避免新建用户数据目录后检测不到（无需手动添加即可在平台选择中看到）
-    for udd in &suggested {
-        if Path::new(udd).exists() {
-            all_profiles.extend(read_profiles(udd, browser_type == "edge"));
-        }
-    }
-
     BrowserInfo {
         browser_type: browser_type.to_string(),
         browser_name: browser_name.to_string(),
