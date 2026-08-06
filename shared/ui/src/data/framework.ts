@@ -76,6 +76,88 @@ registerDataItems(
       desc: "数据管理面板当前子标签（本地存储 / 本地文件）",
       default: "storage" as string,
     },
+
+    // ── 浏览器面板（BrowserConfigPanel / useBrowserBaseData） ──
+
+    /** 浏览器配置面板侧边栏宽度 */
+    "core-bcp-sidebar-width": {
+      storage: "localStorage",
+      category: "layout",
+      desc: "浏览器配置面板侧边栏宽度（可拖拽调整）",
+      default: 185,
+    },
+    /** 浏览器配置面板当前激活的浏览器标签 */
+    "core-active-browser-tab": {
+      storage: "localStorage",
+      category: "layout",
+      desc: "浏览器配置面板当前激活的浏览器标签",
+      default: null as string | null,
+    },
+    /** 当前选中的浏览器类型 */
+    "core-current-browser": {
+      storage: "localStorage",
+      category: "preference",
+      desc: "浏览器面板当前选中的浏览器类型",
+      default: "" as string,
+    },
+    /** 当前选中的用户数据 Profile */
+    "core-current-profile": {
+      storage: "localStorage",
+      category: "preference",
+      desc: "浏览器面板当前选中的用户数据 Profile",
+      default: null as { name: string; userDataDir: string; id: string } | null,
+    },
+    /** 是否隐藏不可控的 Profile 卡片 */
+    "core-hide-uncontrollable": {
+      storage: "localStorage",
+      category: "preference",
+      desc: "是否隐藏不可控的 Profile 卡片",
+      default: false,
+    },
+
+    // ── 全局字体选择（TopBar） ──
+
+    /** 全局字体选择（{ font: "maple" | "maple-cn" | "system" | ... }） */
+    "core-font-config": {
+      storage: "localStorage",
+      category: "preference",
+      desc: "全局字体选择配置",
+      default: { font: "maple" } as { font: string },
+    },
+
+    // ── 浏览器相关缓存 ──
+
+    /** 浏览器列表缓存（检测结果，不含图标） */
+    "core-browsers-cache": {
+      storage: "localStorage",
+      category: "cache",
+      desc: "浏览器列表缓存（检测结果）",
+      default: [] as unknown[],
+    },
+    /** 浏览器可执行文件路径配置缓存 */
+    "core-cfg-exe-paths": {
+      storage: "localStorage",
+      category: "cache",
+      desc: "浏览器可执行文件路径配置缓存",
+      default: {} as Record<string, string>,
+    },
+    /** 浏览器用户数据目录配置缓存 */
+    "core-cfg-userdata-dirs": {
+      storage: "localStorage",
+      category: "cache",
+      desc: "浏览器用户数据目录配置缓存",
+      default: {} as Record<string, string[]>,
+    },
+
+    // ── 数据管理快照 ──
+
+    /** 数据管理快照（最多保留 5 份） */
+    "core-snapshots": {
+      storage: "localStorage",
+      category: "cache",
+      desc: "数据管理快照（保存时 localStorage 全量备份）",
+      default: [] as unknown[],
+    },
   },
 );
 
