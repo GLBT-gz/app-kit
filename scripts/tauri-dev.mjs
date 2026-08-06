@@ -25,13 +25,34 @@ const subcommand = args[0] && !args[0].startsWith("-") ? args[0] : "dev";
 
 let tmpConfig;
 
-/** 首选固定端口：保证 dev 多次启动 origin 一致，localStorage 缓存不因端口变化丢失 */
-const PREFERRED_PORT = 8464;
+// 首选固定端口：优先从当前项目 src-tauri/tauri.conf.json 的 build.devUrl 解析端口
+// （各项目已在自己配置里固定端口，如 006 为 5176），不再硬编码默认端口。
+// 固定端口保证 dev 多次启动 origin 一致，localStorage 缓存不因端口变化丢失。
+let preferredPort;
+try {
+  const conf = JSON.parse(readFileSync(resolve(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"));
+  const devUrl = conf.build?.devUrl;
+  if (typeof devUrl === "string") {
+    const m = devUrl.match(/:(\d+)\/?$/);
+    if (m) preferredPort = Number(m[1]);
+  }
+} catch {
+  /* 读不到时使用随机端口 */
+}
+// package.json 显式声明 tauri-dev-port 时覆盖（个别需要强制端口时使用）
+try {
+  const pkg = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
+  if (typeof pkg["tauri-dev-port"] === "number" && pkg["tauri-dev-port"] > 0) {
+    preferredPort = pkg["tauri-dev-port"];
+  }
+} catch {
+  /* 忽略 */
+}
 
 /**
- * 探测一个空闲端口（优先固定端口，被占用时退回随机端口）
+ * 探测一个空闲端口（优先项目固定端口，被占用时退回随机端口）
  *
- * 固定端口 8464 空闲 → 用 8464；被占用（残留进程）→ 随机端口兜底。
+ * 项目固定端口空闲 → 用固定端口；被占用或未配置 → 随机端口。
  */
 function getFreePort() {
   return new Promise((resolvePort, reject) => {
@@ -39,7 +60,7 @@ function getFreePort() {
       const srv = createServer();
       srv.unref();
       srv.on("error", (err) => {
-        if (err.code === "EADDRINUSE" && port === PREFERRED_PORT) {
+        if (err.code === "EADDRINUSE" && port === preferredPort) {
           tryListen(0); // 固定端口被占用，退回随机端口
         } else {
           reject(err);
@@ -50,7 +71,11 @@ function getFreePort() {
         srv.close(() => resolvePort(used));
       });
     };
-    tryListen(PREFERRED_PORT);
+    if (preferredPort) {
+      tryListen(preferredPort);
+    } else {
+      tryListen(0); // 项目未配置固定端口：随机端口
+    }
   });
 }
 
