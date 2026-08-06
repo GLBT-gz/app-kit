@@ -406,7 +406,7 @@ function LogEntryItem({ entry }: { entry: LogEntry }) {
                       if (h === '公式得数/备货件数' && cell !== '-') {
                          const salesIdx = entry.table!.headers.indexOf('近7日销量');
                          const s = salesIdx >= 0 ? parseInt(row[salesIdx]) : NaN;
-                         cellStyle = { color: !isNaN(s) && s >= 5 ? '#2563eb' : '#93c5fd', fontWeight: 600 };
+                         cellStyle = { color: !isNaN(s) && s >= 5 ? '#2563eb' : '#93c5fd' };
                        }
                       return <td key={ci} style={cellStyle}>{cell}</td>;
                     })}
