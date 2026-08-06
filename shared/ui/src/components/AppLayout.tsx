@@ -65,7 +65,7 @@ export function AppLayout({
   children,
   settingsTabs = [],
   defaultSettingsTab,
-  settingsSidebarWidth: initialSidebarWidth = 175,
+  settingsSidebarWidth: initialSidebarWidth = 185,
   onSettingsChange,
   onSetWindowPin,
   tabBar,

@@ -28,7 +28,7 @@
    设置侧边栏（标签页导航）
    ======================================== */
 .settings-sidebar {
-  width: 200px;
+  width: 185px;
   flex-shrink: 0;
   padding: 8px;
   border-right: 1px solid var(--border);
