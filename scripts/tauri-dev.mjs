@@ -25,16 +25,32 @@ const subcommand = args[0] && !args[0].startsWith("-") ? args[0] : "dev";
 
 let tmpConfig;
 
-/** 探测一个空闲端口 */
+/** 首选固定端口：保证 dev 多次启动 origin 一致，localStorage 缓存不因端口变化丢失 */
+const PREFERRED_PORT = 8464;
+
+/**
+ * 探测一个空闲端口（优先固定端口，被占用时退回随机端口）
+ *
+ * 固定端口 8464 空闲 → 用 8464；被占用（残留进程）→ 随机端口兜底。
+ */
 function getFreePort() {
   return new Promise((resolvePort, reject) => {
-    const srv = createServer();
-    srv.unref();
-    srv.on("error", reject);
-    srv.listen(0, "127.0.0.1", () => {
-      const { port } = srv.address();
-      srv.close(() => resolvePort(port));
-    });
+    const tryListen = (port) => {
+      const srv = createServer();
+      srv.unref();
+      srv.on("error", (err) => {
+        if (err.code === "EADDRINUSE" && port === PREFERRED_PORT) {
+          tryListen(0); // 固定端口被占用，退回随机端口
+        } else {
+          reject(err);
+        }
+      });
+      srv.listen(port, "127.0.0.1", () => {
+        const used = srv.address().port;
+        srv.close(() => resolvePort(used));
+      });
+    };
+    tryListen(PREFERRED_PORT);
   });
 }
 
