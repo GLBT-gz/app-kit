@@ -22,12 +22,12 @@ scripts/
 
 | feature | 命令数 | 内容 |
 |---|---|---|
-| `cmd-browser` | 13 | 浏览器检测/配置/进程管理 |
-| `cmd-files` | 5 | 数据文件管理 |
+| `cmd-browser` | 11 | 浏览器检测/配置/进程管理 |
+| `cmd-files` | 4 | 数据文件管理 |
 | `cmd-utils` | 3 | 通用工具（打开目录/路径检查/保存文件） |
 | `cmd-db` | 2 | SQLite 表管理（rusqlite 为 optional 依赖，仅启用时编译） |
-| `cmd-full` | 21 | 组合：`cmd-browser`+`cmd-files`+`cmd-utils`（多数业务项目） |
-| `cmd-lite` | 8 | 组合：`cmd-files`+`cmd-utils`（纯数据类项目，如 005/900） |
+| `cmd-full` | 18 | 组合：`cmd-browser`+`cmd-files`+`cmd-utils`（多数业务项目） |
+| `cmd-lite` | 7 | 组合：`cmd-files`+`cmd-utils`（纯数据类项目，如 005） |
 
 项目用法（在项目 `src-tauri/Cargo.toml`）：
 
