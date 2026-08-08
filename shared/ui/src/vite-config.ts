@@ -66,6 +66,8 @@ const MIME_TYPES: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".ttf": "font/ttf",
+  ".woff2": "font/woff2",
 };
 
 function copyDirRecursive(src: string, dest: string) {
@@ -184,7 +186,14 @@ export function createViteConfig(options: ViteConfigOptions) {
 
   const plugins: any[] = [react(), ...extraPlugins];
   if (enableFonts) plugins.push(copyFontsPlugin());
-  if (extraPublicDirs.length > 0) plugins.push(extraPublicDirsPlugin(root, extraPublicDirs));
+  // 共享 Maple Mono 字体：dev 模式也按 /fonts/* 提供静态服务。
+  // 若不提供，@font-face 请求 /fonts/MapleMono-VF.ttf 会 404 并被 Vite 回退为 index.html（HTML），
+  // Chromium 尝试按字体解析时报 “OTS parsing error: invalid sfntVersion”。构建时随 extraPublicDirs 一并复制到 dist。
+  const fontPublicDirs: ExtraPublicDir[] = enableFonts
+    ? [{ src: pathResolve(UI_ROOT, "public/fonts"), prefix: "/fonts" }]
+    : [];
+  const allExtraDirs = [...fontPublicDirs, ...extraPublicDirs];
+  if (allExtraDirs.length > 0) plugins.push(extraPublicDirsPlugin(root, allExtraDirs));
 
   return defineConfig({
     root,
