@@ -293,7 +293,7 @@ export function LocalFiles() {
     <>
       <div className="dm-toolbar">
         <span className="dm-toolbar-summary">
-          目录：<span style={{ fontSize: 12 }}>{dataDir}</span>
+          <span style={{ fontSize: 12 }}>{dataDir}</span>
           {loadError && files.length > 0 && <span style={{ color: "#ef4444", marginLeft: 8 }}>（部分文件读取失败）</span>}
         </span>
         <div style={{ display: "flex", gap: 4, flex: 1, justifyContent: "flex-end" }}>
