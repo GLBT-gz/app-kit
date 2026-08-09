@@ -318,6 +318,10 @@ fn get_db_tables(db_rel_path: String) -> Result<Vec<DbTableInfo>, String> {
     }
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("打开数据库失败: {}", e))?;
+    // 项目自身常驻连接（无 busy_timeout），并发读写可能短暂撞锁（SQLITE_BUSY），
+    // 这里等待锁释放而不是立即失败
+    conn.busy_timeout(std::time::Duration::from_millis(3000))
+        .map_err(|e| format!("设置 busy_timeout 失败: {}", e))?;
     let mut stmt = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
         .map_err(|e| format!("查询表名失败: {}", e))?;
@@ -344,6 +348,9 @@ fn clear_db_table(db_rel_path: String, table_name: String) -> Result<(), String>
     let db_path = dir.join(&db_rel_path);
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("打开数据库失败: {}", e))?;
+    // 与 get_db_tables 同理：等待锁释放
+    conn.busy_timeout(std::time::Duration::from_millis(3000))
+        .map_err(|e| format!("设置 busy_timeout 失败: {}", e))?;
     conn.execute(&format!("DELETE FROM \"{}\"", table_name), [])
         .map_err(|e| format!("清空表 {} 失败: {}", table_name, e))?;
     Ok(())
