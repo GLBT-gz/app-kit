@@ -23,6 +23,24 @@ export function LocalFiles() {
   const [clearingAllBackend, setClearingAllBackend] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // ── 复制目录路径提示状态（复制成功后显示几秒恢复） ──
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  const handleCopyDir = useCallback(() => {
+    try {
+      navigator.clipboard.writeText(dataDir);
+      setCopied(true);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch { /* 剪贴板不可用时静默 */ }
+  }, [dataDir]);
+
   // ── 数据库表信息 ──
   const [dbTablesMap, setDbTablesMap] = useState<Record<string, DbTableInfo[]>>({});
   const [dbTablesLoading, setDbTablesLoading] = useState<Record<string, boolean>>({});
@@ -301,13 +319,11 @@ export function LocalFiles() {
           </span>
           <button
             className="dm-tool-btn"
-            style={{ fontSize: 11, padding: "1px 8px", marginLeft: 8 }}
-            onClick={() => {
-              try { navigator.clipboard.writeText(dataDir); } catch { /* 剪贴板不可用时静默 */ }
-            }}
+            style={{ fontSize: 11, padding: "1px 8px", marginLeft: 8, color: copied ? "#22c55e" : undefined, borderColor: copied ? "rgba(34,197,94,0.5)" : undefined }}
+            onClick={handleCopyDir}
             title="复制目录路径"
           >
-            复制
+            {copied ? "✓ 已复制" : "复制"}
           </button>
           {loadError && files.length > 0 && <span style={{ color: "#ef4444", marginLeft: 8 }}>（部分文件读取失败）</span>}
         </span>
