@@ -293,7 +293,22 @@ export function LocalFiles() {
     <>
       <div className="dm-toolbar">
         <span className="dm-toolbar-summary">
-          目录：<span style={{ fontSize: 12 }}>{dataDir}</span>
+          <span
+            style={{ fontSize: 12, userSelect: "text", cursor: "text" }}
+            title={dataDir}
+          >
+            {dataDir}
+          </span>
+          <button
+            className="dm-tool-btn"
+            style={{ fontSize: 11, padding: "1px 8px", marginLeft: 8 }}
+            onClick={() => {
+              try { navigator.clipboard.writeText(dataDir); } catch { /* 剪贴板不可用时静默 */ }
+            }}
+            title="复制目录路径"
+          >
+            复制
+          </button>
           {loadError && files.length > 0 && <span style={{ color: "#ef4444", marginLeft: 8 }}>（部分文件读取失败）</span>}
         </span>
         <div style={{ display: "flex", gap: 4, flex: 1, justifyContent: "flex-end" }}>
