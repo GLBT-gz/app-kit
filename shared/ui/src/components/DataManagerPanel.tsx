@@ -10,19 +10,19 @@ import { isPlainObject, tryParseJSON, formatValue, typeTag, JsonNode, ConfirmDia
 import { LocalFiles } from "./LocalFiles";
 
 // ============================================================
-// 主组件 — 2 个 Tab：本地存储 | 本地文件
+// 主组件 — 2 个 Tab：浏览器存储 | 本地存储
 // ============================================================
 
 type DataTab = "storage" | "local";
 
 const DATA_TABS: TabItem[] = [
-  { id: "storage", label: "本地存储" },
-  { id: "local", label: "本地文件" },
+  { id: "storage", label: "浏览器存储" },
+  { id: "local", label: "本地存储" },
 ];
 
 const SUB_LABEL_MAP: Record<DataTab, string> = {
-  storage: "本地存储",
-  local: "本地文件",
+  storage: "浏览器存储",
+  local: "本地存储",
 };
 
 interface DataManagerPanelProps {
@@ -33,13 +33,16 @@ interface DataManagerPanelProps {
 export function DataManagerPanel({ appName = "当前应用", onClose }: DataManagerPanelProps) {
   const [tab, setTabState] = useState<DataTab>(() => {
     const saved = safeGetJSON<string>(LS_KEYS.DATA_MGR_SUBTAB);
-    if (saved === "本地存储") return "storage";
+    // 新格式：直接存 tab id
+    if (saved === "storage" || saved === "local") return saved;
+    // 旧格式：存 label 字符串（旧版第一个 Tab 曾叫"本地存储"，现改名"浏览器存储"）
+    if (saved === "本地存储" || saved === "浏览器存储") return "storage";
     if (saved === "本地文件") return "local";
-    // 向后兼容：从旧版 NAV_LOCATION 的 3 级路径恢复
+    // 更早版本：从旧版 NAV_LOCATION 的 3 级路径恢复
     const navPath = safeGetJSON<string[]>(LS_KEYS.NAV_LOCATION) ?? [];
     if (navPath.length >= 3 && navPath[1] === "数据管理") {
       if (navPath[2] === "本地文件") return "local";
-      if (navPath[2] === "本地存储") return "storage";
+      if (navPath[2] === "本地存储" || navPath[2] === "浏览器存储") return "storage";
     }
     return "storage";
   });
@@ -47,9 +50,9 @@ export function DataManagerPanel({ appName = "当前应用", onClose }: DataMana
   const setTab = useCallback((t: string) => {
     const v = t as DataTab;
     setTabState(v);
-    const label = SUB_LABEL_MAP[v];
-    safeSetJSON(LS_KEYS.DATA_MGR_SUBTAB, label);
-    safeSetJSON(LS_KEYS.NAV_LOCATION, ["设置", "数据管理", label]);
+    // 存储 tab id 而非 label，避免标签改名后旧值语义错位
+    safeSetJSON(LS_KEYS.DATA_MGR_SUBTAB, v);
+    safeSetJSON(LS_KEYS.NAV_LOCATION, ["设置", "数据管理", SUB_LABEL_MAP[v]]);
   }, []);
 
   const handleTabWheel = useCallback((e: React.WheelEvent) => {

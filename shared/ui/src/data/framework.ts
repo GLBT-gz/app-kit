@@ -73,7 +73,7 @@ registerDataItems(
     "core-data-mgr-subtab": {
       storage: "localStorage",
       category: "layout",
-      desc: "数据管理面板当前子标签（本地存储 / 本地文件）",
+      desc: "数据管理面板当前子标签（浏览器存储 / 本地存储）",
       default: "storage" as string,
     },
 
