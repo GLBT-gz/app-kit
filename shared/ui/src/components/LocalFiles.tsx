@@ -276,8 +276,35 @@ export function LocalFiles() {
     return [...map.entries()];
   }, [backendFiles, dbRegItems]);
 
-  // 分离已知和未知文件
-  const otherFiles = files.filter(f => !backendFileNames.has(f.name) && !dbRegFileNames.has(f.name));
+  // 已注册数据库的衍生文件（SQLite 运行附属 -wal/-shm/-journal + 历史备份 .bak-*/.backup-*/.manual-backup-*），
+  // 视为与数据库文件一体：不在「其他文件（未注册）」中单独列出，避免误删/误以为多余文件。
+  const dbAuxNames = useMemo(() => {
+    const s = new Set<string>();
+    if (dbRegFileNames.size === 0) return s;
+    for (const f of files) {
+      for (const dbName of dbRegFileNames) {
+        if (!dbName) continue;
+        const stem = dbName.replace(/\.db$/i, "");
+        const prefixes = [
+          `${stem}.db-`,                 // leisure.db-wal / .db-shm / .db-journal
+          `${stem}.db.bak-`,             // leisure.db.bak-before-migrate
+          `${stem}.db.backup-`,          // leisure.db.backup-xxx
+          `${stem}.db.manual-backup-`,   // leisure.db.manual-backup-20260803
+          `${dbName}.bak-`, `${dbName}.backup-`,
+        ];
+        if (prefixes.some(p => f.name.startsWith(p))) {
+          s.add(f.name);
+          break;
+        }
+      }
+    }
+    return s;
+  }, [files, dbRegFileNames]);
+
+  // 分离已知和未知文件（已知 = 注册的后端文件 / 注册的数据库 / 数据库衍生文件）
+  const otherFiles = files.filter(
+    f => !backendFileNames.has(f.name) && !dbRegFileNames.has(f.name) && !dbAuxNames.has(f.name),
+  );
 
   // SQLite 辅助文件（.db-shm / .db-wal）关联分组
   const sqliteAuxMap = useMemo(() => {
