@@ -1,4 +1,22 @@
 /* ========================================
+   padding 语义规范（改样式前必读）
+   ========================================
+   .page-content  主内容区专属类（AppLayout 渲染页面处）。
+                  页面级 padding: 12px 20px 只挂在这里。
+   .content-area  纯布局容器，无 padding，与页面边距彻底解耦。
+   .panel-content 设置面板内部滚动面板（如 BrowserConfigPanel），
+                  自带 padding，任何页面级覆盖都不会命中它。
+
+   子项目"全屏页面"约定：页面根节点保持 flex 布局，用
+     .page-content:has(> .fullscreen-page) { padding: 0; overflow: hidden; }
+   做条件覆盖。
+
+   禁止写法：
+     div.page-content { padding: 0 }        ← 全局覆盖，会误伤所有页面
+     .settings-content .content-area {...}  ← 恢复规则已无必要
+   ======================================== */
+
+/* ========================================
    Global Reset & Base
    ======================================== */
 :root {
@@ -95,18 +113,8 @@ input, textarea, select, button {
 
 /* ========================================
    Content Area
+   （类名语义与全屏覆盖规范见文件头部注释）
    ======================================== */
-/* ── padding 语义规范 ──────────────────────────────────
-   .page-content  主内容区专属：页面级 padding（12px 20px）只挂在这里。
-   .content-area  纯布局容器：不设 padding，与页面边距彻底解耦；
-                  子项目覆盖一律写 .page-content:has(...)，永远不会
-                  波及设置面板内部。
-   .panel-content 设置面板内部滚动面板（如 BrowserConfigPanel）：
-                  自带 padding，任何页面级覆盖都不会命中它。
-   全屏页面约定：页面根节点保持 flex 布局，用
-     .page-content:has(> .fullscreen-page) { padding: 0; overflow: hidden; }
-   做条件覆盖，禁止全局 div.page-content { padding: 0 }。
-   ────────────────────────────────────────────────── */
 .content-area {
   flex: 1;
   min-height: 0;
