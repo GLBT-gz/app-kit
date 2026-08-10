@@ -23,6 +23,24 @@ export function LocalFiles() {
   const [clearingAllBackend, setClearingAllBackend] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // ── 复制目录路径提示状态（复制成功后显示几秒恢复） ──
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  const handleCopyDir = useCallback(() => {
+    try {
+      navigator.clipboard.writeText(dataDir);
+      setCopied(true);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch { /* 剪贴板不可用时静默 */ }
+  }, [dataDir]);
+
   // ── 数据库表信息 ──
   const [dbTablesMap, setDbTablesMap] = useState<Record<string, DbTableInfo[]>>({});
   const [dbTablesLoading, setDbTablesLoading] = useState<Record<string, boolean>>({});
@@ -258,8 +276,35 @@ export function LocalFiles() {
     return [...map.entries()];
   }, [backendFiles, dbRegItems]);
 
-  // 分离已知和未知文件
-  const otherFiles = files.filter(f => !backendFileNames.has(f.name) && !dbRegFileNames.has(f.name));
+  // 已注册数据库的衍生文件（SQLite 运行附属 -wal/-shm/-journal + 历史备份 .bak-*/.backup-*/.manual-backup-*），
+  // 视为与数据库文件一体：不在「其他文件（未注册）」中单独列出，避免误删/误以为多余文件。
+  const dbAuxNames = useMemo(() => {
+    const s = new Set<string>();
+    if (dbRegFileNames.size === 0) return s;
+    for (const f of files) {
+      for (const dbName of dbRegFileNames) {
+        if (!dbName) continue;
+        const stem = dbName.replace(/\.db$/i, "");
+        const prefixes = [
+          `${stem}.db-`,                 // leisure.db-wal / .db-shm / .db-journal
+          `${stem}.db.bak-`,             // leisure.db.bak-before-migrate
+          `${stem}.db.backup-`,          // leisure.db.backup-xxx
+          `${stem}.db.manual-backup-`,   // leisure.db.manual-backup-20260803
+          `${dbName}.bak-`, `${dbName}.backup-`,
+        ];
+        if (prefixes.some(p => f.name.startsWith(p))) {
+          s.add(f.name);
+          break;
+        }
+      }
+    }
+    return s;
+  }, [files, dbRegFileNames]);
+
+  // 分离已知和未知文件（已知 = 注册的后端文件 / 注册的数据库 / 数据库衍生文件）
+  const otherFiles = files.filter(
+    f => !backendFileNames.has(f.name) && !dbRegFileNames.has(f.name) && !dbAuxNames.has(f.name),
+  );
 
   // SQLite 辅助文件（.db-shm / .db-wal）关联分组
   const sqliteAuxMap = useMemo(() => {
@@ -293,7 +338,20 @@ export function LocalFiles() {
     <>
       <div className="dm-toolbar">
         <span className="dm-toolbar-summary">
-          <span style={{ fontSize: 12 }}>{dataDir}</span>
+          <span
+            style={{ fontSize: 12, userSelect: "text", cursor: "text" }}
+            title={dataDir}
+          >
+            {dataDir}
+          </span>
+          <button
+            className="dm-tool-btn"
+            style={{ fontSize: 11, padding: "1px 8px", marginLeft: 8, color: copied ? "#22c55e" : undefined, borderColor: copied ? "rgba(34,197,94,0.5)" : undefined }}
+            onClick={handleCopyDir}
+            title="复制目录路径"
+          >
+            {copied ? "✓ 已复制" : "复制"}
+          </button>
           {loadError && files.length > 0 && <span style={{ color: "#ef4444", marginLeft: 8 }}>（部分文件读取失败）</span>}
         </span>
         <div style={{ display: "flex", gap: 4, flex: 1, justifyContent: "flex-end" }}>
