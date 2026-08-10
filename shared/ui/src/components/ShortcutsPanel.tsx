@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 
 export interface ShortcutDef {
@@ -20,14 +20,14 @@ const BUILTIN_SHORTCUTS: { label: string; keys: string }[] = [
 
 /**
  * 读取已保存的快捷键配置（可能包含空值表示禁用）。
- * 如果从未保存过，写入默认值并返回。
+ * 如果从未保存过，写入默认值（含注册的额外快捷键）并返回。
  */
-function loadShortcuts(): Record<string, string> {
+function loadShortcuts(extraShortcuts: ShortcutDef[] = []): Record<string, string> {
   const saved = safeGetJSON<Record<string, string>>("core-shortcuts");
   if (saved === null) {
     // 首次使用：写入完整默认值，确保 DataManager 能看到全部条目
     const defaults: Record<string, string> = {};
-    for (const def of DEFAULT_SHORTCUTS) {
+    for (const def of [...DEFAULT_SHORTCUTS, ...extraShortcuts]) {
       defaults[def.id] = def.defaultKeys;
     }
     safeSetJSON("core-shortcuts", defaults);
@@ -45,22 +45,24 @@ function saveFullShortcuts(map: Record<string, string>) {
 
 /**
  * 获取生效的快捷键（已保存值兜底到默认值）。
+ * extraShortcuts：项目注册的额外快捷键，未保存时兜底到各自默认值。
  */
-export function getEffectiveShortcuts(): Record<string, string> {
-  const saved = loadShortcuts();
+export function getEffectiveShortcuts(extraShortcuts: ShortcutDef[] = []): Record<string, string> {
+  const saved = loadShortcuts(extraShortcuts);
   const map: Record<string, string> = {};
-  for (const def of DEFAULT_SHORTCUTS) {
+  for (const def of [...DEFAULT_SHORTCUTS, ...extraShortcuts]) {
     map[def.id] = saved[def.id] ?? def.defaultKeys;
   }
   return map;
 }
 
-export function ShortcutsPanel() {
+export function ShortcutsPanel({ extraShortcuts = [] }: { extraShortcuts?: ShortcutDef[] }) {
   // 初始化为完整生效图
-  const [shortcuts, setShortcuts] = useState<Record<string, string>>(() => getEffectiveShortcuts());
+  const [shortcuts, setShortcuts] = useState<Record<string, string>>(() => getEffectiveShortcuts(extraShortcuts));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const allDefs = useMemo(() => [...DEFAULT_SHORTCUTS, ...extraShortcuts], [extraShortcuts]);
 
   useEffect(() => {
     if (recording && inputRef.current) {
@@ -112,9 +114,9 @@ export function ShortcutsPanel() {
 
   /** 重置为默认值 */
   const resetShortcut = useCallback((id: string) => {
-    const def = DEFAULT_SHORTCUTS.find(d => d.id === id);
+    const def = allDefs.find(d => d.id === id);
     commitMap({ ...shortcuts, [id]: def?.defaultKeys ?? "" });
-  }, [shortcuts, commitMap]);
+  }, [shortcuts, commitMap, allDefs]);
 
   /** 清除快捷键（设为禁用） */
   const clearShortcut = useCallback((id: string) => {
@@ -124,11 +126,11 @@ export function ShortcutsPanel() {
   /** 恢复全部默认 */
   const resetAll = useCallback(() => {
     const defaults: Record<string, string> = {};
-    for (const def of DEFAULT_SHORTCUTS) {
+    for (const def of allDefs) {
       defaults[def.id] = def.defaultKeys;
     }
     commitMap(defaults);
-  }, [commitMap]);
+  }, [commitMap, allDefs]);
 
   const cancelEditing = useCallback(() => {
     setEditingId(null);
@@ -155,7 +157,7 @@ export function ShortcutsPanel() {
         </button>
       </div>
       <div className="shortcuts-list">
-        {DEFAULT_SHORTCUTS.map(def => (
+        {allDefs.map(def => (
           <div key={def.id} className="shortcut-row">
             <span className="shortcut-label">{def.label}</span>
             <div className="shortcut-input-wrapper">

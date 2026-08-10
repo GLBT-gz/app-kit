@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, startTransition } from "react";
 import { TopBar } from "./TopBar";
 import { SettingsSidebar } from "./SettingsSidebar";
-import { getEffectiveShortcuts } from "./ShortcutsPanel";
+import { getEffectiveShortcuts, type ShortcutDef } from "./ShortcutsPanel";
 import { safeGetJSON, safeSetJSON, LS_KEYS } from "../localStorageKeys";
 import { ensureDataDefaults } from "../data";
 
@@ -25,6 +25,8 @@ export interface AppLayoutProps {
   onSettingsChange?: (open: boolean) => void;
   /** 窗口置顶 Tauri API 调用（默认无操作） */
   onSetWindowPin?: (pin: boolean) => Promise<void>;
+  /** 项目注册的额外快捷键：显示在快捷键面板并参与按键分发，onTrigger 为触发动作 */
+  registeredShortcuts?: (ShortcutDef & { onTrigger?: () => void })[];
   /** 顶栏左侧自定义 tab 栏 */
   tabBar?: React.ReactNode;
   /** 顶栏滚轮事件（项目自定义，如切换 tab） */
@@ -68,6 +70,7 @@ export function AppLayout({
   settingsSidebarWidth: initialSidebarWidth = 185,
   onSettingsChange,
   onSetWindowPin,
+  registeredShortcuts,
   tabBar,
   onTopBarWheel,
   openSettingsTo,
@@ -208,7 +211,7 @@ export function AppLayout({
       const combo = parts.join("+");
 
       if (!combo) return;
-      const shortcuts = getEffectiveShortcuts();
+      const shortcuts = getEffectiveShortcuts(registeredShortcuts);
 
       if (combo === shortcuts["toggle-settings"]) {
         e.preventDefault();
@@ -237,10 +240,21 @@ export function AppLayout({
         setTheme(t => t === "dark" ? "light" : "dark");
         return;
       }
+
+      // 注册式快捷键分发：项目通过 registeredShortcuts 注册的快捷键
+      if (registeredShortcuts) {
+        for (const def of registeredShortcuts) {
+          if (combo === shortcuts[def.id]) {
+            e.preventDefault();
+            def.onTrigger?.();
+            return;
+          }
+        }
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [showSettings, closeSettings, onSetWindowPin]);
+  }, [showSettings, closeSettings, onSetWindowPin, registeredShortcuts]);
 
   const resolvedTabs = settingsTabs.length > 0
     ? settingsTabs
