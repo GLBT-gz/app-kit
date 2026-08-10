@@ -2,14 +2,16 @@
    padding 语义规范（改样式前必读）
    ========================================
    .page-content  主内容区专属类（AppLayout 渲染页面处）。
-                  页面级 padding: 12px 20px 只挂在这里。
+                  默认无 padding；需要默认边距的普通页面，
+                  页面根节点追加 .page-padded（padding: 12px 20px）。
    .content-area  纯布局容器，无 padding，与页面边距彻底解耦。
    .panel-content 设置面板内部滚动面板（如 BrowserConfigPanel），
                   自带 padding，任何页面级覆盖都不会命中它。
 
-   子项目"全屏页面"约定：页面根节点保持 flex 布局，用
-     .page-content:has(> .fullscreen-page) { padding: 0; overflow: hidden; }
-   做条件覆盖。
+   子项目页面约定：
+     - 全屏页面（表格/聊天/工具页）：根节点保持 flex 布局，无需任何覆盖；
+     - 普通页面：根节点追加 .page-padded；
+     - 页面自带边距时：不加任何类，用自己的 padding。
 
    禁止写法：
      div.page-content { padding: 0 }        ← 全局覆盖，会误伤所有页面
@@ -125,11 +127,15 @@ input, textarea, select, button {
 
 .page-content {
   flex: 1;
-  padding: 12px 20px;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+/* 普通页面需要默认边距时，页面根节点追加该类 */
+.page-padded {
+  padding: 12px 20px;
 }
 
 .panel-content {
