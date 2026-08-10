@@ -96,16 +96,35 @@ input, textarea, select, button {
 /* ========================================
    Content Area
    ======================================== */
-/* ── 边距覆盖规范 ──────────────────────────────────
-   子项目如需要去掉 .content-area 的 padding（例如全屏聊天界面），
-   不得使用全局 div.content-area { padding: 0 } 直接覆盖，
-   因为这会影响设置面板内部（如 BrowserConfigPanel）嵌套的 .content-area。
-   应使用更具体的选择器进行条件性覆盖，例如：
-     .content-area:has(> .my-fullscreen-container) { padding: 0; }
-   或针对设置面板内部恢复 padding：
-     .settings-content .content-area { padding: 12px 20px; }
+/* ── padding 语义规范 ──────────────────────────────────
+   .page-content  主内容区专属：页面级 padding（12px 20px）只挂在这里。
+   .content-area  纯布局容器：不设 padding，与页面边距彻底解耦；
+                  子项目覆盖一律写 .page-content:has(...)，永远不会
+                  波及设置面板内部。
+   .panel-content 设置面板内部滚动面板（如 BrowserConfigPanel）：
+                  自带 padding，任何页面级覆盖都不会命中它。
+   全屏页面约定：页面根节点保持 flex 布局，用
+     .page-content:has(> .fullscreen-page) { padding: 0; overflow: hidden; }
+   做条件覆盖，禁止全局 div.page-content { padding: 0 }。
    ────────────────────────────────────────────────── */
 .content-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.page-content {
+  flex: 1;
+  padding: 12px 20px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.panel-content {
   flex: 1;
   padding: 12px 20px;
   min-height: 0;

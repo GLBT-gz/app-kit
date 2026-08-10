@@ -298,7 +298,7 @@ export function AppLayout({
       />
 
       <div className="flex flex-1 min-h-0">
-          <div className="content-area" style={{ display: showSettings ? 'none' : undefined }}>
+          <div className="page-content" style={{ display: showSettings ? 'none' : undefined }}>
             {children}
           </div>
           <div className={`settings-panel ${settingsClosing ? "closing" : ""}`} style={{ display: showSettings ? undefined : 'none' }}>

@@ -321,7 +321,7 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
         <div className="sidebar-resize-handle" onMouseDown={noBrowsers ? undefined : startDrag} />
       </div>
       <div
-        className="content-area"
+        className="panel-content"
         ref={scrollRef}
         onScroll={() => {
           if (!scrollRef.current || !activeData) return;
