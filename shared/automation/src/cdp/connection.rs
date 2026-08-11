@@ -90,12 +90,13 @@ impl CdpConnection {
             writer.send(Message::Text(cmd_str.into())).await?;
         }
 
-        // 等待响应（由 start_message_loop 读取并分发），最长 30 秒超时
-        let result = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+        // 等待响应（由 start_message_loop 读取并分发），最长 90 秒超时
+        // （010 产品上架同步在页面执行多次弹窗/重建等待，30s 不够）
+        let result = tokio::time::timeout(std::time::Duration::from_secs(90), rx)
             .await
             .map_err(|_| {
                 anyhow::anyhow!(
-                    "CDP 命令超时 ({}): 30秒内无响应。可能浏览器 WebSocket 已断开",
+                    "CDP 命令超时 ({}): 90秒内无响应。可能浏览器 WebSocket 已断开",
                     method
                 )
             })?
