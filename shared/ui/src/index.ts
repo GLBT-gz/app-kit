@@ -61,6 +61,7 @@ export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
 export { usePlatformOptions } from "./hooks/usePlatformOptions";
 export { usePlatformSelections } from "./hooks/usePlatformSelections";
 export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";
+export { useWheelTabSwitch } from "./hooks/useWheelTabSwitch";
 
 // 工具
 export {
