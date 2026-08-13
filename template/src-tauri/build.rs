@@ -9,6 +9,8 @@ fn main() {
                 "list_database_files",
                 "open_directory",
                 "check_path_exists",
+                "get_data_directory",
+                "get_install_directory",
                 "save_file",
                 "get_db_tables",
                 "clear_db_table",
