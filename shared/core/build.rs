@@ -22,6 +22,8 @@ fn main() {
         // 通用工具（cmd-utils）
         "open_directory",
         "check_path_exists",
+        "get_data_directory",
+        "get_install_directory",
         "save_file",
         // 数据库表管理（cmd-db）
         "get_db_tables",

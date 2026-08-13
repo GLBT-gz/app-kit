@@ -62,12 +62,12 @@ export async function installVersion(url: string, savePath: string): Promise<str
 
 /** 获取应用数据目录路径 */
 export async function getDataDirectory(): Promise<string> {
-  return tauriInvoke("get_data_directory");
+  return pluginInvoke("get_data_directory");
 }
 
 /** 获取安装目录路径 */
 export async function getInstallDirectory(): Promise<string> {
-  return tauriInvoke("get_install_directory");
+  return pluginInvoke("get_install_directory");
 }
 
 // ── 本地文件读写 ──

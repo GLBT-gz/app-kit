@@ -1,21 +1,6 @@
 use tauri::Manager;
 
 #[tauri::command]
-fn get_data_directory(app: tauri::AppHandle) -> String {
-    app.path().app_data_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".to_string())
-}
-
-#[tauri::command]
-fn get_install_directory() -> String {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_string_lossy().to_string()))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-#[tauri::command]
 fn open_directory(path: String) -> Result<String, String> {
     opener::open(&path).map_err(|e| format!("打开目录失败: {}", e))?;
     Ok(path)
@@ -151,8 +136,6 @@ pub fn run() {
             open_directory,
             check_path_exists,
             get_app_version,
-            get_data_directory,
-            get_install_directory,
             set_window_pin,
             install_version,
             read_local_file,

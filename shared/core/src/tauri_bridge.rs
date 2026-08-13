@@ -13,8 +13,8 @@
 //! - `cmd-files`（数据文件管理，4 个）：
 //!   delete_data_files, list_data_files,
 //!   read_all_local_files, list_database_files
-//! - `cmd-utils`（通用工具，3 个）：
-//!   open_directory, check_path_exists, save_file
+//! - `cmd-utils`（通用工具，5 个）：
+//!   open_directory, check_path_exists, get_data_directory, get_install_directory, save_file
 //! - `cmd-db`（数据库表管理，2 个）：
 //!   get_db_tables, clear_db_table
 
@@ -285,6 +285,30 @@ fn check_path_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
 }
 
+/// 获取应用数据目录路径（Windows 下与安装目录统一盘符为大写）
+#[cfg(feature = "cmd-utils")]
+#[tauri::command]
+fn get_data_directory<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> String {
+    use tauri::Manager;
+    app.path()
+        .app_data_dir()
+        .map(|p| crate::system::path::normalize_drive_letter(&p.to_string_lossy()))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// 获取安装目录（当前可执行文件所在目录，Windows 下盘符归一化为大写）
+#[cfg(feature = "cmd-utils")]
+#[tauri::command]
+fn get_install_directory() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            p.parent()
+                .map(|d| crate::system::path::normalize_drive_letter(&d.to_string_lossy()))
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 /// 保存 Base64 编码的文件到指定路径
 #[cfg(feature = "cmd-utils")]
 #[tauri::command]
@@ -411,6 +435,10 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             open_directory,
             #[cfg(feature = "cmd-utils")]
             check_path_exists,
+            #[cfg(feature = "cmd-utils")]
+            get_data_directory,
+            #[cfg(feature = "cmd-utils")]
+            get_install_directory,
             #[cfg(feature = "cmd-utils")]
             save_file,
             // ── 数据库表管理（cmd-db）──
