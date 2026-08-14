@@ -460,6 +460,13 @@ function BrowserConfigInner({
   const [localSuggestedDirs, setLocalSuggestedDirs] = useState<string[]>(() => browser.suggested_user_data_dirs || []);
   const [_profilesDetected, setProfilesDetected] = useState(false);
 
+  // ── 单一数据源：profiles 由 browserStore 统一检测提供 ──
+  // store 检测完成（refreshBrowserData）后 browser.profiles 更新，同步到本地显示；
+  // 不在此处自动重复 detectCustomProfiles（否则同一批目录被扫两遍 + 全量卡片渲染，卡顿根因）
+  useEffect(() => {
+    setLocalProfiles(browser.profiles || []);
+  }, [browser.profiles]);
+
   // 当 profiles 检测结果更新时，通知父组件持久化
   // 用 ref 持有 onProfilesChange，避免因闭包变化导致 useEffect 死循环
   const onProfilesChangeRef = useRef(onProfilesChange);
@@ -579,14 +586,9 @@ function BrowserConfigInner({
     }
   }, [onDetectProfiles, browser.browser_type, exePathProp]);
 
-  // 首次挂载或 userDirs 变化时延迟检测（800ms 后执行，让出首帧渲染 + 侧栏交互时间）
-  useEffect(() => {
-    if (!onDetectProfiles) return;
-    if (!visible) return;
-    const timer = setTimeout(() => detectProfiles(userDirs), 800);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(userDirs), detectProfiles, onDetectProfiles, visible]);
+  // ── 不再自动检测 profiles：由 browserStore 统一检测（单一数据源），
+  // 避免同一批目录被 detectCustomProfiles 重复扫描 + 全量卡片渲染（卡顿根因）。
+  // 手动检测保留：doDetect（「重新检测」按钮 / 新增用户后 500ms 自动触发）
 
   const doDetect = async () => {
     await detectProfiles(userDirs, true);
