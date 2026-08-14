@@ -28,9 +28,11 @@ use serde::Serialize;
 // ── 浏览器检测与配置（cmd-browser）──
 
 /// 检测所有已安装浏览器（内置 Edge/Chrome + 注册的自定义浏览器）
+/// async：检测涉及注册表扫描 + 文件系统遍历 + 头像图片处理，若在主线程
+/// 执行会阻塞 UI（卡到全部头像返回后才恢复）；放后台线程保持界面响应。
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
-fn detect_browsers() -> Vec<crate::browser::BrowserInfo> {
+async fn detect_browsers() -> Vec<crate::browser::BrowserInfo> {
     management::detect_all_browsers()
 }
 
@@ -44,9 +46,11 @@ fn detect_browser_types() -> Vec<String> {
 }
 
 /// 根据自定义路径检测浏览器配置
+/// async：每个目录都要读取 Local State / Preferences 并处理头像，主线程
+/// 串行执行多个这类命令会阻塞 UI；放后台线程并行执行保持界面响应。
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
-fn detect_custom_profiles(
+async fn detect_custom_profiles(
     browser_type: String,
     custom_exe_path: Option<String>,
     user_data_dirs: Vec<String>,
