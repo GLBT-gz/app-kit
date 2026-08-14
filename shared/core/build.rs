@@ -4,6 +4,7 @@ fn main() {
     let commands = [
         // 浏览器检测/配置/进程（cmd-browser）
         "detect_browsers",
+        "detect_browser_types",
         "detect_custom_profiles",
         "get_launch_command",
         "launch_browser_profile",

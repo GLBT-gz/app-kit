@@ -130,9 +130,14 @@ export async function saveFile(path: string, dataB64: string): Promise<void> {
 
 // ── 浏览器配置管理 ──
 
-/** 检测所有已安装的浏览器 */
+/** 检测所有已安装的浏览器（内置 + 注册的自定义浏览器） */
 export async function detectBrowsers(): Promise<BrowserInfo[]> {
   return pluginInvoke("detect_browsers");
+}
+
+/** 返回当前支持的（已注册）浏览器类型：内置 edge/chrome + 业务项目注册的类型 */
+export async function detectBrowserTypes(): Promise<string[]> {
+  return pluginInvoke("detect_browser_types");
 }
 
 /** 使用自定义路径检测浏览器配置 */

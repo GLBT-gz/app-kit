@@ -27,11 +27,20 @@ use serde::Serialize;
 
 // ── 浏览器检测与配置（cmd-browser）──
 
-/// 检测所有已安装浏览器（Edge / Chrome / EDecker）
+/// 检测所有已安装浏览器（内置 Edge/Chrome + 注册的自定义浏览器）
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
 fn detect_browsers() -> Vec<crate::browser::BrowserInfo> {
     management::detect_all_browsers()
+}
+
+/// 返回当前支持的（已注册）浏览器类型：内置 edge/chrome + 业务项目注册的类型（如 edecker）
+#[cfg(feature = "cmd-browser")]
+#[tauri::command]
+fn detect_browser_types() -> Vec<String> {
+    let mut registered = vec!["edge".to_string(), "chrome".to_string()];
+    registered.extend(management::registered_browser_types());
+    registered
 }
 
 /// 根据自定义路径检测浏览器配置
@@ -408,6 +417,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             // ── 浏览器检测/配置/进程（cmd-browser）──
             #[cfg(feature = "cmd-browser")]
             detect_browsers,
+            #[cfg(feature = "cmd-browser")]
+            detect_browser_types,
             #[cfg(feature = "cmd-browser")]
             detect_custom_profiles,
             #[cfg(feature = "cmd-browser")]

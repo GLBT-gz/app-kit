@@ -15,7 +15,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { detectBrowsers, detectCustomProfiles } from "../api";
+import { detectBrowsers, detectBrowserTypes, detectCustomProfiles } from "../api";
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { populateBrowserIcons, stripBrowserCache } from "../utils/browser-icons";
@@ -29,12 +29,12 @@ const MIN_LOADING_MS = 400;
 
 /**
  * 已知浏览器显示名（detect_custom_profiles 对非 edge/chrome 类型会回退为「浏览器」，
- * 此处仅用于从路径配置恢复条目时的友好显示名；保持中性，不引入公司专用逻辑）。
+ * 此处仅用于从路径配置恢复条目时的友好显示名；保持中性，不引入公司专用逻辑。
+ * 公司专用浏览器（如易得客）的显示名由业务项目注册的检测器返回）。
  */
 const KNOWN_BROWSER_NAMES: Record<string, string> = {
   edge: "Microsoft Edge",
   chrome: "Google Chrome",
-  edecker: "易得客浏览器",
 };
 
 /** 构造一个最小浏览器条目（用户配置过路径但检测未返回的类型，如易得客） */
@@ -140,8 +140,13 @@ export function refreshBrowserData(): Promise<void> {
   refreshPromise = (async () => {
     try {
       // 1) 基础检测：注册表定位 exe + 默认 User Data 目录
-      //    （BrowserInfo 结构是 BCPBrowser 的超集，统一为 BCPBrowser 供三处消费方使用）
-      const list = (await detectBrowsers()) as unknown as BCPBrowser[];
+      //    并取当前支持的（已注册）类型列表，用于过滤历史缓存中的
+      //    「本项目不支持」的浏览器类型（如 000 项目历史残留的易得客）
+      const [list, registeredTypes] = await Promise.all([
+        detectBrowsers() as unknown as Promise<BCPBrowser[]>,
+        detectBrowserTypes(),
+      ]);
+      const supportedTypes = new Set(registeredTypes);
 
       // 2) 用「用户配置的目录列表」（含自定义目录）补全 profiles
       const dirsByType = loadUserDataDirsCache();
@@ -165,19 +170,19 @@ export function refreshBrowserData(): Promise<void> {
         }
       }));
 
-      // 3) 合并：保留检测未返回、但用户已有数据（缓存 / 路径配置）的浏览器类型
-      //    - 缓存条目（历史遗留，如易得客含店铺窗口 children）原样保留
-      //    - 用户配置过 exe/目录的类型若无条目，构造并检测补全（保证侧边栏不丢配置）
+      // 3) 合并：仅保留「检测返回」或「后端支持（已注册）」的浏览器类型
+      //    - 已注册但检测未返回的类型（如易得客检测失败）：保留缓存 / 按路径配置恢复，保证侧边栏不丢配置
+      //    - 未注册类型（如 000 项目历史缓存的易得客）：一律剔除，避免跨项目污染
       const merged = [...enriched];
       const knownTypes = new Set(merged.map(m => m.browser_type));
       for (const b of state.browsers) {
-        if (!knownTypes.has(b.browser_type)) {
+        if (supportedTypes.has(b.browser_type) && !knownTypes.has(b.browser_type)) {
           merged.push(b);
           knownTypes.add(b.browser_type);
         }
       }
       for (const bt of Object.keys(dirsByType)) {
-        if (knownTypes.has(bt)) continue;
+        if (!supportedTypes.has(bt) || knownTypes.has(bt)) continue;
         const dirs = dirsByType[bt];
         if (dirs.length === 0) continue;
         try {
@@ -189,7 +194,7 @@ export function refreshBrowserData(): Promise<void> {
         knownTypes.add(bt);
       }
       for (const bt of Object.keys(exesByType)) {
-        if (knownTypes.has(bt)) continue;
+        if (!supportedTypes.has(bt) || knownTypes.has(bt)) continue;
         merged.push(makeFallbackBrowser(bt, exesByType[bt] || null, []));
         knownTypes.add(bt);
       }
