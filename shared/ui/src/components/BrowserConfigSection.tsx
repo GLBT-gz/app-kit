@@ -107,9 +107,9 @@ function BrowserConfigSection({
     });
   }, []);
 
-  /** 手动重新检测全部浏览器 */
+  /** 手动重新检测全部浏览器（force：无视会话内已检测的跳过逻辑） */
   const handleRefresh = useCallback(() => {
-    refreshBrowserData();
+    refreshBrowserData(true);
   }, []);
 
   return (

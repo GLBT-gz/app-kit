@@ -129,11 +129,15 @@ export function useBrowserStore(): BrowserStoreState {
 /**
  * 触发一次全量浏览器检测（in-flight 去重，并发调用只执行一次）。
  *
- * 检测范围 = 基础检测（注册表 + 默认目录）+ 用户配置目录补全 profiles，
- * 一次检测的结果同时供全局配置 / 当前配置 / 平台选择器消费。
+ * - 本次会话已检测过（lastSyncedAt 非空）时直接跳过：避免配置页之间
+ *   切换（各组件挂载触发）造成重复检测阻塞页面操作（刷新后滚轮切换卡顿的根因）；
+ *   需要强制重新检测时传 force=true（侧边栏「重新检测」按钮）
+ * - 检测范围 = 基础检测（注册表 + 默认目录）+ 用户配置目录补全 profiles，
+ *   一次检测的结果同时供全局配置 / 当前配置 / 平台选择器消费
  */
-export function refreshBrowserData(): Promise<void> {
+export function refreshBrowserData(force = false): Promise<void> {
   if (refreshPromise) return refreshPromise;
+  if (!force && state.lastSyncedAt !== null) return Promise.resolve();
 
   const startedAt = Date.now();
   setState(s => ({ ...s, loading: true, error: null }));
