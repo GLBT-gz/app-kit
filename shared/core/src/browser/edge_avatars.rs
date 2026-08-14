@@ -1,5 +1,5 @@
 // ============================================================
-// Edge 预设头像资源表
+// Edge 预设头像资源表（由 scripts/gen_edge_avatars.js 生成，勿手工编辑）
 // 来源：Edge 设置页（edge://settings/profiles）头像选择器 list 数据，
 //   提取自 Edge headless 实例的 settings-avatar-select.list（2026-08-14）。
 // index -> 图案 完整映射：
@@ -10,6 +10,7 @@
 // 用途：Edge 未登录但手动设置了预设头像的 profile（Local State
 //   info_cache.avatar_icon=chrome://theme/IDR_PROFILE_AVATAR_N）由此恢复。
 //   Edge 没有 Chrome 的 {User Data}\Avatars 缓存目录，只能内嵌资源。
+// Edge 更新头像后：重新提取 final/idx_*.png 并运行本脚本再生成。
 // ============================================================
 
 /// Edge 预设头像（index -> PNG base64）
@@ -57,12 +58,32 @@ pub const EDGE_AVATAR_INDEX_FILES: &[(usize, &str)] = &[
 ];
 
 /// 按 avatar_icon（chrome://theme/IDR_PROFILE_AVATAR_N）读取 Edge 预设头像原始 PNG 字节。
-/// 找不到（非预设 index / 未设置头像）返回 None。
+/// 找不到（非预设 index / 未设置头像）返回 None；未覆盖的 index 会打印日志提示
+/// Edge 头像列表可能已更新（可运行 scripts/gen_edge_avatars.js 重新生成资源表）。
 pub fn read_edge_preset_avatar(avatar_icon: &str) -> Option<Vec<u8>> {
     let marker = "IDR_PROFILE_AVATAR_";
     let idx = avatar_icon.rfind(marker)?;
-    let n: usize = avatar_icon[idx + marker.len()..].parse().ok()?;
-    let b64 = EDGE_AVATAR_INDEX_FILES.iter().find(|(i, _)| *i == n)?.1;
+    let tail = &avatar_icon[idx + marker.len()..];
+    let n: usize = match tail.parse() {
+        Ok(n) => n,
+        Err(_) => {
+            eprintln!(
+                "[edge_avatars] 无法解析预设头像 index: {:?}（可能 Edge 改变了 avatar_icon 格式）",
+                tail
+            );
+            return None;
+        }
+    };
+    let b64 = match EDGE_AVATAR_INDEX_FILES.iter().find(|(i, _)| *i == n) {
+        Some((_, b)) => *b,
+        None => {
+            eprintln!(
+                "[edge_avatars] 未覆盖的预设头像 index {}（可能 Edge 新增了头像；可运行 scripts/gen_edge_avatars.js 重新生成资源表）",
+                n
+            );
+            return None;
+        }
+    };
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.decode(b64).ok()
 }
