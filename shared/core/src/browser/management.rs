@@ -710,32 +710,31 @@ fn kill_default_instance_processes(exe_name: &str, default_dir: &str) -> Result<
             .ok_or_else(|| "无法获取进程 PID".to_string())?;
 
         let kill_output = {
-                #[cfg(windows)]
-                {
-                    use std::os::windows::process::CommandExt;
-                    std::process::Command::new("taskkill")
-                        .args(["/F", "/PID", &pid.to_string(), "/T"])
-                        .creation_flags(0x08000000)
-                        .output()
-                }
-                #[cfg(not(windows))]
-                {
-                    std::process::Command::new("kill")
-                        .arg("-9")
-                        .arg(pid.to_string())
-                        .output()
-                }
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                std::process::Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string(), "/T"])
+                    .creation_flags(0x08000000)
+                    .output()
             }
-            .map_err(|e| format!("终止进程失败: {}", e))?;
+            #[cfg(not(windows))]
+            {
+                std::process::Command::new("kill")
+                    .arg("-9")
+                    .arg(pid.to_string())
+                    .output()
+            }
+        }
+        .map_err(|e| format!("终止进程失败: {}", e))?;
 
-            if kill_output.status.success() {
-                // 等待进程树完全退出
-                std::thread::sleep(std::time::Duration::from_secs(1));
-                return Ok(format!("已终止默认目录浏览器全部进程 (PID:{})", pid));
-            } else {
-                let stderr = String::from_utf8_lossy(&kill_output.stderr);
-                return Err(format!("终止进程失败: {}", stderr));
-            }
+        if kill_output.status.success() {
+            // 等待进程树完全退出
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            return Ok(format!("已终止默认目录浏览器全部进程 (PID:{})", pid));
+        } else {
+            let stderr = String::from_utf8_lossy(&kill_output.stderr);
+            return Err(format!("终止进程失败: {}", stderr));
         }
     }
 
