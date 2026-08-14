@@ -160,6 +160,10 @@ export function refreshBrowserData(force = false): Promise<void> {
         const dirs = (dirsByType[bt] && dirsByType[bt].length > 0)
           ? dirsByType[bt]
           : (b.user_data_dirs || []);
+        // 注册式专用浏览器（易得客店铺 / 紫鸟环境）以 children 展示，主配置由
+        // Rust 端 detect 提供：不随 user_data_dirs 重新读取 profiles，
+        // 避免历史缓存的目录列表被误当作多用户 profile 覆盖主配置
+        if (b.children && b.children.length > 0) return b;
         if (dirs.length === 0) return b;
         try {
           const r = await detectCustomProfiles(bt, exesByType[bt] || b.exe_paths?.[0] || null, dirs);

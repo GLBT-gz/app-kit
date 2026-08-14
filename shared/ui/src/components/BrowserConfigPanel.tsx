@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { safeGetJSON, safeSetJSON, LS_KEYS } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses } from "../api";
+import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses, ziniaoPatchStatus, ziniaoPatchApply } from "../api";
 import type { ChildBrowserConfig } from "../types";
 
 // ════════════════════════════════════════════
@@ -539,6 +539,50 @@ function BrowserConfigInner({
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
 
+  // ── 紫鸟 CDP patch 状态（无痕化集成；仅 ziniao 且命令可用时展示） ──
+  const [ziniaoPatch, setZiniaoPatch] = useState<{
+    supported: boolean;
+    loading: boolean;
+    patching: boolean;
+    patched: boolean;
+    detail: string;
+  }>({ supported: false, loading: false, patching: false, patched: false, detail: "" });
+  const checkZiniaoPatch = useCallback(async () => {
+    if (browser.browser_type !== "ziniao") return;
+    setZiniaoPatch(prev => ({ ...prev, loading: true }));
+    try {
+      const st = await ziniaoPatchStatus();
+      setZiniaoPatch({
+        supported: true,
+        loading: false,
+        patching: false,
+        patched: st.patched,
+        detail: st.detail,
+      });
+    } catch {
+      // 命令不可用（其他项目未注册）→ 隐藏入口
+      setZiniaoPatch(prev => ({ ...prev, supported: false, loading: false }));
+    }
+  }, [browser.browser_type]);
+  useEffect(() => {
+    if (browser.browser_type !== "ziniao") return;
+    checkZiniaoPatch();
+  }, [browser.browser_type, checkZiniaoPatch]);
+
+  // 紫鸟一键 patch（showToast 定义之后；弹 UAC 提权）
+  const applyZiniaoPatch = useCallback(async () => {
+    setZiniaoPatch(prev => ({ ...prev, patching: true }));
+    try {
+      const msg = await ziniaoPatchApply();
+      showToast(msg, "info");
+      await checkZiniaoPatch();
+    } catch (e) {
+      showToast(String(e), "error");
+    } finally {
+      setZiniaoPatch(prev => ({ ...prev, patching: false }));
+    }
+  }, [checkZiniaoPatch, showToast]);
+
   // ── 路径有效性检查（300ms 防抖后并行检查，单次 setState 批量更新） ──
   useEffect(() => {
     if (!onCheckPath) return;
@@ -925,23 +969,45 @@ function BrowserConfigInner({
           </div>
         )}
 
-        {/* ── 易得客店铺列表 ── */}
-        {browser.browser_type === 'edecker' && browser.children && browser.children.length > 0 && (
+        {/* ── 紫鸟 CDP patch 状态卡片（应用内无痕化） ── */}
+        {browser.browser_type === 'ziniao' && ziniaoPatch.supported && (
+          <div className={`ziniao-patch-card ${ziniaoPatch.patched ? 'ok' : 'warn'}`}>
+            <div className="ziniao-patch-info">
+              <div className="ziniao-patch-title">
+                <span className={`ziniao-patch-dot ${ziniaoPatch.patched ? 'ok' : 'warn'}`} />
+                {ziniaoPatch.loading ? '检测中…' : (ziniaoPatch.patched ? 'CDP 多开补丁已生效' : 'CDP 多开补丁未安装')}
+              </div>
+              {!ziniaoPatch.loading && <div className="ziniao-patch-detail">{ziniaoPatch.detail}</div>}
+            </div>
+            {!ziniaoPatch.patched && (
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={ziniaoPatch.loading || ziniaoPatch.patching}
+                onClick={applyZiniaoPatch}
+              >
+                {ziniaoPatch.patching ? '安装中…' : '一键安装'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── 子浏览器窗口列表（易得客店铺窗口 / 紫鸟环境窗口） ── */}
+        {['edecker', 'ziniao'].includes(browser.browser_type) && browser.children && browser.children.length > 0 && (
           <>
             <div className="profiles-section-title">
-              店铺窗口 ({browser.children.length})
+              {browser.browser_type === 'edecker' ? '店铺窗口' : '环境窗口'} ({browser.children.length})
             </div>
             <div className="profiles-grid">
               {browser.children.filter(c => c.enabled).map((child, _idx) => (
                 <div className="profile-card" key={child.user_data_dir}>
                   <div className="pc-avatar">
-                    <div className="avatar-placeholder">店</div>
+                    <div className="avatar-placeholder">{browser.browser_type === 'edecker' ? '店' : '环'}</div>
                   </div>
                   <div className="pc-body">
                     <div className="pc-top">
                       <div className="pc-name-row">
                         <span className="pc-name">{child.name}</span>
-                        <span className="pc-badge">店铺</span>
+                        <span className="pc-badge">{browser.browser_type === 'edecker' ? '店铺' : '环境'}</span>
                       </div>
                     </div>
                     <div className="pc-details">

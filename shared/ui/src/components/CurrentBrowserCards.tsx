@@ -73,8 +73,8 @@ function mkKey(bt: string, p: BCPProfile): string {
 
 /** 该 profile 所在目录是否为浏览器的默认用户路径（不可用于自动化） */
 function isDefaultUserDir(b: BCPBrowser, p: BCPProfile): boolean {
-  // 易得客的默认路径就是可用的主程序配置
-  if (b.browser_type === "edecker") return false;
+  // 易得客/紫鸟的默认路径就是可用的主程序配置（店铺/环境窗口以 children 展示）
+  if (b.browser_type === "edecker" || b.browser_type === "ziniao") return false;
   return !!b.default_user_data_dir && p.user_data_dir === b.default_user_data_dir;
 }
 
@@ -82,7 +82,7 @@ function isDefaultUserDir(b: BCPBrowser, p: BCPProfile): boolean {
 function isDefaultSiblingDir(b: BCPBrowser, p: BCPProfile): boolean {
   if (isDefaultUserDir(b, p)) return false;
   if (!b.default_user_data_dir) return false;
-  if (b.browser_type === "edecker") return false;
+  if (b.browser_type === "edecker" || b.browser_type === "ziniao") return false;
   const defaultParent = b.default_user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
   const profileParent = p.user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
   return defaultParent === profileParent;

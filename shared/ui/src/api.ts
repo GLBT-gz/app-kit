@@ -60,6 +60,24 @@ export async function installVersion(url: string, savePath: string): Promise<str
   return tauriInvoke("install_version", { url, savePath });
 }
 
+// ── 紫鸟 app.asar patch（000 应用注册的命令） ──
+
+/** 检测紫鸟 app.asar 是否已打 v10.8 patch */
+export async function ziniaoPatchStatus(): Promise<{
+  installed: boolean;
+  asar_path: string;
+  patched: boolean;
+  main_index_len: number;
+  detail: string;
+}> {
+  return tauriInvoke("ziniao_patch_status");
+}
+
+/** 一键打补丁（重打包 + 提权覆盖，会弹 UAC） */
+export async function ziniaoPatchApply(): Promise<string> {
+  return tauriInvoke("ziniao_patch_apply");
+}
+
 /** 获取应用数据目录路径 */
 export async function getDataDirectory(): Promise<string> {
   return pluginInvoke("get_data_directory");
