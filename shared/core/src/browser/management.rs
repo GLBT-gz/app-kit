@@ -552,10 +552,11 @@ fn kill_browser_process_inner(
     profile_id: &str,
     user_data_dir: &str,
 ) -> Result<String, String> {
-    // 默认目录兜底：用户手动启动的默认实例进程命令行无 --user-data-dir，
-    // 无法精确匹配到 profile；默认目录为单实例，终止即关闭整个进程树
+    // 默认目录兜底：默认目录为单实例，终止即关闭整个进程树。
+    // 主进程可能是用户手动启动（无 --user-data-dir），也可能是本工具「打开」启动
+    // （带 --user-data-dir=默认目录），两种都要能匹配到
     if default_instance_exe(user_data_dir) == Some(exe_name) {
-        return kill_default_instance_processes(exe_name);
+        return kill_default_instance_processes(exe_name, user_data_dir);
     }
 
     let ps_script = format!(
@@ -642,10 +643,10 @@ fn kill_browser_process_inner(
     Err("未找到匹配的浏览器进程".to_string())
 }
 
-/// 终止默认目录的浏览器实例：查找「无 --user-data-dir 且无 --type=」的主进程
-/// （用户手动启动/开机自启的默认实例），taskkill /T 关闭整个进程树。
+/// 终止默认目录的浏览器实例：查找默认目录的主进程（无 --user-data-dir 的默认实例，
+/// 或 --user-data-dir 等于默认目录的实例），taskkill /T 关闭整个进程树。
 /// 只按 PID 杀主进程树，不影响使用独立 user-data-dir 运行的其它实例。
-fn kill_default_instance_processes(exe_name: &str) -> Result<String, String> {
+fn kill_default_instance_processes(exe_name: &str, default_dir: &str) -> Result<String, String> {
     let ps_script = format!(
         "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
          | Select-Object ProcessId,CommandLine \
@@ -688,16 +689,27 @@ fn kill_default_instance_processes(exe_name: &str) -> Result<String, String> {
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let args = cmd_args(cmd_line);
-        // 主进程：无 --type=（子进程如 renderer/gpu 等都有）；默认实例：无 --user-data-dir
-        if !args.iter().any(|a| a.starts_with("--type="))
-            && !args.iter().any(|a| a.starts_with("--user-data-dir"))
-        {
-            let pid = proc
-                .get("ProcessId")
-                .and_then(|v| v.as_u64())
-                .ok_or_else(|| "无法获取进程 PID".to_string())?;
+        // 子进程（renderer/gpu 等）都有 --type=，主进程没有
+        if args.iter().any(|a| a.starts_with("--type=")) {
+            continue;
+        }
+        // 主进程的 user-data-dir：无该参数（默认实例）或等于默认目录才匹配；
+        // 使用独立 user-data-dir 运行的实例必须跳过，避免误杀
+        let ud = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--user-data-dir="));
+        match ud {
+            None => {}
+            Some(dir) if dir.eq_ignore_ascii_case(default_dir) => {}
+            Some(_) => continue,
+        }
 
-            let kill_output = {
+        let pid = proc
+            .get("ProcessId")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| "无法获取进程 PID".to_string())?;
+
+        let kill_output = {
                 #[cfg(windows)]
                 {
                     use std::os::windows::process::CommandExt;
