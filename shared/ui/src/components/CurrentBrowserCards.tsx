@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { detectBrowserRunningProcesses } from "../api";
+import { detectBrowserRunningProcesses, launchBrowserProfile, findAvailablePort, killBrowserProfileProcess } from "../api";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
@@ -119,6 +119,8 @@ interface ProfileCardProps {
   launchStatus?: LaunchStatus;
   connStatus?: ConnectionStatus;
   onCardClick: (bt: string, profile: BCPProfile) => void;
+  /** 右键回调：弹出上下文菜单（打开 / 调试打开） */
+  onCardContextMenu?: (e: React.MouseEvent, bt: string, profile: BCPProfile) => void;
 }
 
 const ProfileCard = memo(function ProfileCard({
@@ -131,6 +133,7 @@ const ProfileCard = memo(function ProfileCard({
   launchStatus,
   connStatus,
   onCardClick,
+  onCardContextMenu,
 }: ProfileCardProps) {
   let cls = "current-card";
   if (isSelected) cls += " current-card--selected";
@@ -141,6 +144,11 @@ const ProfileCard = memo(function ProfileCard({
     <button
       className={cls}
       onClick={() => onCardClick(browserType, profile)}
+      onContextMenu={(e) => {
+        // 默认用户路径不可用，不弹右键菜单；其余卡片弹出自定义菜单
+        if (isDefault) return;
+        onCardContextMenu?.(e, browserType, profile);
+      }}
       disabled={isDefault || isLaunching}
       title={
         isDefault
@@ -238,6 +246,19 @@ function CurrentBrowserCards({
     return safeGetJSON<boolean>("core-hide-uncontrollable") ?? false;
   });
 
+  // ── 右键菜单（打开 / 调试打开） ──
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; bt: string; p: BCPProfile } | null>(null);
+  // 同一 user_data_dir 下正在运行的 profile（调试打开前需先关闭，释放 Singleton 锁）
+  const [ctxRunningProfile, setCtxRunningProfile] = useState<{ bt: string; p: BCPProfile } | null>(null);
+
+  // ── 轻量 toast（复用组件库 .toast 样式） ──
+  const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
+  const showToast = useCallback((text: string, type: "success" | "error" | "info" | "warning" = "info") => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
   // 浏览器状态（内部自动检测）
   const [internalLaunchStatuses, setInternalLaunchStatuses] = useState<Record<string, LaunchStatus>>({});
   const [internalConnectionStatuses, setInternalConnectionStatuses] = useState<Record<string, ConnectionStatus>>({});
@@ -315,6 +336,114 @@ function CurrentBrowserCards({
         .finally(() => setLaunching(null));
     }
   }, [onSelectionChange, onSelect, onLaunchProfile]);
+
+  // ── 右键菜单：打开 / 调试打开 ──
+
+  /** 关闭右键菜单 */
+  const closeCtxMenu = useCallback(() => {
+    setCtxMenu(null);
+    setCtxRunningProfile(null);
+  }, []);
+
+  /** 卡片右键：阻止默认菜单，记录菜单位置 */
+  const handleCardContextMenu = useCallback((e: React.MouseEvent, bt: string, p: BCPProfile) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY, bt, p });
+  }, []);
+
+  /** 正常打开：不带调试端口（debug_port=0） */
+  const doOpen = useCallback(async (bt: string, p: BCPProfile) => {
+    closeCtxMenu();
+    const key = mkKey(bt, p);
+    setLaunching(key);
+    try {
+      const fn = onLaunchProfile || launchBrowserProfile;
+      const msg = await fn(bt, p.id, p.user_data_dir, 0);
+      const pid = msg.replace("PID:", "");
+      showToast(`「${p.name}」已启动${pid ? ` (PID: ${pid})` : ""}`, "success");
+    } catch (e) {
+      showToast(`打开失败: ${e}`, "error");
+    } finally {
+      setLaunching(null);
+    }
+  }, [onLaunchProfile, closeCtxMenu, showToast]);
+
+  /** 调试打开：先杀同目录已有实例，再分配可用端口以 --remote-debugging-port 启动 */
+  const doDebugOpen = useCallback(async (bt: string, p: BCPProfile) => {
+    closeCtxMenu();
+    const key = mkKey(bt, p);
+    setLaunching(key);
+    try {
+      // Chrome/Edge 的 Singleton 锁针对整个 user_data_dir：同目录下有任何 profile
+      // 在运行，新进程都无法使用该目录。先找同目录运行中的 profile 并关闭。
+      const runningProfile = ctxRunningProfile;
+      if (runningProfile) {
+        showToast(`「${runningProfile.p.name}」正在运行（同用户目录），先关闭...`, "warning");
+        await killBrowserProfileProcess(bt, runningProfile.p.id, runningProfile.p.user_data_dir);
+        showToast("已关闭旧进程，等待释放目录锁", "info");
+        // 等待进程完全退出，释放 Singleton 锁
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      showToast("查找可用调试端口...", "info");
+      const port = await findAvailablePort(40000, 60000);
+      const fn = onLaunchProfile || launchBrowserProfile;
+      const msg = await fn(bt, p.id, p.user_data_dir, port);
+      const pid = msg.replace("PID:", "");
+      showToast(`「${p.name}」调试启动成功 (PID: ${pid}, 端口: ${port})`, "success");
+    } catch (e) {
+      showToast(`调试打开失败: ${e}`, "error");
+    } finally {
+      setLaunching(null);
+    }
+  }, [onLaunchProfile, closeCtxMenu, ctxRunningProfile, showToast]);
+
+  // 右键弹菜单后：查询同目录运行中的 profile（用于调试打开前置关闭）
+  useEffect(() => {
+    if (!ctxMenu) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const runningProfiles = (browsers.find(b => b.browser_type === ctxMenu.bt)?.profiles || [])
+          .filter(pr => pr.user_data_dir === ctxMenu.p.user_data_dir)
+          .map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id }));
+        const states = await detectBrowserRunningProcesses(runningProfiles);
+        const running = states.find(s => s.is_running);
+        const target = running
+          ? (browsers.find(b => b.browser_type === ctxMenu.bt)?.profiles || [])
+            .find(pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id)
+          : undefined;
+        if (!cancelled) {
+          setCtxRunningProfile(target ? { bt: ctxMenu.bt, p: target } : null);
+        }
+      } catch {
+        if (!cancelled) setCtxRunningProfile(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ctxMenu, browsers]);
+
+  // 点击外部 / Esc / 滚轮关闭右键菜单
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest(".current-card-ctx-menu")) closeCtxMenu();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeCtxMenu();
+    };
+    const onWheel = () => closeCtxMenu();
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("touchstart", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("touchstart", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onWheel);
+    };
+  }, [ctxMenu, closeCtxMenu]);
 
   const isSelectMode = !!onSelect;
   const isMultiSelectMode = !!onSelectionChange;
@@ -513,6 +642,7 @@ function CurrentBrowserCards({
                       launchStatus={internalLaunchStatuses[key]}
                       connStatus={internalConnectionStatuses[key]}
                       onCardClick={handleCardClick}
+                      onCardContextMenu={handleCardContextMenu}
                     />
                   );
                 })}
@@ -523,6 +653,42 @@ function CurrentBrowserCards({
           </div>
         );
       })}
+
+      {/* 轻量 toast（右上角） */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type}`}>{t.text}</div>
+        ))}
+      </div>
+
+      {/* 右键菜单：打开 / 调试打开 */}
+      {ctxMenu && (
+        <div
+          className="current-card-ctx-menu"
+          style={{
+            left: Math.max(4, Math.min(ctxMenu.x, window.innerWidth - 168)),
+            top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 96)),
+          }}
+          onContextMenu={e => e.preventDefault()}
+        >
+          <button
+            className="current-card-ctx-item"
+            onClick={() => doOpen(ctxMenu.bt, ctxMenu.p)}
+            title={`正常启动「${ctxMenu.p.name}」（不带调试端口）`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+            打开
+          </button>
+          <button
+            className="current-card-ctx-item"
+            onClick={() => doDebugOpen(ctxMenu.bt, ctxMenu.p)}
+            title={`以随机可用端口调试启动（--remote-debugging-port）`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+            调试打开
+          </button>
+        </div>
+      )}
     </div>
   );
 }
