@@ -552,6 +552,12 @@ fn kill_browser_process_inner(
     profile_id: &str,
     user_data_dir: &str,
 ) -> Result<String, String> {
+    // 默认目录兜底：用户手动启动的默认实例进程命令行无 --user-data-dir，
+    // 无法精确匹配到 profile；默认目录为单实例，终止即关闭整个进程树
+    if default_instance_exe(user_data_dir) == Some(exe_name) {
+        return kill_default_instance_processes(exe_name);
+    }
+
     let ps_script = format!(
         "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
          | Select-Object ProcessId,CommandLine \
@@ -634,6 +640,94 @@ fn kill_browser_process_inner(
     }
 
     Err("未找到匹配的浏览器进程".to_string())
+}
+
+/// 终止默认目录的浏览器实例：查找「无 --user-data-dir 且无 --type=」的主进程
+/// （用户手动启动/开机自启的默认实例），taskkill /T 关闭整个进程树。
+/// 只按 PID 杀主进程树，不影响使用独立 user-data-dir 运行的其它实例。
+fn kill_default_instance_processes(exe_name: &str) -> Result<String, String> {
+    let ps_script = format!(
+        "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
+         | Select-Object ProcessId,CommandLine \
+         | ConvertTo-Json -Compress",
+        exe_name
+    );
+
+    let output = {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &ps_script])
+                .creation_flags(0x08000000)
+                .output()
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &ps_script])
+                .output()
+        }
+    }
+    .map_err(|e| format!("查询进程失败: {}", e))?;
+
+    let stdout = decode_windows_stdout(&output.stdout);
+    let processes: Vec<serde_json::Value> = if let Ok(arr) =
+        serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
+    {
+        arr
+    } else if let Ok(single) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
+        vec![single]
+    } else {
+        return Err("未找到匹配的浏览器进程".to_string());
+    };
+
+    for proc in &processes {
+        let cmd_line = proc
+            .get("CommandLine")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let args = cmd_args(cmd_line);
+        // 主进程：无 --type=（子进程如 renderer/gpu 等都有）；默认实例：无 --user-data-dir
+        if !args.iter().any(|a| a.starts_with("--type="))
+            && !args.iter().any(|a| a.starts_with("--user-data-dir"))
+        {
+            let pid = proc
+                .get("ProcessId")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "无法获取进程 PID".to_string())?;
+
+            let kill_output = {
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    std::process::Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string(), "/T"])
+                        .creation_flags(0x08000000)
+                        .output()
+                }
+                #[cfg(not(windows))]
+                {
+                    std::process::Command::new("kill")
+                        .arg("-9")
+                        .arg(pid.to_string())
+                        .output()
+                }
+            }
+            .map_err(|e| format!("终止进程失败: {}", e))?;
+
+            if kill_output.status.success() {
+                // 等待进程树完全退出
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                return Ok(format!("已终止默认目录浏览器全部进程 (PID:{})", pid));
+            } else {
+                let stderr = String::from_utf8_lossy(&kill_output.stderr);
+                return Err(format!("终止进程失败: {}", stderr));
+            }
+        }
+    }
+
+    Err("未找到默认浏览器实例进程".to_string())
 }
 
 /// 浏览器进程运行状态

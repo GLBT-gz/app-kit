@@ -146,8 +146,6 @@ const ProfileCard = memo(function ProfileCard({
       className={cls}
       onClick={() => onCardClick(browserType, profile)}
       onContextMenu={(e) => {
-        // 默认用户路径不可用，不弹右键菜单；其余卡片弹出自定义菜单
-        if (isDefault) return;
         onCardContextMenu?.(e, browserType, profile);
       }}
       disabled={isDefault || isLaunching}
@@ -413,9 +411,20 @@ function CurrentBrowserCards({
   }, [onLaunchProfile, closeCtxMenu, ctxRunningProfile, showToast]);
 
   /** 关闭该配置：kill_browser_profile_process 按 user-data-dir + profile-directory
-   *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置 */
+   *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置。
+   *  默认目录（完全受限）为单实例，后端终止整个进程树，前端需用户确认 */
   const doClose = useCallback(async (bt: string, p: BCPProfile) => {
     closeCtxMenu();
+    const browser = browsers.find(b => b.browser_type === bt);
+    const isDefault = browser ? isDefaultUserDir(browser, p) : false;
+    if (
+      isDefault &&
+      !window.confirm(
+        `「${p.name}」属于浏览器默认用户目录（单实例）。\n终止将关闭该浏览器的全部窗口与进程，未保存的内容可能丢失。\n确定继续？`,
+      )
+    ) {
+      return;
+    }
     try {
       const msg = await killBrowserProfileProcess(bt, p.id, p.user_data_dir);
       showToast(`「${p.name}」已关闭${msg ? ` (${msg})` : ""}`, "success");
@@ -424,7 +433,7 @@ function CurrentBrowserCards({
       // 后端在未匹配到进程时返回“未找到匹配的浏览器进程”
       showToast(err.includes("未找到匹配") ? `「${p.name}」未在运行` : `关闭失败: ${e}`, "warning");
     }
-  }, [closeCtxMenu, showToast]);
+  }, [closeCtxMenu, showToast, browsers]);
 
   // 右键弹菜单后：查询同目录运行中的 profile（用于调试打开前置关闭）
   useEffect(() => {
@@ -692,42 +701,52 @@ function CurrentBrowserCards({
         ))}
       </div>
 
-      {/* 右键菜单：打开 / 调试打开 / 关闭 */}
-      {ctxMenu && (
-        <div
-          className="current-card-ctx-menu"
-          style={{
-            left: Math.max(4, Math.min(ctxMenu.x, window.innerWidth - 168)),
-            top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 132)),
-          }}
-          onContextMenu={e => e.preventDefault()}
-        >
-          <button
-            className="current-card-ctx-item"
-            onClick={() => doOpen(ctxMenu.bt, ctxMenu.p)}
-            title={`正常启动「${ctxMenu.p.name}」（不带调试端口）`}
+      {/* 右键菜单：打开 / 调试打开（默认目录不可用，隐藏） / 关闭（默认目录为终止） */}
+      {ctxMenu && (() => {
+        const ctxBrowser = browsers.find(b => b.browser_type === ctxMenu.bt);
+        const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, ctxMenu.p) : false;
+        return (
+          <div
+            className="current-card-ctx-menu"
+            style={{
+              left: Math.max(4, Math.min(ctxMenu.x, window.innerWidth - 168)),
+              top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 132)),
+            }}
+            onContextMenu={e => e.preventDefault()}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-            打开
-          </button>
-          <button
-            className="current-card-ctx-item"
-            onClick={() => doDebugOpen(ctxMenu.bt, ctxMenu.p)}
-            title={`以随机可用端口调试启动（--remote-debugging-port）`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
-            调试打开
-          </button>
-          <button
-            className="current-card-ctx-item"
-            onClick={() => doClose(ctxMenu.bt, ctxMenu.p)}
-            title={`关闭「${ctxMenu.p.name}」（只关闭该配置自己的进程）`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-            关闭
-          </button>
-        </div>
-      )}
+            <button
+              className="current-card-ctx-item"
+              onClick={() => doOpen(ctxMenu.bt, ctxMenu.p)}
+              title={`正常启动「${ctxMenu.p.name}」（不带调试端口）`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+              打开
+            </button>
+            {!ctxIsDefault && (
+              <button
+                className="current-card-ctx-item"
+                onClick={() => doDebugOpen(ctxMenu.bt, ctxMenu.p)}
+                title={`以随机可用端口调试启动（--remote-debugging-port）`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+                调试打开
+              </button>
+            )}
+            <button
+              className="current-card-ctx-item"
+              onClick={() => doClose(ctxMenu.bt, ctxMenu.p)}
+              title={
+                ctxIsDefault
+                  ? `终止「${ctxMenu.p.name}」（默认用户目录，单实例：关闭全部窗口与进程）`
+                  : `关闭「${ctxMenu.p.name}」（只关闭该配置自己的进程）`
+              }
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+              {ctxIsDefault ? "终止" : "关闭"}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
