@@ -134,17 +134,23 @@ fn kill_browser_profile_process(
     management::kill_browser_profile_process(&browser_type, &profile_id, &user_data_dir)
 }
 
-/// 杀死指定浏览器的所有进程（Edge → msedge.exe, Chrome → chrome.exe）
+/// 杀死指定浏览器的所有进程（Edge → msedge.exe, Chrome → chrome.exe, 自定义 → 注册的进程名）
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
 fn kill_all_browser_processes(browser_type: String) -> Result<String, String> {
     let exe_name = match browser_type.as_str() {
-        "edge" => "msedge.exe",
-        "chrome" => "chrome.exe",
-        "edecker" => "edecker.exe",
-        _ => return Err(format!("不支持的浏览器类型: {}", browser_type)),
+        "edge" => "msedge.exe".to_string(),
+        "chrome" => "chrome.exe".to_string(),
+        // 注册式：自定义浏览器类型的进程名由业务项目注册（如 003 的易得客 → edecker.exe）
+        _ => {
+            if let Some(name) = management::registered_process_name(&browser_type) {
+                name
+            } else {
+                return Err(format!("不支持的浏览器类型: {}", browser_type));
+            }
+        }
     };
-    let count = crate::system::process::kill_processes_by_name(exe_name)
+    let count = crate::system::process::kill_processes_by_name(&exe_name)
         .map_err(|e| format!("杀死进程失败: {}", e))?;
     Ok(format!("已关闭 {} 个 {} 进程", count, exe_name))
 }

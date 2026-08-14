@@ -2,21 +2,68 @@
 // 浏览器进程管理
 //
 // 包含通用的 Chrome/Edge 进程扫描、headless 检测、进程终止、
-// 运行状态检测与端口分配逻辑，以及易得客6 的检测
-// （主程序 + Profiles/shop_xxx 店铺窗口 children）。
+// 运行状态检测与端口分配逻辑。
+//
+// 浏览器类型为「注册式」：共享层仅内置通用 Edge/Chrome；
+// 公司专用浏览器（如易得客6）由业务项目在启动时调用
+// register_browser_detector 注册，其他项目不注册则不受影响。
 // ============================================================
 
-use crate::browser::{BrowserInfo, ChildBrowserConfig, LaunchInfo, ProfileInfo};
+use crate::browser::{BrowserInfo, LaunchInfo, ProfileInfo};
 use crate::config::PortEntry;
 use crate::encoding::decode_windows_stdout;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
-use super::icons::{CHROME_ICO, EDGE_ICO, EDECKER_ICO};
+use std::sync::{Arc, Mutex, OnceLock};
+use super::icons::{CHROME_ICO, EDGE_ICO};
 use winreg::enums::*;
 use winreg::RegKey;
+
+// ── 自定义浏览器检测器注册表（注册式） ──
+
+/// 自定义浏览器检测器：由业务项目注册（如 003 注册易得客6）
+#[derive(Clone)]
+pub struct BrowserDetector {
+    /// 生成完整浏览器信息（含 exe 路径、用户数据目录、版本、children 等）
+    pub detect: Arc<dyn Fn() -> BrowserInfo + Send + Sync>,
+    /// 浏览器进程名（用于 kill 全部进程），如 "edecker.exe"
+    pub process_name: Arc<dyn Fn() -> String + Send + Sync>,
+}
+
+static CUSTOM_DETECTORS: OnceLock<Mutex<HashMap<String, BrowserDetector>>> = OnceLock::new();
+
+/// 注册自定义浏览器检测器（应用启动时调用）
+pub fn register_browser_detector(browser_type: &str, detector: BrowserDetector) {
+    CUSTOM_DETECTORS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap()
+        .insert(browser_type.to_string(), detector);
+}
+
+fn custom_detector(browser_type: &str) -> Option<BrowserDetector> {
+    CUSTOM_DETECTORS
+        .get()?
+        .lock()
+        .ok()?
+        .get(browser_type)
+        .cloned()
+}
+
+/// 查询注册的进程名（供 kill 全部进程等场景使用）
+pub fn registered_process_name(browser_type: &str) -> Option<String> {
+    custom_detector(browser_type).map(|d| (d.process_name)())
+}
+
+/// 查询注册的自定义类型列表
+pub fn registered_browser_types() -> Vec<String> {
+    match CUSTOM_DETECTORS.get() {
+        Some(reg) => reg.lock().unwrap().keys().cloned().collect(),
+        None => Vec::new(),
+    }
+}
 
 /// 扫描正在运行的浏览器实例（含调试端口）
 pub fn scan_running_browser_instances(exe_name: &str) -> HashMap<String, u16> {
@@ -876,16 +923,6 @@ fn get_browser_version(browser_type: &str) -> String {
                 return ver;
             }
         }
-        "edecker" => {
-            // 易得客无注册表版本信息，从可执行文件读取
-            let exe_paths = get_exe_paths("edecker");
-            if let Some(p) = exe_paths.first() {
-                let ver = get_file_version(p);
-                if !ver.is_empty() {
-                    return ver;
-                }
-            }
-        }
         _ => {}
     }
     String::new()
@@ -1153,34 +1190,14 @@ fn get_exe_paths(browser_type: &str) -> Vec<String> {
             }
             paths
         }
-        "edecker" => {
-            let mut paths = Vec::new();
-            // 易得客安装在 AppData\Local 下
-            if let Some(local) = dirs::data_local_dir() {
-                let p = local.join(r"eDecker6\Application\edecker.exe");
-                if p.exists() {
-                    paths.push(p.to_string_lossy().to_string());
-                }
+        _ => {
+            // 注册式：自定义浏览器类型的 exe 路径由注册的检测器提供
+            if let Some(det) = custom_detector(browser_type) {
+                (det.detect)().exe_paths
+            } else {
+                Vec::new()
             }
-            // 也检查标准路径（兼容性）
-            paths.extend(check_standard_paths(&[
-                r"C:\Program Files\易得客6\edecker.exe",
-                r"C:\Program Files (x86)\易得客6\edecker.exe",
-            ]));
-            // 未安装时提供默认路径以便用户自行填写
-            if paths.is_empty() {
-                if let Some(local) = dirs::data_local_dir() {
-                    paths.push(
-                        local
-                            .join(r"eDecker6\Application\edecker.exe")
-                            .to_string_lossy()
-                            .to_string(),
-                    );
-                }
-            }
-            paths
         }
-        _ => Vec::new(),
     }
 }
 
@@ -1199,13 +1216,19 @@ fn get_user_data_dir(browser_type: &str) -> Option<String> {
                 local_app_data.to_string_lossy()
             ),
         ),
-        "edecker" => Some(
-            format!(
-                r"{}\eDecker6\User Data",
-                local_app_data.to_string_lossy()
-            ),
-        ),
-        _ => None,
+        _ => {
+            // 注册式：自定义浏览器类型的用户数据目录由注册的检测器提供
+            if let Some(det) = custom_detector(browser_type) {
+                let info = (det.detect)();
+                if info.default_user_data_dir.is_empty() {
+                    None
+                } else {
+                    Some(info.default_user_data_dir)
+                }
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -1315,76 +1338,6 @@ fn get_file_version(exe_path: &str) -> String {
     }
 }
 
-// ============ 易得客店铺目录 ============
-
-/// 扫描易得客店铺目录（Profiles/shop_xxx/）
-/// 易得客的店铺隔离窗口存放在 {User Data 的父目录}/Profiles/ 下
-fn scan_edecker_shop_dirs(default_user_data_dir: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    if let Some(parent) = Path::new(default_user_data_dir).parent() {
-        let profiles_dir = parent.join("Profiles");
-        if profiles_dir.exists() {
-            if let Ok(entries) = fs::read_dir(&profiles_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir()
-                        && path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .map_or(false, |n| n.starts_with("shop_"))
-                        && path.join("Local State").exists()
-                    {
-                        result.push(path.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    result
-}
-
-/// 从店铺目录名提取店铺名称
-/// 目录名格式: shop_时间戳_IP_店铺账号ID 或 shop_时间戳_店铺账号ID
-fn extract_shop_name(dir: &str) -> String {
-    let path = Path::new(dir);
-    let folder_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_string();
-
-    // 尝试从目录名解析店铺账号 ID
-    let parts: Vec<&str> = folder_name.split('_').collect();
-    // shop_时间戳_IP_账号ID 或 shop_时间戳_账号ID
-    if parts.len() >= 3 && parts[0] == "shop" {
-        format!("店铺 {}", parts[parts.len() - 1])
-    } else {
-        folder_name
-    }
-}
-
-/// 从店铺目录名提取代理 IP
-fn extract_shop_ip(dir: &str) -> Option<String> {
-    let path = Path::new(dir);
-    let folder_name = path
-        .file_name()
-        .and_then(|n| n.to_str())?;
-    let parts: Vec<&str> = folder_name.split('_').collect();
-    if parts.len() >= 4 && parts[0] == "shop" {
-        // 尝试解析第三个部分（时间戳之后）是否为 IP 格式
-        let ip_candidate = parts[2];
-        let ip_segments: Vec<&str> = ip_candidate.split('.').collect();
-        if ip_segments.len() == 4 {
-            // 看起来是 IP 格式
-            Some(ip_candidate.to_string())
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 // ============ 检测 Edge ============
 
 fn detect_edge() -> BrowserInfo {
@@ -1459,79 +1412,23 @@ fn detect_chrome() -> BrowserInfo {
     }
 }
 
-// ============ 检测 易得客6 ============
-
-fn detect_edecker() -> BrowserInfo {
-    let exe_paths = get_exe_paths("edecker");
-    let installed = !exe_paths.is_empty();
-    let default_user_data = get_user_data_dir("edecker").unwrap_or_default();
-    let user_data_dirs = if !default_user_data.is_empty() {
-        vec![default_user_data.clone()]
-    } else {
-        Vec::new()
-    };
-    let version = get_file_version(exe_paths.first().map_or("", |p| p.as_str()));
-
-    // 易得客没有 Chrome 意义上的"多用户"（Profile 1, Profile 2...）
-    // 但添加一个主程序配置使其在 UI 中可选中（仅当目录真实存在时）
-    let mut profiles = Vec::new();
-    if !default_user_data.is_empty() && std::path::Path::new(&default_user_data).exists() {
-        profiles.push(ProfileInfo {
-            id: "Default".to_string(),
-            name: "易得客主程序".to_string(),
-            user_name: String::new(),
-            email: String::new(),
-            path: default_user_data.clone(),
-            user_data_dir: default_user_data.clone(),
-            download_dir: String::new(),
-            avatar_base64: String::new(),
-            avatar_has_icon: false,
-        });
-    }
-
-    // 扫描店铺目录并构建 children
-    let shop_dirs = scan_edecker_shop_dirs(&default_user_data);
-    let children: Vec<ChildBrowserConfig> = shop_dirs
-        .iter()
-        .map(|dir| {
-            let name = extract_shop_name(dir);
-            let proxy_ip = extract_shop_ip(dir);
-            ChildBrowserConfig {
-                user_data_dir: std::path::PathBuf::from(dir),
-                name,
-                proxy_ip,
-                enabled: true,
-            }
-        })
-        .collect();
-
-    // 将店铺目录同时作为 suggested 保留（兼容旧逻辑）
-    let suggested = shop_dirs.clone();
-
-    BrowserInfo {
-        browser_type: "edecker".to_string(),
-        browser_name: "易得客6".to_string(),
-        browser_icon_base64: EDECKER_ICO.to_string(),
-        installed,
-        exe_paths,
-        user_data_dirs,
-        default_user_data_dir: default_user_data,
-        default_debug_port: 9333,
-        browser_version: version,
-        suggested_user_data_dirs: suggested,
-        profiles,
-        children,
-    }
-}
-
 // ============ 公共 API ============
 
-/// 检测所有已安装浏览器
+/// 检测所有已安装浏览器（内置 Edge/Chrome + 业务项目注册的自定义浏览器）
 pub fn detect_all_browsers() -> Vec<BrowserInfo> {
     let mut browsers = Vec::new();
     browsers.push(detect_edge());
     browsers.push(detect_chrome());
-    browsers.push(detect_edecker());
+    if let Some(reg) = CUSTOM_DETECTORS.get() {
+        for (browser_type, detector) in reg.lock().unwrap().iter() {
+            let info = (detector.detect)();
+            if info.browser_type.is_empty() {
+                eprintln!("[detect_all_browsers] 注册的检测器 {} 返回了空的 browser_type，已跳过", browser_type);
+                continue;
+            }
+            browsers.push(info);
+        }
+    }
     browsers
 }
 
@@ -1544,12 +1441,33 @@ pub fn detect_profiles_from(
     let icons: HashMap<&str, (&str, &str)> = HashMap::from([
         ("edge", ("Microsoft Edge", EDGE_ICO)),
         ("chrome", ("Google Chrome", CHROME_ICO)),
-        ("edecker", ("易得客6", EDECKER_ICO)),
     ]);
-    let (browser_name, icon_b64) = icons
-        .get(browser_type)
-        .copied()
-        .unwrap_or(("浏览器", EDGE_ICO));
+
+    // 注册类型：名称/图标/端口/children/版本 取自注册的检测器
+    let registered = custom_detector(browser_type);
+    let (browser_name, icon_b64, default_port, children, base_version) =
+        if let Some(det) = &registered {
+            let base = (det.detect)();
+            (
+                base.browser_name,
+                base.browser_icon_base64,
+                base.default_debug_port,
+                base.children,
+                base.browser_version,
+            )
+        } else {
+            let (name, icon) = icons
+                .get(browser_type)
+                .copied()
+                .unwrap_or(("浏览器", EDGE_ICO));
+            (
+                name.to_string(),
+                icon.to_string(),
+                9222,
+                Vec::new(),
+                String::new(),
+            )
+        };
 
     let exe_paths = if let Some(exe) = custom_exe_path {
         if Path::new(exe).exists() {
@@ -1573,28 +1491,10 @@ pub fn detect_profiles_from(
     all_profiles.sort_by(|a, b| a.id.cmp(&b.id).then(a.user_data_dir.cmp(&b.user_data_dir)));
     all_profiles.dedup_by(|a, b| a.id == b.id && a.user_data_dir == b.user_data_dir);
 
-    let version = get_browser_version(browser_type);
-
-    // 易得客：扫描店铺目录构建 children（店铺隔离窗口）
-    let children: Vec<ChildBrowserConfig> = if browser_type == "edecker" {
-        let shop_dirs = scan_edecker_shop_dirs(
-            user_data_dirs.first().map(|s| s.as_str()).unwrap_or(""),
-        );
-        shop_dirs
-            .iter()
-            .map(|dir| {
-                let name = extract_shop_name(dir);
-                let proxy_ip = extract_shop_ip(dir);
-                ChildBrowserConfig {
-                    user_data_dir: std::path::PathBuf::from(dir),
-                    name,
-                    proxy_ip,
-                    enabled: true,
-                }
-            })
-            .collect()
+    let version = if !base_version.is_empty() {
+        base_version
     } else {
-        Vec::new()
+        get_browser_version(browser_type)
     };
 
     // 扫描同级目录作为 suggested（不包含默认目录）
@@ -1608,8 +1508,8 @@ pub fn detect_profiles_from(
 
     BrowserInfo {
         browser_type: browser_type.to_string(),
-        browser_name: browser_name.to_string(),
-        browser_icon_base64: icon_b64.to_string(),
+        browser_name,
+        browser_icon_base64: icon_b64,
         installed: !exe_paths.is_empty(),
         exe_paths,
         user_data_dirs: user_data_dirs.to_vec(),
@@ -1617,7 +1517,7 @@ pub fn detect_profiles_from(
             .first()
             .cloned()
             .unwrap_or_default(),
-        default_debug_port: if browser_type == "edecker" { 9333 } else { 9222 },
+        default_debug_port: default_port,
         browser_version: version,
         suggested_user_data_dirs: suggested,
         profiles: all_profiles,
