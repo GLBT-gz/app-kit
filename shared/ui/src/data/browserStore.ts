@@ -13,7 +13,7 @@
 //   - 新鲜度：进入配置页时检测，完成后增量合并，lastSyncedAt 标注时间
 // ============================================================
 
-import { useSyncExternalStore } from "react";
+import { startTransition, useSyncExternalStore } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { detectBrowsers, detectBrowserTypes, detectCustomProfiles } from "../api";
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
@@ -222,15 +222,20 @@ export function refreshBrowserData(force = false): Promise<void> {
       const remaining = MIN_LOADING_MS - (Date.now() - startedAt);
       if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
 
-      setState(s => ({
-        ...s,
-        browsers: merged,
-        exePaths: nextExe,
-        userDataDirs: nextDirs,
-        loading: false,
-        lastSyncedAt: Date.now(),
-        error: null,
-      }));
+      // 检测完成：数据全量渲染降为低优先级（startTransition）。
+      // 否则大列表渲染会占满主线程，打断滚轮切换等用户交互（设置页切换卡顿的根因之一）。
+      // 渲染期间用户交互（同步 setState）可抢占，保证滚轮始终跟手。
+      startTransition(() => {
+        setState(s => ({
+          ...s,
+          browsers: merged,
+          exePaths: nextExe,
+          userDataDirs: nextDirs,
+          loading: false,
+          lastSyncedAt: Date.now(),
+          error: null,
+        }));
+      });
     } catch (e) {
       const remaining = MIN_LOADING_MS - (Date.now() - startedAt);
       if (remaining > 0) await new Promise(r => setTimeout(r, remaining));

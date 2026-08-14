@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "./TopBar";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { getEffectiveShortcuts, type ShortcutDef } from "./ShortcutsPanel";
@@ -105,8 +105,7 @@ export function AppLayout({
     return safeGetJSON<number>(LS_KEYS.SIDEBAR_WIDTH) ?? initialSidebarWidth;
   });
 
-  // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 延迟渲染 ──
-  // 滚轮切换时 sidebar 高亮立刻变化，内容区渲染通过 startTransition 推迟
+  // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 同步渲染 ──
   const [sidebarHighlightTab, setSidebarHighlightTab] = useState(settingsTab);
 
   // ── 已挂载的标签页集合：首次访问后保持挂载，后续仅切换 display ──
@@ -264,14 +263,12 @@ export function AppLayout({
     ? settingsTab
     : resolvedTabs[0]?.id || "";
 
-  // ── 标签页切换：双状态，sidebar 高亮立即更新，内容区渲染通过 startTransition 推迟 ──
+  // ── 标签页切换：高亮与内容同步立即切换（对齐 DataManagerPanel 的层级方案） ──
+  // 不包 startTransition：后台检测完成的全量渲染已降为低优先级（见 browserStore），
+  // 若此处再降级，主线程忙时内容切换会被排队，表现为高亮已变但内容滞后（卡顿）
   const handleTabChange = useCallback((newId: string) => {
-    // 立即更新 sidebar 高亮（视觉反馈）
     setSidebarHighlightTab(newId);
-    // 推迟内容区渲染（低优先级，不阻塞后续事件）
-    startTransition(() => {
-      setSettingsTab(newId);
-    });
+    setSettingsTab(newId);
   }, []);
 
   // 标签页首次访问后加入 mountedTabs，之后不再卸载
