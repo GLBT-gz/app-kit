@@ -108,8 +108,31 @@ export function AppLayout({
   // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 同步渲染 ──
   const [sidebarHighlightTab, setSidebarHighlightTab] = useState(settingsTab);
 
-  // ── 已挂载的标签页集合：首次访问后保持挂载，后续仅切换 display ──
+  // ── 已挂载的标签页集合：页面层叠方案 ──
+  // 设置面板打开后，在浏览器空闲时（requestIdleCallback）逐帧预挂载全部标签页
+  // （display:none 不可见）。滚轮切换任何 tab 都只是切换可见层（display），
+  // 无首次挂载渲染成本；预挂载只发生在空闲间隙，用户滚轮/交互时自动让路。
+  const mountedTabsRef = useRef<Set<string>>(new Set([settingsTab]));
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([settingsTab]));
+
+  // ── 逐帧预挂载未挂载的标签页（层叠）：仅设置面板打开时执行 ──
+  useEffect(() => {
+    if (!showSettings) return;
+    let cancelled = false;
+    const ids = resolvedTabs.map(t => t.id);
+    const schedule = () => {
+      if (cancelled) return;
+      const next = ids.find(id => !mountedTabsRef.current.has(id));
+      if (!next) return;
+      mountedTabsRef.current.add(next);
+      setMountedTabs(new Set(mountedTabsRef.current));
+      requestIdleCallback(schedule, { timeout: 1500 });
+    };
+    requestIdleCallback(schedule, { timeout: 1500 });
+    return () => { cancelled = true; };
+    // resolvedTabs 在设置面板打开期间稳定，仅依赖 showSettings 即可
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSettings]);
 
   // ── 主题/置顶变化时持久化到 localStorage ──
   const skipOnce = useRef(true);
@@ -270,11 +293,6 @@ export function AppLayout({
     setSidebarHighlightTab(newId);
     setSettingsTab(newId);
   }, []);
-
-  // 标签页首次访问后加入 mountedTabs，之后不再卸载
-  useEffect(() => {
-    setMountedTabs(prev => prev.has(validSettingsTab) ? prev : new Set([...prev, validSettingsTab]));
-  }, [validSettingsTab]);
 
   return (
     <div className="app">
