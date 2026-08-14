@@ -795,19 +795,9 @@ const AVATAR_INDEX_FILES: [&str; 56] = [
 /// 新版 Chrome/Edge（151+）预设头像：Local State 的 profile.info_cache 记录
 /// avatar_icon=chrome://theme/IDR_PROFILE_AVATAR_N，头像图片按需下载/缓存到
 /// {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
-/// 找不到（未设置头像、文件未缓存、非该浏览器格式）时返回 None。
-fn read_avatar_file_by_index(profile_path: &std::path::Path) -> Option<Vec<u8>> {
-    let user_data = profile_path.parent()?;
-    let local_state = user_data.join("Local State");
-    let content = fs::read_to_string(local_state).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let profile_dir = profile_path.file_name()?.to_str()?;
-    let avatar_icon = json
-        .get("profile")?
-        .get("info_cache")?
-        .get(profile_dir)?
-        .get("avatar_icon")?
-        .as_str()?;
+/// 找不到（未设置头像、文件未缓存）时返回 None。
+/// avatar_icon 由调用方从已解析的 Local State JSON 传入（避免每个 profile 重复读+解析大文件）。
+fn read_avatar_file_by_index(user_data: &Path, avatar_icon: &str) -> Option<Vec<u8>> {
     let marker = "IDR_PROFILE_AVATAR_";
     let idx = avatar_icon.rfind(marker)?;
     let n: usize = avatar_icon[idx + marker.len()..].parse().ok()?;
@@ -950,15 +940,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
         }
     }
 
-    // 7. 新版 Chrome/Edge（151+）预设头像：Local State 记录资源索引
-    //    （avatar_icon=IDR_PROFILE_AVATAR_N），图片按需下载缓存到
-    //    {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
-    if let Some(data) = read_avatar_file_by_index(profile_path) {
-        return ImageData {
-            base64: to_avatar_base64(&data, "image/png"),
-            is_icon: false,
-        };
-    }
+    // 7. 新版 Chrome/Edge（151+）预设头像：由调用方用已解析的 info_cache.avatar_icon
+    //    调用 read_avatar_file_by_index 处理（见 read_profiles 内），避免重复解析 Local State。
 
     ImageData {
         base64: String::new(),
@@ -1152,6 +1135,20 @@ fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
                     base64: icon_url.to_string(),
                     is_icon: false,
                 };
+            }
+        }
+        if avatar.base64.is_empty() {
+            // 7. 新版 Chrome/Edge（151+）预设头像：Local State info_cache 记录
+            //    avatar_icon=chrome://theme/IDR_PROFILE_AVATAR_N，图片按需下载缓存到
+            //    {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
+            //    avatar_icon 来自已解析的 Local State JSON（info），无需重复读文件。
+            if let Some(icon) = info.get("avatar_icon").and_then(|v| v.as_str()) {
+                if let Some(data) = read_avatar_file_by_index(&profile_path, icon) {
+                    avatar = ImageData {
+                        base64: to_avatar_base64(&data, "image/png"),
+                        is_icon: false,
+                    };
+                }
             }
         }
         if avatar.base64.is_empty() {
