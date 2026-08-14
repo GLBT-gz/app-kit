@@ -1,12 +1,12 @@
 // ============================================================
-// 浏览器进程管理（中性版）
+// 浏览器进程管理
 //
-// 仅包含通用的 Chrome/Edge 进程扫描、headless 检测、进程终止、
-// 运行状态检测与端口分配逻辑。易得客等公司专用浏览器的逻辑
-// 由公司层（glbt-apps）的平台库提供。
+// 包含通用的 Chrome/Edge 进程扫描、headless 检测、进程终止、
+// 运行状态检测与端口分配逻辑，以及易得客6 的检测
+// （主程序 + Profiles/shop_xxx 店铺窗口 children）。
 // ============================================================
 
-use crate::browser::{BrowserInfo, LaunchInfo, ProfileInfo};
+use crate::browser::{BrowserInfo, ChildBrowserConfig, LaunchInfo, ProfileInfo};
 use crate::config::PortEntry;
 use crate::encoding::decode_windows_stdout;
 use serde::Serialize;
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
-use super::icons::{CHROME_ICO, EDGE_ICO};
+use super::icons::{CHROME_ICO, EDGE_ICO, EDECKER_ICO};
 use winreg::enums::*;
 use winreg::RegKey;
 
@@ -646,6 +646,39 @@ pub struct ImageData {
     pub is_icon: bool,
 }
 
+/// 头像缩略阈值：小于该字节数的图片直接原样 base64（避免小图重编码反而变大）
+const AVATAR_THUMB_THRESHOLD: usize = 4096;
+
+/// 将图片字节编码为 base64 data URL。
+/// png/jpeg 大图（>= 4KB）压缩为 64x64 PNG，大幅减小 IPC 传输与前端列表渲染开销；
+/// 缩略失败或小图时回退原样编码。
+fn to_avatar_base64(data: &[u8], mime: &str) -> String {
+    let encode_original = |bytes: &[u8]| -> String {
+        format!(
+            "data:{};base64,{}",
+            mime,
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes)
+        )
+    };
+
+    if data.len() >= AVATAR_THUMB_THRESHOLD && (mime == "image/png" || mime == "image/jpeg") {
+        if let Ok(img) = image::load_from_memory(data) {
+            let thumb = img.thumbnail(64, 64);
+            let mut out = Vec::new();
+            if thumb
+                .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+                .is_ok()
+            {
+                return format!(
+                    "data:image/png;base64,{}",
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &out)
+                );
+            }
+        }
+    }
+    encode_original(data)
+}
+
 /// 读取头像图片为 base64
 fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageData {
     // 1. 尝试读取 PNG 头像（从 screenshot 目录获取）
@@ -658,9 +691,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
                     if ext == "png" || ext == "jpg" || ext == "jpeg" {
                         if let Ok(data) = fs::read(&path) {
                             let mime = if ext == "png" { "image/png" } else { "image/jpeg" };
-                            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
                             return ImageData {
-                                base64: format!("data:{};base64,{}", mime, b64),
+                                base64: to_avatar_base64(&data, mime),
                                 is_icon: false,
                             };
                         }
@@ -677,9 +709,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
             if let Ok(data) = fs::read(&img_path) {
                 let ext = img_path.extension().and_then(|e| e.to_str()).unwrap_or("png");
                 let mime = if ext == "jpg" || ext == "jpeg" { "image/jpeg" } else { "image/png" };
-                let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
                 return ImageData {
-                    base64: format!("data:{};base64,{}", mime, b64),
+                    base64: to_avatar_base64(&data, mime),
                     is_icon: false,
                 };
             }
@@ -691,9 +722,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
         let ico_path = profile_path.join(name);
         if ico_path.exists() {
             if let Ok(data) = fs::read(&ico_path) {
-                let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
                 return ImageData {
-                    base64: format!("data:image/x-icon;base64,{}", b64),
+                    base64: to_avatar_base64(&data, "image/x-icon"),
                     is_icon: true,
                 };
             }
@@ -714,9 +744,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
                                 "webp" => "image/webp",
                                 _ => "image/png",
                             };
-                            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
                             return ImageData {
-                                base64: format!("data:{};base64,{}", mime, b64),
+                                base64: to_avatar_base64(&data, mime),
                                 is_icon: false,
                             };
                         }
@@ -768,9 +797,8 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
                                             "ico" => "image/x-icon",
                                             _ => "image/png",
                                         };
-                                        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
                                         return ImageData {
-                                            base64: format!("data:{};base64,{}", mime, b64),
+                                            base64: to_avatar_base64(&data, mime),
                                             is_icon: ext == "ico",
                                         };
                                     }
@@ -846,6 +874,16 @@ fn get_browser_version(browser_type: &str) -> String {
                 "DisplayVersion",
             ) {
                 return ver;
+            }
+        }
+        "edecker" => {
+            // 易得客无注册表版本信息，从可执行文件读取
+            let exe_paths = get_exe_paths("edecker");
+            if let Some(p) = exe_paths.first() {
+                let ver = get_file_version(p);
+                if !ver.is_empty() {
+                    return ver;
+                }
             }
         }
         _ => {}
@@ -1115,6 +1153,33 @@ fn get_exe_paths(browser_type: &str) -> Vec<String> {
             }
             paths
         }
+        "edecker" => {
+            let mut paths = Vec::new();
+            // 易得客安装在 AppData\Local 下
+            if let Some(local) = dirs::data_local_dir() {
+                let p = local.join(r"eDecker6\Application\edecker.exe");
+                if p.exists() {
+                    paths.push(p.to_string_lossy().to_string());
+                }
+            }
+            // 也检查标准路径（兼容性）
+            paths.extend(check_standard_paths(&[
+                r"C:\Program Files\易得客6\edecker.exe",
+                r"C:\Program Files (x86)\易得客6\edecker.exe",
+            ]));
+            // 未安装时提供默认路径以便用户自行填写
+            if paths.is_empty() {
+                if let Some(local) = dirs::data_local_dir() {
+                    paths.push(
+                        local
+                            .join(r"eDecker6\Application\edecker.exe")
+                            .to_string_lossy()
+                            .to_string(),
+                    );
+                }
+            }
+            paths
+        }
         _ => Vec::new(),
     }
 }
@@ -1131,6 +1196,12 @@ fn get_user_data_dir(browser_type: &str) -> Option<String> {
         "chrome" => Some(
             format!(
                 r"{}\Google\Chrome\User Data",
+                local_app_data.to_string_lossy()
+            ),
+        ),
+        "edecker" => Some(
+            format!(
+                r"{}\eDecker6\User Data",
                 local_app_data.to_string_lossy()
             ),
         ),
@@ -1244,6 +1315,76 @@ fn get_file_version(exe_path: &str) -> String {
     }
 }
 
+// ============ 易得客店铺目录 ============
+
+/// 扫描易得客店铺目录（Profiles/shop_xxx/）
+/// 易得客的店铺隔离窗口存放在 {User Data 的父目录}/Profiles/ 下
+fn scan_edecker_shop_dirs(default_user_data_dir: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    if let Some(parent) = Path::new(default_user_data_dir).parent() {
+        let profiles_dir = parent.join("Profiles");
+        if profiles_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&profiles_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir()
+                        && path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .map_or(false, |n| n.starts_with("shop_"))
+                        && path.join("Local State").exists()
+                    {
+                        result.push(path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+/// 从店铺目录名提取店铺名称
+/// 目录名格式: shop_时间戳_IP_店铺账号ID 或 shop_时间戳_店铺账号ID
+fn extract_shop_name(dir: &str) -> String {
+    let path = Path::new(dir);
+    let folder_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
+
+    // 尝试从目录名解析店铺账号 ID
+    let parts: Vec<&str> = folder_name.split('_').collect();
+    // shop_时间戳_IP_账号ID 或 shop_时间戳_账号ID
+    if parts.len() >= 3 && parts[0] == "shop" {
+        format!("店铺 {}", parts[parts.len() - 1])
+    } else {
+        folder_name
+    }
+}
+
+/// 从店铺目录名提取代理 IP
+fn extract_shop_ip(dir: &str) -> Option<String> {
+    let path = Path::new(dir);
+    let folder_name = path
+        .file_name()
+        .and_then(|n| n.to_str())?;
+    let parts: Vec<&str> = folder_name.split('_').collect();
+    if parts.len() >= 4 && parts[0] == "shop" {
+        // 尝试解析第三个部分（时间戳之后）是否为 IP 格式
+        let ip_candidate = parts[2];
+        let ip_segments: Vec<&str> = ip_candidate.split('.').collect();
+        if ip_segments.len() == 4 {
+            // 看起来是 IP 格式
+            Some(ip_candidate.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 // ============ 检测 Edge ============
 
 fn detect_edge() -> BrowserInfo {
@@ -1318,6 +1459,71 @@ fn detect_chrome() -> BrowserInfo {
     }
 }
 
+// ============ 检测 易得客6 ============
+
+fn detect_edecker() -> BrowserInfo {
+    let exe_paths = get_exe_paths("edecker");
+    let installed = !exe_paths.is_empty();
+    let default_user_data = get_user_data_dir("edecker").unwrap_or_default();
+    let user_data_dirs = if !default_user_data.is_empty() {
+        vec![default_user_data.clone()]
+    } else {
+        Vec::new()
+    };
+    let version = get_file_version(exe_paths.first().map_or("", |p| p.as_str()));
+
+    // 易得客没有 Chrome 意义上的"多用户"（Profile 1, Profile 2...）
+    // 但添加一个主程序配置使其在 UI 中可选中（仅当目录真实存在时）
+    let mut profiles = Vec::new();
+    if !default_user_data.is_empty() && std::path::Path::new(&default_user_data).exists() {
+        profiles.push(ProfileInfo {
+            id: "Default".to_string(),
+            name: "易得客主程序".to_string(),
+            user_name: String::new(),
+            email: String::new(),
+            path: default_user_data.clone(),
+            user_data_dir: default_user_data.clone(),
+            download_dir: String::new(),
+            avatar_base64: String::new(),
+            avatar_has_icon: false,
+        });
+    }
+
+    // 扫描店铺目录并构建 children
+    let shop_dirs = scan_edecker_shop_dirs(&default_user_data);
+    let children: Vec<ChildBrowserConfig> = shop_dirs
+        .iter()
+        .map(|dir| {
+            let name = extract_shop_name(dir);
+            let proxy_ip = extract_shop_ip(dir);
+            ChildBrowserConfig {
+                user_data_dir: std::path::PathBuf::from(dir),
+                name,
+                proxy_ip,
+                enabled: true,
+            }
+        })
+        .collect();
+
+    // 将店铺目录同时作为 suggested 保留（兼容旧逻辑）
+    let suggested = shop_dirs.clone();
+
+    BrowserInfo {
+        browser_type: "edecker".to_string(),
+        browser_name: "易得客6".to_string(),
+        browser_icon_base64: EDECKER_ICO.to_string(),
+        installed,
+        exe_paths,
+        user_data_dirs,
+        default_user_data_dir: default_user_data,
+        default_debug_port: 9333,
+        browser_version: version,
+        suggested_user_data_dirs: suggested,
+        profiles,
+        children,
+    }
+}
+
 // ============ 公共 API ============
 
 /// 检测所有已安装浏览器
@@ -1325,6 +1531,7 @@ pub fn detect_all_browsers() -> Vec<BrowserInfo> {
     let mut browsers = Vec::new();
     browsers.push(detect_edge());
     browsers.push(detect_chrome());
+    browsers.push(detect_edecker());
     browsers
 }
 
@@ -1337,6 +1544,7 @@ pub fn detect_profiles_from(
     let icons: HashMap<&str, (&str, &str)> = HashMap::from([
         ("edge", ("Microsoft Edge", EDGE_ICO)),
         ("chrome", ("Google Chrome", CHROME_ICO)),
+        ("edecker", ("易得客6", EDECKER_ICO)),
     ]);
     let (browser_name, icon_b64) = icons
         .get(browser_type)
@@ -1367,6 +1575,28 @@ pub fn detect_profiles_from(
 
     let version = get_browser_version(browser_type);
 
+    // 易得客：扫描店铺目录构建 children（店铺隔离窗口）
+    let children: Vec<ChildBrowserConfig> = if browser_type == "edecker" {
+        let shop_dirs = scan_edecker_shop_dirs(
+            user_data_dirs.first().map(|s| s.as_str()).unwrap_or(""),
+        );
+        shop_dirs
+            .iter()
+            .map(|dir| {
+                let name = extract_shop_name(dir);
+                let proxy_ip = extract_shop_ip(dir);
+                ChildBrowserConfig {
+                    user_data_dir: std::path::PathBuf::from(dir),
+                    name,
+                    proxy_ip,
+                    enabled: true,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     // 扫描同级目录作为 suggested（不包含默认目录）
     let default_user_data = user_data_dirs.first().map(|s| s.as_str()).unwrap_or("");
     let mut suggested = scan_peer_user_data_dirs(default_user_data);
@@ -1387,11 +1617,11 @@ pub fn detect_profiles_from(
             .first()
             .cloned()
             .unwrap_or_default(),
-        default_debug_port: 9222,
+        default_debug_port: if browser_type == "edecker" { 9333 } else { 9222 },
         browser_version: version,
         suggested_user_data_dirs: suggested,
         profiles: all_profiles,
-        children: vec![],
+        children,
     }
 }
 

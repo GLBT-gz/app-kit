@@ -3,6 +3,7 @@ import { BrowserConfigPanel, type BCPBrowser } from "./BrowserConfigPanel";
 import { detectCustomProfiles, getLaunchCommand, launchBrowserProfile, openDir, checkPathExists, createNewUserDataDir, createDesktopShortcut } from "../api";
 import { open } from "@tauri-apps/plugin-dialog";
 import { safeGetJSON } from "../localStorageKeys";
+import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 
 export interface BrowserConfigSectionProps {
   /** 浏览器列表（来自 useBrowserBaseData，已是最终检测结果） */
@@ -28,29 +29,39 @@ export interface BrowserConfigSectionProps {
 }
 
 /**
- * 浏览器配置展示组件。
+ * 浏览器配置展示组件（全局浏览器配置页）。
  *
- * 配置数据（browsers/exePaths/userDataDirs）来自 useBrowserBaseData props，
- * activeBrowser（选中的标签页）由本组件本地管理，避免跨组件渲染链路导致卡顿。
+ * ## 按需检测
+ * - 挂载时调用 refreshBrowserData()：进入本页面才触发一次后端检测
+ *   （应用启动不检测，见 browserStore 的更新协议）
+ * - 检测中侧边栏图标转圈；「重新检测」按钮由 BrowserConfigPanel
+ *   在侧边栏顶部渲染（整批检测全部浏览器）
  */
 function BrowserConfigSection({
   browsers,
   exePaths,
   userDataDirs,
-  loading,
   onExePathsChange,
   onUserDataDirsChange,
 }: BrowserConfigSectionProps) {
+  // ── 单一数据源订阅：检测中状态（侧边栏图标转圈 + 按钮禁用） ──
+  const { loading } = useBrowserStore();
+
+  // ── 按需检测：进入全局配置页才触发（in-flight 去重，并发挂载只检测一次） ──
+  useEffect(() => {
+    refreshBrowserData();
+  }, []);
+
   // ── 本地 UI 状态：选中的浏览器类型标签 ──
   const [activeBrowser, setActiveBrowser] = useState<string | null>(null);
 
   // 当浏览器列表就绪且未选中时，自动选第一个
   useEffect(() => {
-    if (!loading && browsers.length > 0 && !activeBrowser) {
+    if (browsers.length > 0 && !activeBrowser) {
       const saved = safeGetJSON<string | null>("core-active-browser-tab");
       setActiveBrowser(saved || browsers[0].browser_type);
     }
-  }, [loading, browsers, activeBrowser]);
+  }, [browsers, activeBrowser]);
 
   const mappedBrowsers: BCPBrowser[] = useMemo(() => browsers.map(b => ({
     ...b,
@@ -96,9 +107,12 @@ function BrowserConfigSection({
     });
   }, []);
 
-  return loading ? (
-    <div style={{ padding: 24, color: "var(--text-muted)", fontSize: 13 }}>正在检测浏览器...</div>
-  ) : (
+  /** 手动重新检测全部浏览器 */
+  const handleRefresh = useCallback(() => {
+    refreshBrowserData();
+  }, []);
+
+  return (
     <BrowserConfigPanel
       browsers={mappedBrowsers}
       activeBrowserType={activeBrowser}
@@ -112,6 +126,8 @@ function BrowserConfigSection({
       onBrowseFile={handleBrowseFile}
       onBrowseDirectory={handleBrowseDirectory}
       onDetectProfiles={handleDetectProfiles}
+      refreshing={loading}
+      onRefreshAll={handleRefresh}
       onLaunchProfile={launchBrowserProfile}
       onGetLaunchCommand={getLaunchCommand}
       onCreateUserDataDir={createNewUserDataDir}

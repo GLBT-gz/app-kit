@@ -33,18 +33,20 @@ export function getBrowserIcon(browserType: string): string | undefined {
 }
 
 /**
- * 从浏览器列表中剔除所有 base64 大字段（浏览器图标 + Profile 头像），
+ * 从浏览器列表中剔除所有 base64 大字段（Profile 头像），
  * 用于写入 localStorage 缓存前瘦身。
  *
  * Profile 头像是运行时从磁盘读取的动态数据，不应缓存在 localStorage 中。
+ * 浏览器图标（browser_icon_base64，Rust 编译时嵌入、体积小）保留，
+ * 以便应用启动无需后端检测即可直接渲染侧边栏图标。
  *
  * 返回类型使用 Record<string, unknown>[] 避免与具体接口的 index-signature 冲突。
  */
-export function stripBrowserCache<T extends Record<string, unknown>>(browsers: T[]): T[] {
+export function stripBrowserCache<T>(browsers: T[]): T[] {
   return browsers.map(b => {
-    const { browser_icon_base64: _, profiles, ...rest } = b;
+    const { profiles, ...rest } = b as Record<string, unknown>;
     const strippedProfiles = profiles ? (profiles as Record<string, unknown>[]).map(p => {
-      const { avatar_base64: __, ...pRest } = p as Record<string, unknown>;
+      const { avatar_base64: _, ...pRest } = p as Record<string, unknown>;
       return pRest;
     }) : undefined;
     return { ...rest, ...(strippedProfiles ? { profiles: strippedProfiles } : {}) } as unknown as T;

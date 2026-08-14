@@ -35,7 +35,7 @@
   background: var(--bg-nav);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   overflow-y: auto;
   position: relative;
 }
@@ -43,7 +43,7 @@
 .settings-tab-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 10px;
   border-radius: 6px;
   border: none;
@@ -74,8 +74,8 @@
 }
 
 .sti-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,7 +305,7 @@
 .nav-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding: 8px;
   background: var(--bg-nav);
   border-right: 1px solid var(--border);
@@ -339,6 +339,61 @@
 .sidebar-resize-handle:hover,
 .sidebar-resize-handle.dragging {
   background: var(--accent);
+}
+
+/* 重新检测全部浏览器按钮（侧边栏顶部，样式与 nav-item 统一） */
+.nav-refresh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.nav-refresh:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.nav-refresh.icon-only {
+  justify-content: center;
+  padding: 8px 0;
+  gap: 0;
+}
+
+.nav-refresh svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 重新检测按钮与下方浏览器列表的分隔横线 */
+.nav-divider {
+  height: 1px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+/* 转圈 loading 图标（检测中替换浏览器图标） */
+.nav-spin {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: nav-spin 0.9s linear infinite;
+}
+
+@keyframes nav-spin {
+  to { transform: rotate(360deg); }
 }
 
 .nav-item {

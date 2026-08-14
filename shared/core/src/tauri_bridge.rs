@@ -141,6 +141,7 @@ fn kill_all_browser_processes(browser_type: String) -> Result<String, String> {
     let exe_name = match browser_type.as_str() {
         "edge" => "msedge.exe",
         "chrome" => "chrome.exe",
+        "edecker" => "edecker.exe",
         _ => return Err(format!("不支持的浏览器类型: {}", browser_type)),
     };
     let count = crate::system::process::kill_processes_by_name(exe_name)

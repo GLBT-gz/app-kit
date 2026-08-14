@@ -76,6 +76,10 @@ export interface BrowserConfigPanelProps {
   onBrowseDirectory?: () => Promise<string | string[] | null>;
   /** 检测浏览器配置文件 */
   onDetectProfiles?: (browserType: string, exePath: string | null, userDirs: string[]) => Promise<BCPBrowser>;
+  /** 是否正在重新检测（全局浏览器检测中，侧边栏图标转圈） */
+  refreshing?: boolean;
+  /** 手动触发一次全量重新检测（提供时在侧边栏顶部显示「重新检测」按钮） */
+  onRefreshAll?: () => void;
   /** 启动浏览器 Profile */
   onLaunchProfile?: (browserType: string, profileId: string, userDataDir: string, debugPort: number) => Promise<string>;
   /** 获取启动命令 */
@@ -200,7 +204,7 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
     exePaths, onExePathsChange, userDataDirs, onUserDataDirsChange,
     sidebarWidth: initialSidebarWidth = 185,
     onCheckPath, onOpenDir, onBrowseFile, onBrowseDirectory,
-    onDetectProfiles, onLaunchProfile, onGetLaunchCommand, onCreateUserDataDir, onCreateShortcut,
+    onDetectProfiles, refreshing, onRefreshAll, onLaunchProfile, onGetLaunchCommand, onCreateUserDataDir, onCreateShortcut,
     onProfilesChange,
   } = props;
 
@@ -293,9 +297,30 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
   return (
     <div className="settings-panel-layout" style={{ flex: 1, minHeight: 0 }}>
       <div className="nav-sidebar" ref={sidebarRef} style={{ width: noBrowsers ? 185 : sidebarWidth }} data-mode={noBrowsers ? "wide" : navMode}>
+        {onRefreshAll && (
+          <div
+            className={`nav-refresh ${navMode === "compact" ? "icon-only" : ""}`}
+            onClick={onRefreshAll}
+            title="重新检测全部浏览器"
+            role="button"
+          >
+            <span className="nav-item-icon">
+              {refreshing ? (
+                <span className="nav-spin" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><polyline points="21 3 21 9 15 9" /></svg>
+              )}
+            </span>
+            {navMode !== "compact" && (
+              <span className="nav-item-label">{refreshing ? "检测中…" : "重新检测"}</span>
+            )}
+          </div>
+        )}
+        {onRefreshAll && <div className="nav-divider" />}
         <div className="nav-list">
           {noBrowsers ? (
             <div className="nav-item" style={{ cursor: "default", opacity: 0.5 }}>
+              <span className="nav-item-icon"><span className="nav-spin" /></span>
               <span className="nav-item-label">检测中…</span>
             </div>
           ) : (
@@ -307,7 +332,11 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
                 title={b.browser_name}
               >
                 <span className="nav-item-icon">
-                  {getBrowserIcon(b.browser_type) && <img src={getBrowserIcon(b.browser_type)!} alt="" />}
+                  {refreshing ? (
+                    <span className="nav-spin" />
+                  ) : (
+                    getBrowserIcon(b.browser_type) && <img src={getBrowserIcon(b.browser_type)!} alt="" />
+                  )}
                 </span>
                 {navMode !== "compact" && (
                   <span className="nav-item-label">

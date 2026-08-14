@@ -23,6 +23,8 @@ winreg.workspace = true
 tauri = { version = "2", optional = true }
 # SQLite 数据库表管理（仅 cmd-db 启用时编译，项目按需启用）
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+# profile 头像缩略图（png/jpeg 大图压缩为 64x64，避免列表渲染大 base64 拖慢前端）
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [features]
 default = []

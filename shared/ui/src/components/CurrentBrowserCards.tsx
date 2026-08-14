@@ -3,6 +3,7 @@ import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
 import { detectBrowserRunningProcesses } from "../api";
+import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
 
@@ -22,13 +23,20 @@ export const CONNECTION_LABELS: Record<ConnectionStatus, string> = {
 };
 
 interface CurrentBrowserCardsProps {
-  /** 浏览器列表（含已检测的 profiles） */
+  /** 浏览器列表（含已检测的 profiles，来自 browserStore） */
   browsers: BCPBrowser[];
-  /** 每个浏览器的可执行文件路径 */
-  exePaths: Record<string, string>;
-  /** 每个浏览器的用户数据目录 */
-  userDataDirs: Record<string, string[]>;
-  /** 检测浏览器 profiles */
+  /**
+   * @deprecated 组件不再自行检测，仅保留字段以兼容调用方。
+   */
+  exePaths?: Record<string, string>;
+  /**
+   * @deprecated 组件不再自行检测，仅保留字段以兼容调用方。
+   */
+  userDataDirs?: Record<string, string[]>;
+  /**
+   * @deprecated profiles 由 browserStore 统一检测提供，本组件不再自行调用。
+   * 保留字段以兼容调用方（000/007 等）。
+   */
   onDetectProfiles?: (browserType: string, exePath: string | null, userDirs: string[]) => Promise<BCPBrowser>;
 
   // ── 单选模式 ──
@@ -45,7 +53,6 @@ interface CurrentBrowserCardsProps {
 
   /** 启动浏览器 profile（启动模式，不传 onSelect 时使用） */
   onLaunchProfile?: (browserType: string, profileId: string, userDataDir: string, debugPort: number) => Promise<string>;
-
 }
 
 /** 将 backend ProfileInfo 统一为 BCPProfile 格式 */
@@ -98,20 +105,134 @@ function getSortGroup(b: BCPBrowser, p: BCPProfile): number {
   return 2;
 }
 
+// ════════════════════════════════════════════
+//  单个 Profile 卡片（memo：选中态变化只重渲染受影响的卡片）
+// ════════════════════════════════════════════
+
+interface ProfileCardProps {
+  profile: BCPProfile;
+  browserType: string;
+  isSelected: boolean;
+  isDefault: boolean;
+  isSibling: boolean;
+  isLaunching: boolean;
+  launchStatus?: LaunchStatus;
+  connStatus?: ConnectionStatus;
+  onCardClick: (bt: string, profile: BCPProfile) => void;
+}
+
+const ProfileCard = memo(function ProfileCard({
+  profile,
+  browserType,
+  isSelected,
+  isDefault,
+  isSibling,
+  isLaunching,
+  launchStatus,
+  connStatus,
+  onCardClick,
+}: ProfileCardProps) {
+  let cls = "current-card";
+  if (isSelected) cls += " current-card--selected";
+  if (isDefault) cls += " current-card--default";
+  if (isSibling) cls += " current-card--sibling";
+
+  return (
+    <button
+      className={cls}
+      onClick={() => onCardClick(browserType, profile)}
+      disabled={isDefault || isLaunching}
+      title={
+        isDefault
+          ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
+          : isSibling
+            ? "与默认路径同级目录 — 存在限制，无法同时控制多个浏览器实例，建议谨慎使用"
+            : "选择此浏览器配置"
+      }
+    >
+      {/* 选中标记（先于警告图标渲染，以覆盖） */}
+      {isSelected && (
+        <span className="current-card-check" style={{ background: "var(--accent)", border: "none", zIndex: 2 }}>
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </span>
+      )}
+      {/* 默认路径锁定标记 */}
+      {isDefault && (
+        <span className="current-card-lock">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+        </span>
+      )}
+      {/* 同级目录警告标记 */}
+      {isSibling && (
+        <span className="current-card-warn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </span>
+      )}
+      {/* 浏览器状态标签（左上角：是否启动 + 是否可连） */}
+      {launchStatus && (
+        <span className={"current-card-launch current-card-launch--" + launchStatus}>
+          {LAUNCH_LABELS[launchStatus]}
+        </span>
+      )}
+      {connStatus && launchStatus === "launched" && (
+        <span className={"current-card-conn current-card-conn--" + connStatus}>
+          {CONNECTION_LABELS[connStatus]}
+        </span>
+      )}
+      {/* 头像 */}
+      <div className={"current-card-avatar" + (isDefault ? " current-card-avatar--dimmed" : "")}>
+        {profile.avatar_base64 ? (
+          <img src={profile.avatar_base64} alt={profile.name} className="current-card-avatar-img" />
+        ) : (
+          <div className="current-card-avatar-placeholder">
+            {profile.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      {/* 名称 */}
+      <div className="current-card-name">{profile.name}</div>
+      {/* 邮箱 */}
+      {profile.email && <div className="current-card-email">{profile.email}</div>}
+      {/* 来源目录（父目录\目录名） */}
+      <div className="current-card-dir">
+        {getDirDisplayName(profile.user_data_dir)}
+      </div>
+      {/* 默认路径提示 */}
+      {isDefault && (
+        <div className="current-card-default-label">默认路径·不可用</div>
+      )}
+      {/* 同级目录警告 */}
+      {isSibling && (
+        <div className="current-card-sibling-label">默认同级路径·受限</div>
+      )}
+      {/* 合法路径（非默认非同级） */}
+      {!isDefault && !isSibling && (
+        <div className="current-card-valid-label">路径规范·可用</div>
+      )}
+      {/* 启动中遮罩 */}
+      {isLaunching && <div className="current-card-launching">启动中...</div>}
+    </button>
+  );
+});
+
 function CurrentBrowserCards({
   browsers,
-  exePaths,
-  userDataDirs,
-  onDetectProfiles,
+  exePaths: _exePaths,
+  userDataDirs: _userDataDirs,
+  onDetectProfiles: _onDetectProfiles,
   selectedKey,
   onSelect,
   selectedKeys,
   onSelectionChange,
   onLaunchProfile,
 }: CurrentBrowserCardsProps) {
-  // 每个浏览器的 profiles state: [browserType → BCPProfile[]]
-  const [profilesMap, setProfilesMap] = useState<Record<string, BCPProfile[]>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const { loading } = useBrowserStore();
+
+  // ── 挂载时触发一次检测（按需：进入本页面才执行，应用启动不检测） ──
+  useEffect(() => {
+    refreshBrowserData();
+  }, []);
+
   const [launching, setLaunching] = useState<string | null>(null);
   const [hideDefaultProfiles, setHideDefaultProfiles] = useState(() => {
     return safeGetJSON<boolean>("core-hide-uncontrollable") ?? false;
@@ -125,11 +246,7 @@ function CurrentBrowserCards({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 序列号：后发 detectAll 运行时，让过时的运行自动放弃更新
-  const detectSeqRef = useRef(0);
   const cdpSeqRef = useRef(0);
-
-  // 上一次检测输入的签名（避免纯重渲染导致重复检测）
-  const lastDetectSigRef = useRef("");
 
   const toggleHideDefault = useCallback(() => {
     setHideDefaultProfiles(prev => {
@@ -139,51 +256,76 @@ function CurrentBrowserCards({
     });
   }, []);
 
-  // 检测所有浏览器的 profiles（稳定引用，仅依赖 onDetectProfiles）
-  const detectAll = useCallback(async (seq: number, bws: typeof browsers, exes: typeof exePaths, dirs: typeof userDataDirs) => {
-    if (!onDetectProfiles) return;
-    // 并行检测所有浏览器（每个浏览器独立 loading，互不影响）
-    await Promise.all(bws.map(async (b) => {
+  // ── profiles 从 browsers（browserStore）派生，不再自行检测 ──
+  const profilesByBrowser = useMemo(() => {
+    const m: Record<string, BCPProfile[]> = {};
+    for (const b of browsers) {
+      const ps = (b.profiles || []).map(toBCPProfile);
+      if (ps.length > 0) m[b.browser_type] = ps;
+    }
+    return m;
+  }, [browsers]);
+
+  // 每个浏览器的排序结果（仅在 browsers/profiles 变化时重算）
+  const grouped = useMemo(() => {
+    return browsers.map(b => {
       const bt = b.browser_type;
-      const bsDirs = (dirs[bt] && dirs[bt]!.length > 0) ? dirs[bt]! : (b.user_data_dirs || []);
-      if (bsDirs.length === 0) return;
-
-      setLoading(prev => ({ ...prev, [bt]: true }));
-      try {
-        const result = await onDetectProfiles(bt, exes[bt] || null, bsDirs);
-        if (seq !== detectSeqRef.current) return;
-        const profiles = (result.profiles || []).map(toBCPProfile);
-        setProfilesMap(prev => ({ ...prev, [bt]: profiles }));
-      } catch {
-        // ignore
-      } finally {
-        setLoading(prev => ({ ...prev, [bt]: false }));
-      }
-    }));
-  }, [onDetectProfiles]);
-
-  // 仅当检测输入实际变化时才重新检测（纯重渲染跳过）
-  useEffect(() => {
-    const sig = JSON.stringify({
-      dirs: userDataDirs,
-      exes: exePaths,
-      browsers: browsers.map(b => ({ bt: b.browser_type, ud: b.user_data_dirs, def: b.default_user_data_dir })),
+      const allProfiles = profilesByBrowser[bt] || [];
+      const sortedProfiles = [...allProfiles].sort((a, p) => {
+        const ga = getSortGroup(b, a);
+        const gb = getSortGroup(b, p);
+        if (ga !== gb) return ga - gb;
+        const dirA = a.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
+        const dirB = p.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
+        if (dirA !== dirB) return dirA.localeCompare(dirB);
+        return a.id.localeCompare(p.id);
+      });
+      return { browser: b, sortedProfiles };
     });
-    if (sig === lastDetectSigRef.current) return;
-    lastDetectSigRef.current = sig;
+  }, [browsers, profilesByBrowser]);
 
-    detectSeqRef.current += 1;
-    const seq = detectSeqRef.current;
-    const rafId = requestAnimationFrame(() => {
-      detectAll(seq, browsers, exePaths, userDataDirs);
-    });
-    return () => {
-      cancelAnimationFrame(rafId);
-      // ★ StrictMode 下 React 会 fire effect → cleanup → effect，
-      // 不清除 sig 会导致第二次 effect 跳过检测，用户永远看不到 profiles
-      lastDetectSigRef.current = "";
-    };
-  }, [browsers, exePaths, userDataDirs, detectAll]);
+  // 选中集合 Set（避免点击时 O(n) includes / 全量拷贝）
+  const selectedKeySet = useMemo(() => new Set(selectedKeys || []), [selectedKeys]);
+
+  // 点击回调：用 ref 持有最新 selectedKeys，保持回调引用稳定（memo 生效前提）
+  const selectedKeysRef = useRef(selectedKeys);
+  selectedKeysRef.current = selectedKeys;
+  const handleCardClick = useCallback((bt: string, p: BCPProfile) => {
+    const key = mkKey(bt, p);
+
+    // 多选模式
+    if (onSelectionChange) {
+      const current = selectedKeysRef.current || [];
+      const isSelected = current.includes(key);
+      const next = isSelected
+        ? current.filter(k => k !== key)
+        : [...current, key];
+      onSelectionChange(next, bt, p, !isSelected);
+      return;
+    }
+
+    // 单选模式
+    if (onSelect) {
+      onSelect(key, bt, p);
+    } else if (onLaunchProfile) {
+      // 启动模式
+      setLaunching(key);
+      onLaunchProfile(bt, p.id, p.user_data_dir, 0)
+        .catch(() => {})
+        .finally(() => setLaunching(null));
+    }
+  }, [onSelectionChange, onSelect, onLaunchProfile]);
+
+  const isSelectMode = !!onSelect;
+  const isMultiSelectMode = !!onSelectionChange;
+
+  /** 计算可见 profile 总数（不计被隐藏的默认配置） */
+  const visibleProfileCount = useMemo(() => {
+    return Object.entries(profilesByBrowser).reduce((sum, [bt, ps]) => {
+      const browser = browsers.find(b => b.browser_type === bt);
+      return sum + ps.filter(p => !(hideDefaultProfiles && browser && isDefaultUserDir(browser, p))).length;
+    }, 0);
+  }, [profilesByBrowser, browsers, hideDefaultProfiles]);
 
   // ── 浏览器状态检测（两个独立维度：是否启动 + 是否可连） ──
   // 轮询间隔（毫秒）：后端是 TCP 直连检测，开销极小
@@ -195,7 +337,7 @@ function CurrentBrowserCards({
   useEffect(() => {
     // 收集所有 profile
     const items: { bt: string; dataDir: string; id: string }[] = [];
-    for (const [bt, ps] of Object.entries(profilesMap)) {
+    for (const [bt, ps] of Object.entries(profilesByBrowser)) {
       for (const p of ps) {
         items.push({ bt, dataDir: p.user_data_dir, id: p.id });
       }
@@ -289,46 +431,7 @@ function CurrentBrowserCards({
       stopPoll();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [profilesMap]);
-
-  // 点击卡片
-  const handleCardClick = (bt: string, b: BCPBrowser, p: BCPProfile) => {
-    if (isDefaultUserDir(b, p)) return; // 默认路径不可选中
-    const key = mkKey(bt, p);
-
-    // 多选模式
-    if (onSelectionChange) {
-      const current = selectedKeys || [];
-      const isSelected = current.includes(key);
-      const next = isSelected
-        ? current.filter(k => k !== key)
-        : [...current, key];
-      onSelectionChange(next, bt, p, !isSelected);
-      return;
-    }
-
-    // 单选模式
-    if (onSelect) {
-      onSelect(key, bt, p);
-    } else if (onLaunchProfile) {
-      // 启动模式
-      setLaunching(key);
-      onLaunchProfile(bt, p.id, p.user_data_dir, 0)
-        .catch(() => {})
-        .finally(() => setLaunching(null));
-    }
-  };
-
-  const isSelectMode = !!onSelect;
-  const isMultiSelectMode = !!onSelectionChange;
-
-  /** 计算可见 profile 总数（不计被隐藏的默认配置） */
-  const visibleProfileCount = useMemo(() => {
-    return Object.entries(profilesMap).reduce((sum, [bt, ps]) => {
-      const browser = browsers.find(b => b.browser_type === bt);
-      return sum + ps.filter(p => !(hideDefaultProfiles && browser && isDefaultUserDir(browser, p))).length;
-    }, 0);
-  }, [profilesMap, browsers, hideDefaultProfiles]);
+  }, [profilesByBrowser]);
 
   // 没有浏览器 > 显示占位（保持高度，防止抽搐）
   if (browsers.length === 0) {
@@ -363,24 +466,13 @@ function CurrentBrowserCards({
         </span>
       </div>
 
-      {browsers.map(b => {
-        const bt = b.browser_type;
-        const allProfiles = profilesMap[bt] || [];
-
-        // 排序：默认路径 → 同级目录 → 正常目录；组内按目录名、profile id 排序
-        const sortedProfiles = [...allProfiles].sort((a, p) => {
-          const ga = getSortGroup(b, a);
-          const gb = getSortGroup(b, p);
-          if (ga !== gb) return ga - gb;
-          const dirA = a.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
-          const dirB = p.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
-          if (dirA !== dirB) return dirA.localeCompare(dirB);
-          return a.id.localeCompare(p.id);
-        });
+      {grouped.map(({ browser, sortedProfiles }) => {
+        const bt = browser.browser_type;
+        const allProfiles = profilesByBrowser[bt] || [];
 
         // 过滤：根据需要隐藏默认配置
         const displayProfiles = hideDefaultProfiles
-          ? sortedProfiles.filter(p => !isDefaultUserDir(b, p))
+          ? sortedProfiles.filter(p => !isDefaultUserDir(browser, p))
           : sortedProfiles;
 
         return (
@@ -388,11 +480,11 @@ function CurrentBrowserCards({
             {/* 浏览器头部 */}
             <div className="current-cards-header">
               <span className="current-cards-header-icon">
-                {getBrowserIcon(b.browser_type) && <img src={getBrowserIcon(b.browser_type)!} alt="" />}
+                {getBrowserIcon(browser.browser_type) && <img src={getBrowserIcon(browser.browser_type)!} alt="" />}
               </span>
-              <span className="current-cards-header-name">{b.browser_name}</span>
-              {loading[bt] && <span className="current-cards-loading">检测中...</span>}
-              {!loading[bt] && (
+              <span className="current-cards-header-name">{browser.browser_name}</span>
+              {loading && <span className="current-cards-loading">检测中...</span>}
+              {!loading && (
                 <span className="current-cards-header-count">
                   {allProfiles.length} 个配置
                 </span>
@@ -400,100 +492,28 @@ function CurrentBrowserCards({
             </div>
 
             {/* Profile 方形卡片网格 */}
-            {loading[bt] ? (
-              <div className="current-cards-loading-row">
-                <div className="current-cards-loading-bar" />
-              </div>
-            ) : displayProfiles.length > 0 ? (
+            {displayProfiles.length > 0 ? (
               <div className="current-cards-grid">
                 {displayProfiles.map(p => {
                   const key = mkKey(bt, p);
-                  const isDefault = isDefaultUserDir(b, p);
-                  const isSibling = isDefaultSiblingDir(b, p);
-                  const isSelected = !isDefault && ((isMultiSelectMode && (selectedKeys || []).includes(key)) || (isSelectMode && selectedKey === key));
+                  const isDefault = isDefaultUserDir(browser, p);
+                  const isSibling = isDefaultSiblingDir(browser, p);
+                  const isSelected = !isDefault && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
                   const isLaunching = !isDefault && !isSelectMode && !isMultiSelectMode && launching === key;
 
-                  let cls = "current-card";
-                  if (isSelected) cls += " current-card--selected";
-                  if (isDefault) cls += " current-card--default";
-                  if (isSibling) cls += " current-card--sibling";
-
                   return (
-                    <button
+                    <ProfileCard
                       key={key}
-                      className={cls}
-                      onClick={() => handleCardClick(bt, b, p)}
-                      disabled={isDefault || isLaunching}
-                      title={
-                        isDefault
-                          ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
-                          : isSibling
-                            ? "与默认路径同级目录 — 存在限制，无法同时控制多个浏览器实例，建议谨慎使用"
-                            : (isMultiSelectMode ? `切换选择 ${p.name}` : (isSelectMode ? `选择 ${p.name}` : `启动 ${p.name}`))
-                      }
-                    >
-                      {/* 选中标记（先于警告图标渲染，以覆盖） */}
-                      {isSelected && (
-                        <span className="current-card-check" style={isMultiSelectMode ? { background: "var(--accent)", border: "none", zIndex: 2 } : { zIndex: 2 }}>
-                          <svg width={isMultiSelectMode ? 12 : 16} height={isMultiSelectMode ? 12 : 16} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        </span>
-                      )}
-                      {/* 默认路径锁定标记 */}
-                      {isDefault && (
-                        <span className="current-card-lock">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                        </span>
-                      )}
-                      {/* 同级目录警告标记 */}
-                      {isSibling && (
-                        <span className="current-card-warn">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        </span>
-                      )}
-                      {/* 浏览器状态标签（左上角：是否启动 + 是否可连） */}
-                      {internalLaunchStatuses[key] && (
-                        <span className={"current-card-launch current-card-launch--" + internalLaunchStatuses[key]}>
-                          {LAUNCH_LABELS[internalLaunchStatuses[key]]}
-                        </span>
-                      )}
-                      {internalConnectionStatuses[key] && internalLaunchStatuses[key] === "launched" && (
-                        <span className={"current-card-conn current-card-conn--" + internalConnectionStatuses[key]}>
-                          {CONNECTION_LABELS[internalConnectionStatuses[key]]}
-                        </span>
-                      )}
-                      {/* 头像 */}
-                      <div className={"current-card-avatar" + (isDefault ? " current-card-avatar--dimmed" : "")}>
-                        {p.avatar_base64 ? (
-                          <img src={p.avatar_base64} alt={p.name} className="current-card-avatar-img" />
-                        ) : (
-                          <div className="current-card-avatar-placeholder">
-                            {p.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      {/* 名称 */}
-                      <div className="current-card-name">{p.name}</div>
-                      {/* 邮箱 */}
-                      {p.email && <div className="current-card-email">{p.email}</div>}
-                      {/* 来源目录（父目录\目录名） */}
-                      <div className="current-card-dir">
-                        {getDirDisplayName(p.user_data_dir)}
-                      </div>
-                      {/* 默认路径提示 */}
-                      {isDefault && (
-                        <div className="current-card-default-label">默认路径·不可用</div>
-                      )}
-                      {/* 同级目录警告 */}
-                      {isSibling && (
-                        <div className="current-card-sibling-label">默认同级路径·受限</div>
-                      )}
-                      {/* 合法路径（非默认非同级） */}
-                      {!isDefault && !isSibling && (
-                        <div className="current-card-valid-label">路径规范·可用</div>
-                      )}
-                      {/* 启动中遮罩 */}
-                      {isLaunching && <div className="current-card-launching">启动中...</div>}
-                    </button>
+                      profile={p}
+                      browserType={bt}
+                      isSelected={isSelected}
+                      isDefault={isDefault}
+                      isSibling={isSibling}
+                      isLaunching={isLaunching}
+                      launchStatus={internalLaunchStatuses[key]}
+                      connStatus={internalConnectionStatuses[key]}
+                      onCardClick={handleCardClick}
+                    />
                   );
                 })}
               </div>
