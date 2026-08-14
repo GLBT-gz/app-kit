@@ -1,3 +1,4 @@
+pub mod edge_avatars;
 pub mod icons;
 pub mod launch;
 pub mod management;

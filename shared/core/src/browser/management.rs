@@ -1143,7 +1143,13 @@ fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
             //    {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
             //    avatar_icon 来自已解析的 Local State JSON（info），无需重复读文件。
             if let Some(icon) = info.get("avatar_icon").and_then(|v| v.as_str()) {
-                if let Some(data) = read_avatar_file_by_index(&profile_path, icon) {
+                // 先尝试 Chrome 的 {User Data}\Avatars 缓存文件
+                let mut data = read_avatar_file_by_index(&profile_path, icon);
+                // Edge 没有 Avatars 缓存目录，回退到内嵌预设头像资源表
+                if data.is_none() && is_edge {
+                    data = super::edge_avatars::read_edge_preset_avatar(icon);
+                }
+                if let Some(data) = data {
                     avatar = ImageData {
                         base64: to_avatar_base64(&data, "image/png"),
                         is_icon: false,
