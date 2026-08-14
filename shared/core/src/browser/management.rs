@@ -726,6 +726,98 @@ fn to_avatar_base64(data: &[u8], mime: &str) -> String {
     encode_original(data)
 }
 
+/// Chrome 内置预设头像资源表（index -> 文件名），来源于 Chromium
+/// chrome/browser/profiles/profile_avatar_icon_util.cc 的 GetDefaultAvatarIconResourceInfo()。
+/// index 26 为占位符（无图片文件，Chrome 显示默认空图标）。
+/// 新版 Chrome（151+）将用户使用的预设头像图片按需下载/缓存到 {User Data}\Avatars\{文件名}。
+const AVATAR_INDEX_FILES: [&str; 56] = [
+    // Old avatar icons (0-25)
+    "avatar_generic.png",
+    "avatar_generic_aqua.png",
+    "avatar_generic_blue.png",
+    "avatar_generic_green.png",
+    "avatar_generic_orange.png",
+    "avatar_generic_purple.png",
+    "avatar_generic_red.png",
+    "avatar_generic_yellow.png",
+    "avatar_secret_agent.png",
+    "avatar_superhero.png",
+    "avatar_volley_ball.png",
+    "avatar_businessman.png",
+    "avatar_ninja.png",
+    "avatar_alien.png",
+    "avatar_awesome.png",
+    "avatar_flower.png",
+    "avatar_pizza.png",
+    "avatar_soccer.png",
+    "avatar_burger.png",
+    "avatar_cat.png",
+    "avatar_cupcake.png",
+    "avatar_dog.png",
+    "avatar_horse.png",
+    "avatar_margarita.png",
+    "avatar_note.png",
+    "avatar_sun_cloud.png",
+    // Placeholder (26)
+    "",
+    // Modern avatar icons (27-55)
+    "avatar_origami_cat.png",
+    "avatar_origami_corgi.png",
+    "avatar_origami_dragon.png",
+    "avatar_origami_elephant.png",
+    "avatar_origami_fox.png",
+    "avatar_origami_monkey.png",
+    "avatar_origami_panda.png",
+    "avatar_origami_penguin.png",
+    "avatar_origami_pinkbutterfly.png",
+    "avatar_origami_rabbit.png",
+    "avatar_origami_unicorn.png",
+    "avatar_illustration_basketball.png",
+    "avatar_illustration_bike.png",
+    "avatar_illustration_bird.png",
+    "avatar_illustration_cheese.png",
+    "avatar_illustration_football.png",
+    "avatar_illustration_ramen.png",
+    "avatar_illustration_sunglasses.png",
+    "avatar_illustration_sushi.png",
+    "avatar_illustration_tamagotchi.png",
+    "avatar_illustration_vinyl.png",
+    "avatar_abstract_avocado.png",
+    "avatar_abstract_cappuccino.png",
+    "avatar_abstract_icecream.png",
+    "avatar_abstract_icewater.png",
+    "avatar_abstract_melon.png",
+    "avatar_abstract_onigiri.png",
+    "avatar_abstract_pizza.png",
+    "avatar_abstract_sandwich.png",
+];
+
+/// 新版 Chrome/Edge（151+）预设头像：Local State 的 profile.info_cache 记录
+/// avatar_icon=chrome://theme/IDR_PROFILE_AVATAR_N，头像图片按需下载/缓存到
+/// {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
+/// 找不到（未设置头像、文件未缓存、非该浏览器格式）时返回 None。
+fn read_avatar_file_by_index(profile_path: &std::path::Path) -> Option<Vec<u8>> {
+    let user_data = profile_path.parent()?;
+    let local_state = user_data.join("Local State");
+    let content = fs::read_to_string(local_state).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let profile_dir = profile_path.file_name()?.to_str()?;
+    let avatar_icon = json
+        .get("profile")?
+        .get("info_cache")?
+        .get(profile_dir)?
+        .get("avatar_icon")?
+        .as_str()?;
+    let marker = "IDR_PROFILE_AVATAR_";
+    let idx = avatar_icon.rfind(marker)?;
+    let n: usize = avatar_icon[idx + marker.len()..].parse().ok()?;
+    let fname = AVATAR_INDEX_FILES.get(n)?;
+    if fname.is_empty() {
+        return None;
+    }
+    fs::read(user_data.join("Avatars").join(fname)).ok()
+}
+
 /// 读取头像图片为 base64
 fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageData {
     // 1. 尝试读取 PNG 头像（从 screenshot 目录获取）
@@ -856,6 +948,16 @@ fn read_avatar_base64(profile_path: &std::path::Path, is_edge: bool) -> ImageDat
                 }
             }
         }
+    }
+
+    // 7. 新版 Chrome/Edge（151+）预设头像：Local State 记录资源索引
+    //    （avatar_icon=IDR_PROFILE_AVATAR_N），图片按需下载缓存到
+    //    {User Data}\Avatars\{文件名}。未登录但手动设置了预设头像的 profile 由此恢复。
+    if let Some(data) = read_avatar_file_by_index(profile_path) {
+        return ImageData {
+            base64: to_avatar_base64(&data, "image/png"),
+            is_icon: false,
+        };
     }
 
     ImageData {
