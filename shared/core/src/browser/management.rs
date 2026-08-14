@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::SystemTime;
 use super::icons::{CHROME_ICO, EDGE_ICO};
 use winreg::enums::*;
 use winreg::RegKey;
@@ -229,6 +230,27 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 debug_port: port_opt.map(|p| p.to_string()),
                 cdp_reachable,
             });
+        } else if let Some(exe_name) = default_instance_exe(user_data_dir) {
+            // 默认目录兜底（目录级识别）：用户手动启动的浏览器进程命令行无 --user-data-dir，
+            // 无法精确匹配到 profile；检测到该浏览器存在「无 user-data-dir 的主进程」即视为默认目录在运行
+            let default_key = format!("{}#default-instance", exe_name);
+            if running_by_key.contains_key(&default_key) {
+                result.push(BrowserProcessState {
+                    user_data_dir: user_data_dir.clone(),
+                    profile_id: profile_id.clone(),
+                    is_running: true,
+                    debug_port: None,
+                    cdp_reachable: false,
+                });
+                continue;
+            }
+            result.push(BrowserProcessState {
+                user_data_dir: user_data_dir.clone(),
+                profile_id: profile_id.clone(),
+                is_running: false,
+                debug_port: None,
+                cdp_reachable: false,
+            });
         } else {
             result.push(BrowserProcessState {
                 user_data_dir: user_data_dir.clone(),
@@ -240,6 +262,18 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         }
     }
     result
+}
+
+/// 判断 user_data_dir 是否为内置浏览器的默认用户数据目录，返回对应 exe 名
+fn default_instance_exe(user_data_dir: &str) -> Option<&'static str> {
+    for (bt, exe_name) in [("edge", "msedge.exe"), ("chrome", "chrome.exe")] {
+        if let Some(def_dir) = get_user_data_dir(bt) {
+            if user_data_dir.eq_ignore_ascii_case(&def_dir) {
+                return Some(exe_name);
+            }
+        }
+    }
+    None
 }
 
 /// 通过 TCP 连接检测 CDP 端口是否可达（绕过浏览器 CORS 限制）
@@ -284,7 +318,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
         Ok(o) => {
             if !o.stdout.is_empty() {
                 let stdout = decode_windows_stdout(&o.stdout);
-                parse_process_json(&stdout, &mut result);
+                parse_process_json(&stdout, exe_name, &mut result);
             }
         }
         Err(_) => {}
@@ -310,7 +344,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
         {
             if !wmic_output.stdout.is_empty() {
                 let stdout = decode_windows_stdout(&wmic_output.stdout);
-                parse_wmic_list(&stdout, &mut result);
+                parse_wmic_list(&stdout, exe_name, &mut result);
             }
         }
     }
@@ -319,7 +353,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
 }
 
 /// 解析 PowerShell Get-CimInstance 输出的 JSON，并入 result
-fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
+fn parse_process_json(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
     let processes: Vec<serde_json::Value> = if let Ok(arr) =
         serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
     {
@@ -335,7 +369,7 @@ fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
             .get("CommandLine")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        extract_instance_from_cmdline(cmd_line, result);
+        extract_instance_from_cmdline(cmd_line, exe_name, result);
     }
 }
 
@@ -345,7 +379,7 @@ fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
 ///   CommandLine="C:\...\chrome.exe" --args...
 ///
 ///   空行分隔记录
-fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
+fn parse_wmic_list(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
     // 按空行分割记录
     let mut current_cmd_line: Option<String> = None;
     let mut has_cmd_line = false;
@@ -356,7 +390,7 @@ fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
             // 空行 = 记录结束
             if has_cmd_line {
                 if let Some(cmd) = current_cmd_line.take() {
-                    extract_instance_from_cmdline(&cmd, result);
+                    extract_instance_from_cmdline(&cmd, exe_name, result);
                 }
                 has_cmd_line = false;
             }
@@ -379,21 +413,58 @@ fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
     // 最后一条记录可能没有尾随空行
     if has_cmd_line {
         if let Some(cmd) = current_cmd_line.take() {
-            extract_instance_from_cmdline(&cmd, result);
+            extract_instance_from_cmdline(&cmd, exe_name, result);
         }
     }
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
-fn extract_instance_from_cmdline(cmd_line: &str, result: &mut HashMap<String, Option<u16>>) {
-    let user_data_dir = extract_cmd_arg(cmd_line, "--user-data-dir");
-    let profile = extract_cmd_arg(cmd_line, "--profile-directory");
-    let port_str = extract_cmd_arg(cmd_line, "--remote-debugging-port");
+/// 额外识别「默认目录实例」：默认用户数据目录的主进程（无 --type=，子进程才有）
+/// 可能带 --profile-directory，也可能是极简命令行（如仅 --no-startup-window），
+/// 但只要无 --user-data-dir 即视为默认目录实例（省略该参数时浏览器自动用默认目录），
+/// 以 `{exe}#default-instance` 为 key 标记，供 detect_browser_running_processes 目录级兜底匹配
+fn extract_instance_from_cmdline(
+    cmd_line: &str,
+    exe_name: &str,
+    result: &mut HashMap<String, Option<u16>>,
+) {
+    let args = cmd_args(cmd_line);
+    let get_arg = |flag: &str| {
+        let prefix = format!("{}=", flag);
+        args.iter()
+            .find_map(|a| a.strip_prefix(&prefix))
+            .map(|s| s.to_string())
+    };
+    let user_data_dir = get_arg("--user-data-dir");
+    let profile = get_arg("--profile-directory");
+    let port_str = get_arg("--remote-debugging-port");
+    // 子进程（crashpad/gpu/utility/renderer 等）都带 --type=，主进程没有
+    let is_child = args.iter().any(|a| a.starts_with("--type="));
 
-    if let (Some(ud), Some(pf)) = (user_data_dir, profile) {
-        let key = format!("{}\\{}", ud, pf);
-        let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
-        result.entry(key).or_insert(port);
+    match (user_data_dir, profile) {
+        (Some(ud), Some(pf)) => {
+            let key = format!("{}\\{}", ud, pf);
+            let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
+            result.entry(key).or_insert(port);
+        }
+        (None, _) if !is_child => {
+            let key = format!("{}#default-instance", exe_name);
+            let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
+            result.entry(key).or_insert(port);
+        }
+        _ => {}
+    }
+}
+
+/// 拆分命令行参数（Windows 用 CommandLineToArgvW 处理引号/转义，其它平台按空格分割）
+fn cmd_args(cmd_line: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        split_windows_command_line(cmd_line)
+    }
+    #[cfg(not(windows))]
+    {
+        cmd_line.split(' ').map(|s| s.to_string()).collect()
     }
 }
 
@@ -481,6 +552,13 @@ fn kill_browser_process_inner(
     profile_id: &str,
     user_data_dir: &str,
 ) -> Result<String, String> {
+    // 默认目录兜底：默认目录为单实例，终止即关闭整个进程树。
+    // 主进程可能是用户手动启动（无 --user-data-dir），也可能是本工具「打开」启动
+    // （带 --user-data-dir=默认目录），两种都要能匹配到
+    if default_instance_exe(user_data_dir) == Some(exe_name) {
+        return kill_default_instance_processes(exe_name, user_data_dir);
+    }
+
     let ps_script = format!(
         "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
          | Select-Object ProcessId,CommandLine \
@@ -565,6 +643,104 @@ fn kill_browser_process_inner(
     Err("未找到匹配的浏览器进程".to_string())
 }
 
+/// 终止默认目录的浏览器实例：查找默认目录的主进程（无 --user-data-dir 的默认实例，
+/// 或 --user-data-dir 等于默认目录的实例），taskkill /T 关闭整个进程树。
+/// 只按 PID 杀主进程树，不影响使用独立 user-data-dir 运行的其它实例。
+fn kill_default_instance_processes(exe_name: &str, default_dir: &str) -> Result<String, String> {
+    let ps_script = format!(
+        "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
+         | Select-Object ProcessId,CommandLine \
+         | ConvertTo-Json -Compress",
+        exe_name
+    );
+
+    let output = {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &ps_script])
+                .creation_flags(0x08000000)
+                .output()
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &ps_script])
+                .output()
+        }
+    }
+    .map_err(|e| format!("查询进程失败: {}", e))?;
+
+    let stdout = decode_windows_stdout(&output.stdout);
+    let processes: Vec<serde_json::Value> = if let Ok(arr) =
+        serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
+    {
+        arr
+    } else if let Ok(single) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
+        vec![single]
+    } else {
+        return Err("未找到匹配的浏览器进程".to_string());
+    };
+
+    for proc in &processes {
+        let cmd_line = proc
+            .get("CommandLine")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let args = cmd_args(cmd_line);
+        // 子进程（renderer/gpu 等）都有 --type=，主进程没有
+        if args.iter().any(|a| a.starts_with("--type=")) {
+            continue;
+        }
+        // 主进程的 user-data-dir：无该参数（默认实例）或等于默认目录才匹配；
+        // 使用独立 user-data-dir 运行的实例必须跳过，避免误杀
+        let ud = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--user-data-dir="));
+        match ud {
+            None => {}
+            Some(dir) if dir.eq_ignore_ascii_case(default_dir) => {}
+            Some(_) => continue,
+        }
+
+        let pid = proc
+            .get("ProcessId")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| "无法获取进程 PID".to_string())?;
+
+        let kill_output = {
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                std::process::Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string(), "/T"])
+                    .creation_flags(0x08000000)
+                    .output()
+            }
+            #[cfg(not(windows))]
+            {
+                std::process::Command::new("kill")
+                    .arg("-9")
+                    .arg(pid.to_string())
+                    .output()
+            }
+        }
+        .map_err(|e| format!("终止进程失败: {}", e))?;
+
+        if kill_output.status.success() {
+            // 等待进程树完全退出
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            return Ok(format!("已终止默认目录浏览器全部进程 (PID:{})", pid));
+        } else {
+            let stderr = String::from_utf8_lossy(&kill_output.stderr);
+            return Err(format!("终止进程失败: {}", stderr));
+        }
+    }
+
+    Err("未找到默认浏览器实例进程".to_string())
+}
+
 /// 浏览器进程运行状态
 #[derive(Debug, Clone, Serialize)]
 pub struct BrowserProcessState {
@@ -622,10 +798,12 @@ pub fn detect_and_assign_ports(profiles: &[(String, String)]) -> Vec<PortEntry> 
 // ═══════════════════════════════════════════════════════
 
 /// read_profiles 进程级缓存：避免同一 Local State 文件被重复读取/解析
-/// key = (user_data_dir, is_edge), value = read_profiles 返回值
-static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), Vec<ProfileInfo>>>> = OnceLock::new();
+/// key = (user_data_dir, is_edge), value = (缓存时文件 mtime, read_profiles 返回值)
+/// 命中前校验 mtime，文件变化（如浏览器内改名/改头像）后自动失效重读
+static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), (Option<SystemTime>, Vec<ProfileInfo>)>>> =
+    OnceLock::new();
 
-fn profile_cache() -> &'static Mutex<HashMap<(String, bool), Vec<ProfileInfo>>> {
+fn profile_cache() -> &'static Mutex<HashMap<(String, bool), (Option<SystemTime>, Vec<ProfileInfo>)>> {
     PROFILE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1016,17 +1194,24 @@ fn get_browser_version(browser_type: &str) -> String {
 // ============ 读取用户配置 ============
 
 /// 读取浏览器用户配置（增强版）
-/// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合仅读取一次磁盘
+/// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合避免重复解析磁盘；
+/// 命中前校验 Local State 文件 mtime，文件变化后自动失效重读
 fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
-    // 进程级缓存：同一目录 + 同一 is_edge 参数仅读取一次
+    let local_state_path = Path::new(user_data_dir).join("Local State");
+    // 进程级缓存：同一目录 + 同一 is_edge 参数避免重复解析；
+    // 命中前校验 Local State 文件 mtime，文件已变化（改名/改头像等）则视为失效重读
     {
         let cache = profile_cache().lock().unwrap();
-        if let Some(cached) = cache.get(&(user_data_dir.to_string(), is_edge)) {
-            return cached.clone();
+        if let Some((mtime, cached)) = cache.get(&(user_data_dir.to_string(), is_edge)) {
+            let fresh = fs::metadata(&local_state_path)
+                .and_then(|m| m.modified())
+                .ok();
+            if fresh.is_some() && &fresh == mtime {
+                return cached.clone();
+            }
         }
     }
 
-    let local_state_path = Path::new(user_data_dir).join("Local State");
     if !local_state_path.exists() {
         // 用户数据目录不存在 → 未安装该浏览器，无需报错
         if !Path::new(user_data_dir).exists() {
@@ -1206,11 +1391,14 @@ fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
         }
     });
 
-    // 写入缓存，后续相同参数的调用直接命中
+    // 写入缓存，后续相同参数的调用直接命中（记录文件 mtime，文件变化后自动失效）
+    let mtime = fs::metadata(&local_state_path)
+        .ok()
+        .and_then(|m| m.modified().ok());
     profile_cache()
         .lock()
         .unwrap()
-        .insert((user_data_dir.to_string(), is_edge), profiles.clone());
+        .insert((user_data_dir.to_string(), is_edge), (mtime, profiles.clone()));
 
     profiles
 }

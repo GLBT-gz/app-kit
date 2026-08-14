@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { detectBrowserRunningProcesses, launchBrowserProfile, findAvailablePort, killBrowserProfileProcess } from "../api";
+import { detectBrowserRunningProcesses, launchBrowserProfile, findAvailablePort, killBrowserProfileProcess, killAllBrowserProcesses } from "../api";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
@@ -78,14 +78,12 @@ function isDefaultUserDir(b: BCPBrowser, p: BCPProfile): boolean {
   return !!b.default_user_data_dir && p.user_data_dir === b.default_user_data_dir;
 }
 
-/** 该 profile 所在目录是否为默认路径的同级目录（同父目录下，非默认路径本身） */
-function isDefaultSiblingDir(b: BCPBrowser, p: BCPProfile): boolean {
+/** 该 profile 所在目录是否为多用户目录（同 user-data-dir 含多个用户 → 浏览器单实例锁，
+ *  同一时刻只能打开一个实例 → 部分受限）。counts 为各 user_data_dir 下的用户数。 */
+function isMultiUserDir(b: BCPBrowser, p: BCPProfile, counts?: Record<string, number>): boolean {
   if (isDefaultUserDir(b, p)) return false;
-  if (!b.default_user_data_dir) return false;
   if (b.browser_type === "edecker" || b.browser_type === "ziniao") return false;
-  const defaultParent = b.default_user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
-  const profileParent = p.user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
-  return defaultParent === profileParent;
+  return (counts?.[p.user_data_dir] ?? 0) > 1;
 }
 
 /** 获取目录的显示名称：父目录\\目录名 */
@@ -98,10 +96,10 @@ function getDirDisplayName(path: string): string {
   return normalized;
 }
 
-/** 排序分组：0=默认路径（最前）、1=默认同级目录（其次）、2=正常目录 */
-function getSortGroup(b: BCPBrowser, p: BCPProfile): number {
+/** 排序分组：0=默认路径（完全受限，最前）、1=多用户目录（部分受限，其次）、2=单用户目录（完全规范） */
+function getSortGroup(b: BCPBrowser, p: BCPProfile, counts?: Record<string, number>): number {
   if (isDefaultUserDir(b, p)) return 0;
-  if (isDefaultSiblingDir(b, p)) return 1;
+  if (isMultiUserDir(b, p, counts)) return 1;
   return 2;
 }
 
@@ -115,6 +113,8 @@ interface ProfileCardProps {
   isSelected: boolean;
   isDefault: boolean;
   isSibling: boolean;
+  /** 多用户目录下的用户总数（用于提示文案） */
+  siblingUserCount?: number;
   isLaunching: boolean;
   launchStatus?: LaunchStatus;
   connStatus?: ConnectionStatus;
@@ -129,6 +129,7 @@ const ProfileCard = memo(function ProfileCard({
   isSelected,
   isDefault,
   isSibling,
+  siblingUserCount,
   isLaunching,
   launchStatus,
   connStatus,
@@ -145,8 +146,6 @@ const ProfileCard = memo(function ProfileCard({
       className={cls}
       onClick={() => onCardClick(browserType, profile)}
       onContextMenu={(e) => {
-        // 默认用户路径不可用，不弹右键菜单；其余卡片弹出自定义菜单
-        if (isDefault) return;
         onCardContextMenu?.(e, browserType, profile);
       }}
       disabled={isDefault || isLaunching}
@@ -154,7 +153,7 @@ const ProfileCard = memo(function ProfileCard({
         isDefault
           ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
           : isSibling
-            ? "与默认路径同级目录 — 存在限制，无法同时控制多个浏览器实例，建议谨慎使用"
+            ? `该目录下共 ${siblingUserCount ?? 2} 个用户 — 同一 user-data-dir 同一时刻只能打开一个实例（单实例锁），建议每个用户使用独立目录`
             : "选择此浏览器配置"
       }
     >
@@ -170,7 +169,7 @@ const ProfileCard = memo(function ProfileCard({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
         </span>
       )}
-      {/* 同级目录警告标记 */}
+      {/* 多用户目录警告标记 */}
       {isSibling && (
         <span className="current-card-warn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -209,13 +208,13 @@ const ProfileCard = memo(function ProfileCard({
       {isDefault && (
         <div className="current-card-default-label">默认路径·不可用</div>
       )}
-      {/* 同级目录警告 */}
+      {/* 多用户目录警告 */}
       {isSibling && (
-        <div className="current-card-sibling-label">默认同级路径·受限</div>
+        <div className="current-card-sibling-label">多用户目录·受限</div>
       )}
-      {/* 合法路径（非默认非同级） */}
+      {/* 单用户目录（完全规范） */}
       {!isDefault && !isSibling && (
-        <div className="current-card-valid-label">路径规范·可用</div>
+        <div className="current-card-valid-label">单用户目录·可用</div>
       )}
       {/* 启动中遮罩 */}
       {isLaunching && <div className="current-card-launching">启动中...</div>}
@@ -245,11 +244,6 @@ function CurrentBrowserCards({
   const [hideDefaultProfiles, setHideDefaultProfiles] = useState(() => {
     return safeGetJSON<boolean>("core-hide-uncontrollable") ?? false;
   });
-
-  // ── 右键菜单（打开 / 调试打开） ──
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; bt: string; p: BCPProfile } | null>(null);
-  // 同一 user_data_dir 下正在运行的 profile（调试打开前需先关闭，释放 Singleton 锁）
-  const [ctxRunningProfile, setCtxRunningProfile] = useState<{ bt: string; p: BCPProfile } | null>(null);
 
   // ── 轻量 toast（复用组件库 .toast 样式） ──
   const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
@@ -287,14 +281,28 @@ function CurrentBrowserCards({
     return m;
   }, [browsers]);
 
+  // 每个 user_data_dir 下的用户数（同目录多用户 → 单实例锁 → 部分受限）
+  const dirProfileCounts = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    for (const b of browsers) {
+      const counts: Record<string, number> = {};
+      for (const p of b.profiles || []) {
+        counts[p.user_data_dir] = (counts[p.user_data_dir] || 0) + 1;
+      }
+      m[b.browser_type] = counts;
+    }
+    return m;
+  }, [browsers]);
+
   // 每个浏览器的排序结果（仅在 browsers/profiles 变化时重算）
   const grouped = useMemo(() => {
     return browsers.map(b => {
       const bt = b.browser_type;
       const allProfiles = profilesByBrowser[bt] || [];
+      const counts = dirProfileCounts[bt];
       const sortedProfiles = [...allProfiles].sort((a, p) => {
-        const ga = getSortGroup(b, a);
-        const gb = getSortGroup(b, p);
+        const ga = getSortGroup(b, a, counts);
+        const gb = getSortGroup(b, p, counts);
         if (ga !== gb) return ga - gb;
         const dirA = a.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
         const dirB = p.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
@@ -303,7 +311,7 @@ function CurrentBrowserCards({
       });
       return { browser: b, sortedProfiles };
     });
-  }, [browsers, profilesByBrowser]);
+  }, [browsers, profilesByBrowser, dirProfileCounts]);
 
   // 选中集合 Set（避免点击时 O(n) includes / 全量拷贝）
   const selectedKeySet = useMemo(() => new Set(selectedKeys || []), [selectedKeys]);
@@ -339,21 +347,18 @@ function CurrentBrowserCards({
 
   // ── 右键菜单：打开 / 调试打开 ──
 
-  /** 关闭右键菜单 */
-  const closeCtxMenu = useCallback(() => {
-    setCtxMenu(null);
-    setCtxRunningProfile(null);
-  }, []);
-
-  /** 卡片右键：阻止默认菜单，记录菜单位置 */
+  /** 卡片右键：阻止默认菜单，通知独立的右键菜单组件显示（事件驱动，避免本组件重渲染） */
   const handleCardContextMenu = useCallback((e: React.MouseEvent, bt: string, p: BCPProfile) => {
     e.preventDefault();
-    setCtxMenu({ x: e.clientX, y: e.clientY, bt, p });
+    window.dispatchEvent(
+      new CustomEvent("appkit:profile-ctx-menu", {
+        detail: { x: e.clientX, y: e.clientY, bt, p },
+      }),
+    );
   }, []);
 
   /** 正常打开：不带调试端口（debug_port=0） */
   const doOpen = useCallback(async (bt: string, p: BCPProfile) => {
-    closeCtxMenu();
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
@@ -366,20 +371,28 @@ function CurrentBrowserCards({
     } finally {
       setLaunching(null);
     }
-  }, [onLaunchProfile, closeCtxMenu, showToast]);
+  }, [onLaunchProfile, showToast]);
 
-  /** 调试打开：先杀同目录已有实例，再分配可用端口以 --remote-debugging-port 启动 */
+  /** 调试打开：先查同目录运行中的 profile 并关闭（释放 Singleton 锁），
+   *  再分配可用端口以 --remote-debugging-port 启动 */
   const doDebugOpen = useCallback(async (bt: string, p: BCPProfile) => {
-    closeCtxMenu();
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
       // Chrome/Edge 的 Singleton 锁针对整个 user_data_dir：同目录下有任何 profile
       // 在运行，新进程都无法使用该目录。先找同目录运行中的 profile 并关闭。
-      const runningProfile = ctxRunningProfile;
+      const runningProfiles = (browsers.find(b => b.browser_type === bt)?.profiles || [])
+        .filter(pr => pr.user_data_dir === p.user_data_dir)
+        .map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id }));
+      const states = await detectBrowserRunningProcesses(runningProfiles);
+      const running = states.find(s => s.is_running);
+      const runningProfile = running
+        ? (browsers.find(b => b.browser_type === bt)?.profiles || [])
+          .find(pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id)
+        : undefined;
       if (runningProfile) {
-        showToast(`「${runningProfile.p.name}」正在运行（同用户目录），先关闭...`, "warning");
-        await killBrowserProfileProcess(bt, runningProfile.p.id, runningProfile.p.user_data_dir);
+        showToast(`「${runningProfile.name}」正在运行（同用户目录），先关闭...`, "warning");
+        await killBrowserProfileProcess(bt, runningProfile.id, runningProfile.user_data_dir);
         showToast("已关闭旧进程，等待释放目录锁", "info");
         // 等待进程完全退出，释放 Singleton 锁
         await new Promise(r => setTimeout(r, 1500));
@@ -395,12 +408,11 @@ function CurrentBrowserCards({
     } finally {
       setLaunching(null);
     }
-  }, [onLaunchProfile, closeCtxMenu, ctxRunningProfile, showToast]);
+  }, [onLaunchProfile, browsers, showToast]);
 
   /** 关闭该配置：kill_browser_profile_process 按 user-data-dir + profile-directory
    *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置 */
   const doClose = useCallback(async (bt: string, p: BCPProfile) => {
-    closeCtxMenu();
     try {
       const msg = await killBrowserProfileProcess(bt, p.id, p.user_data_dir);
       showToast(`「${p.name}」已关闭${msg ? ` (${msg})` : ""}`, "success");
@@ -409,55 +421,25 @@ function CurrentBrowserCards({
       // 后端在未匹配到进程时返回“未找到匹配的浏览器进程”
       showToast(err.includes("未找到匹配") ? `「${p.name}」未在运行` : `关闭失败: ${e}`, "warning");
     }
-  }, [closeCtxMenu, showToast]);
+  }, [showToast]);
 
-  // 右键弹菜单后：查询同目录运行中的 profile（用于调试打开前置关闭）
-  useEffect(() => {
-    if (!ctxMenu) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const runningProfiles = (browsers.find(b => b.browser_type === ctxMenu.bt)?.profiles || [])
-          .filter(pr => pr.user_data_dir === ctxMenu.p.user_data_dir)
-          .map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id }));
-        const states = await detectBrowserRunningProcesses(runningProfiles);
-        const running = states.find(s => s.is_running);
-        const target = running
-          ? (browsers.find(b => b.browser_type === ctxMenu.bt)?.profiles || [])
-            .find(pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id)
-          : undefined;
-        if (!cancelled) {
-          setCtxRunningProfile(target ? { bt: ctxMenu.bt, p: target } : null);
-        }
-      } catch {
-        if (!cancelled) setCtxRunningProfile(null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [ctxMenu, browsers]);
-
-  // 点击外部 / Esc / 滚轮关闭右键菜单
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      const t = e.target as HTMLElement;
-      if (!t.closest(".current-card-ctx-menu")) closeCtxMenu();
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeCtxMenu();
-    };
-    const onWheel = () => closeCtxMenu();
-    window.addEventListener("mousedown", onPointerDown);
-    window.addEventListener("touchstart", onPointerDown);
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("wheel", onWheel, { passive: true });
-    return () => {
-      window.removeEventListener("mousedown", onPointerDown);
-      window.removeEventListener("touchstart", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("wheel", onWheel);
-    };
-  }, [ctxMenu, closeCtxMenu]);
+  /** 全部终止：默认目录（完全受限，单实例）配置专用——杀死该浏览器的全部进程，
+   *  含所有独立目录实例。影响大，需用户确认 */
+  const doKillAll = useCallback(async (bt: string, p: BCPProfile) => {
+    if (
+      !window.confirm(
+        `「${p.name}」属于浏览器默认用户目录（单实例）。\n全部终止将关闭该浏览器的所有窗口与进程（含其它独立目录实例），未保存的内容可能丢失。\n确定继续？`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const msg = await killAllBrowserProcesses(bt);
+      showToast(`已终止全部进程${msg ? ` (${msg})` : ""}`, "success");
+    } catch (e) {
+      showToast(`全部终止失败: ${e}`, "error");
+    }
+  }, [showToast]);
 
   const isSelectMode = !!onSelect;
   const isMultiSelectMode = !!onSelectionChange;
@@ -640,7 +622,8 @@ function CurrentBrowserCards({
                 {displayProfiles.map(p => {
                   const key = mkKey(bt, p);
                   const isDefault = isDefaultUserDir(browser, p);
-                  const isSibling = isDefaultSiblingDir(browser, p);
+                  const counts = dirProfileCounts[bt];
+                  const isSibling = isMultiUserDir(browser, p, counts);
                   const isSelected = !isDefault && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
                   const isLaunching = !isDefault && !isSelectMode && !isMultiSelectMode && launching === key;
 
@@ -652,6 +635,7 @@ function CurrentBrowserCards({
                       isSelected={isSelected}
                       isDefault={isDefault}
                       isSibling={isSibling}
+                      siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
                       launchStatus={internalLaunchStatuses[key]}
                       connStatus={internalConnectionStatuses[key]}
@@ -675,27 +659,132 @@ function CurrentBrowserCards({
         ))}
       </div>
 
-      {/* 右键菜单：打开 / 调试打开 / 关闭 */}
-      {ctxMenu && (
-        <div
-          className="current-card-ctx-menu"
-          style={{
-            left: Math.max(4, Math.min(ctxMenu.x, window.innerWidth - 168)),
-            top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 132)),
-          }}
-          onContextMenu={e => e.preventDefault()}
-        >
+      {/* 独立右键菜单组件：右键/关闭只重渲染菜单自身，不触发本组件重渲染 */}
+      <ProfileContextMenu
+        browsers={browsers}
+        onOpen={doOpen}
+        onDebugOpen={doDebugOpen}
+        onClose={doClose}
+        onKillAll={doKillAll}
+      />
+    </div>
+  );
+}
+
+const CurrentBrowserCardsMemo = /* @__PURE__ */ memo(CurrentBrowserCards);
+export { CurrentBrowserCardsMemo as CurrentBrowserCards };
+
+/** 右键菜单事件名 */
+const CTX_MENU_EVENT = "appkit:profile-ctx-menu";
+
+/** 菜单状态（事件 detail） */
+interface CtxMenuDetail {
+  x: number;
+  y: number;
+  bt: string;
+  p: BCPProfile;
+}
+
+interface ProfileContextMenuProps {
+  browsers: BCPBrowser[];
+  onOpen: (bt: string, p: BCPProfile) => void;
+  onDebugOpen: (bt: string, p: BCPProfile) => void;
+  onClose: (bt: string, p: BCPProfile) => void;
+  onKillAll: (bt: string, p: BCPProfile) => void;
+}
+
+/** 独立右键菜单：内部自管状态，通过自定义事件接收「打开」指令。
+ *  打开/关闭只重渲染本组件，不触发父组件（卡片网格）重渲染，保证菜单响应即时 */
+const ProfileContextMenu = memo(function ProfileContextMenu({
+  browsers,
+  onOpen,
+  onDebugOpen,
+  onClose,
+  onKillAll,
+}: ProfileContextMenuProps) {
+  const [menu, setMenu] = useState<CtxMenuDetail | null>(null);
+
+  // 接收卡片右键事件
+  useEffect(() => {
+    const onCtx = (e: Event) => {
+      const d = (e as CustomEvent<CtxMenuDetail>).detail;
+      if (d) setMenu({ x: d.x, y: d.y, bt: d.bt, p: d.p });
+    };
+    window.addEventListener(CTX_MENU_EVENT, onCtx);
+    return () => window.removeEventListener(CTX_MENU_EVENT, onCtx);
+  }, []);
+
+  // 关闭：点击空白 / Esc / 滚轮
+  useEffect(() => {
+    if (!menu) return;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest(".current-card-ctx-menu")) setMenu(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    const onWheel = () => setMenu(null);
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("touchstart", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("touchstart", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onWheel);
+    };
+  }, [menu]);
+
+  if (!menu) return null;
+
+  const { x, y, bt, p } = menu;
+  const ctxBrowser = browsers.find(b => b.browser_type === bt);
+  const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, p) : false;
+  const menuStyle = {
+    left: Math.max(4, Math.min(x, window.innerWidth - 168)),
+    top: Math.max(4, Math.min(y, window.innerHeight - 132)),
+  };
+  const run = (fn: (bt: string, p: BCPProfile) => void) => {
+    setMenu(null);
+    fn(bt, p);
+  };
+
+  return (
+    <div className="current-card-ctx-menu" style={menuStyle} onContextMenu={e => e.preventDefault()}>
+      {ctxIsDefault ? (
+        <>
           <button
             className="current-card-ctx-item"
-            onClick={() => doOpen(ctxMenu.bt, ctxMenu.p)}
-            title={`正常启动「${ctxMenu.p.name}」（不带调试端口）`}
+            onClick={() => run(onOpen)}
+            title={`正常启动「${p.name}」（不带调试端口）`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+            启动
+          </button>
+          <button
+            className="current-card-ctx-item"
+            onClick={() => run(onKillAll)}
+            title={`全部终止「${p.name}」所属浏览器（关闭全部窗口与进程，含独立目录实例）`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+            全部终止
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="current-card-ctx-item"
+            onClick={() => run(onOpen)}
+            title={`正常启动「${p.name}」（不带调试端口）`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
             打开
           </button>
           <button
             className="current-card-ctx-item"
-            onClick={() => doDebugOpen(ctxMenu.bt, ctxMenu.p)}
+            onClick={() => run(onDebugOpen)}
             title={`以随机可用端口调试启动（--remote-debugging-port）`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
@@ -703,17 +792,14 @@ function CurrentBrowserCards({
           </button>
           <button
             className="current-card-ctx-item"
-            onClick={() => doClose(ctxMenu.bt, ctxMenu.p)}
-            title={`关闭「${ctxMenu.p.name}」（只关闭该配置自己的进程）`}
+            onClick={() => run(onClose)}
+            title={`关闭「${p.name}」（只关闭该配置自己的进程）`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
             关闭
           </button>
-        </div>
+        </>
       )}
     </div>
   );
-}
-
-const CurrentBrowserCardsMemo = /* @__PURE__ */ memo(CurrentBrowserCards);
-export { CurrentBrowserCardsMemo as CurrentBrowserCards };
+});

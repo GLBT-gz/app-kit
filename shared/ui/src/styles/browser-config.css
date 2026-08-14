@@ -917,7 +917,7 @@
   line-height: 1.1;
 }
 
-/* 同级目录警告标记（仅警告图标，无背景） */
+/* 多用户目录警告标记（仅警告图标，无背景） */
 .current-card-warn {
   position: absolute;
   top: 6px;
@@ -929,7 +929,7 @@
   z-index: 1;
 }
 
-/* 同级目录警告标签 */
+/* 多用户目录警告标签 */
 .current-card-sibling-label {
   font-size: 9px;
   color: #e6a800;
