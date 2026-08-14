@@ -78,14 +78,12 @@ function isDefaultUserDir(b: BCPBrowser, p: BCPProfile): boolean {
   return !!b.default_user_data_dir && p.user_data_dir === b.default_user_data_dir;
 }
 
-/** 该 profile 所在目录是否为默认路径的同级目录（同父目录下，非默认路径本身） */
-function isDefaultSiblingDir(b: BCPBrowser, p: BCPProfile): boolean {
+/** 该 profile 所在目录是否为多用户目录（同 user-data-dir 含多个用户 → 浏览器单实例锁，
+ *  同一时刻只能打开一个实例 → 部分受限）。counts 为各 user_data_dir 下的用户数。 */
+function isMultiUserDir(b: BCPBrowser, p: BCPProfile, counts?: Record<string, number>): boolean {
   if (isDefaultUserDir(b, p)) return false;
-  if (!b.default_user_data_dir) return false;
   if (b.browser_type === "edecker") return false;
-  const defaultParent = b.default_user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
-  const profileParent = p.user_data_dir.replace(/[\\\/][^\\\/]*$/, '').toLowerCase();
-  return defaultParent === profileParent;
+  return (counts?.[p.user_data_dir] ?? 0) > 1;
 }
 
 /** 获取目录的显示名称：父目录\\目录名 */
@@ -98,10 +96,10 @@ function getDirDisplayName(path: string): string {
   return normalized;
 }
 
-/** 排序分组：0=默认路径（最前）、1=默认同级目录（其次）、2=正常目录 */
-function getSortGroup(b: BCPBrowser, p: BCPProfile): number {
+/** 排序分组：0=默认路径（完全受限，最前）、1=多用户目录（部分受限，其次）、2=单用户目录（完全规范） */
+function getSortGroup(b: BCPBrowser, p: BCPProfile, counts?: Record<string, number>): number {
   if (isDefaultUserDir(b, p)) return 0;
-  if (isDefaultSiblingDir(b, p)) return 1;
+  if (isMultiUserDir(b, p, counts)) return 1;
   return 2;
 }
 
@@ -115,6 +113,8 @@ interface ProfileCardProps {
   isSelected: boolean;
   isDefault: boolean;
   isSibling: boolean;
+  /** 多用户目录下的用户总数（用于提示文案） */
+  siblingUserCount?: number;
   isLaunching: boolean;
   launchStatus?: LaunchStatus;
   connStatus?: ConnectionStatus;
@@ -129,6 +129,7 @@ const ProfileCard = memo(function ProfileCard({
   isSelected,
   isDefault,
   isSibling,
+  siblingUserCount,
   isLaunching,
   launchStatus,
   connStatus,
@@ -154,7 +155,7 @@ const ProfileCard = memo(function ProfileCard({
         isDefault
           ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
           : isSibling
-            ? "与默认路径同级目录 — 存在限制，无法同时控制多个浏览器实例，建议谨慎使用"
+            ? `该目录下共 ${siblingUserCount ?? 2} 个用户 — 同一 user-data-dir 同一时刻只能打开一个实例（单实例锁），建议每个用户使用独立目录`
             : "选择此浏览器配置"
       }
     >
@@ -170,7 +171,7 @@ const ProfileCard = memo(function ProfileCard({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
         </span>
       )}
-      {/* 同级目录警告标记 */}
+      {/* 多用户目录警告标记 */}
       {isSibling && (
         <span className="current-card-warn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -209,13 +210,13 @@ const ProfileCard = memo(function ProfileCard({
       {isDefault && (
         <div className="current-card-default-label">默认路径·不可用</div>
       )}
-      {/* 同级目录警告 */}
+      {/* 多用户目录警告 */}
       {isSibling && (
-        <div className="current-card-sibling-label">默认同级路径·受限</div>
+        <div className="current-card-sibling-label">多用户目录·受限</div>
       )}
-      {/* 合法路径（非默认非同级） */}
+      {/* 单用户目录（完全规范） */}
       {!isDefault && !isSibling && (
-        <div className="current-card-valid-label">路径规范·可用</div>
+        <div className="current-card-valid-label">单用户目录·可用</div>
       )}
       {/* 启动中遮罩 */}
       {isLaunching && <div className="current-card-launching">启动中...</div>}
@@ -287,14 +288,28 @@ function CurrentBrowserCards({
     return m;
   }, [browsers]);
 
+  // 每个 user_data_dir 下的用户数（同目录多用户 → 单实例锁 → 部分受限）
+  const dirProfileCounts = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    for (const b of browsers) {
+      const counts: Record<string, number> = {};
+      for (const p of b.profiles || []) {
+        counts[p.user_data_dir] = (counts[p.user_data_dir] || 0) + 1;
+      }
+      m[b.browser_type] = counts;
+    }
+    return m;
+  }, [browsers]);
+
   // 每个浏览器的排序结果（仅在 browsers/profiles 变化时重算）
   const grouped = useMemo(() => {
     return browsers.map(b => {
       const bt = b.browser_type;
       const allProfiles = profilesByBrowser[bt] || [];
+      const counts = dirProfileCounts[bt];
       const sortedProfiles = [...allProfiles].sort((a, p) => {
-        const ga = getSortGroup(b, a);
-        const gb = getSortGroup(b, p);
+        const ga = getSortGroup(b, a, counts);
+        const gb = getSortGroup(b, p, counts);
         if (ga !== gb) return ga - gb;
         const dirA = a.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
         const dirB = p.user_data_dir.replace(/^.*[\\\/]/, '').toLowerCase();
@@ -303,7 +318,7 @@ function CurrentBrowserCards({
       });
       return { browser: b, sortedProfiles };
     });
-  }, [browsers, profilesByBrowser]);
+  }, [browsers, profilesByBrowser, dirProfileCounts]);
 
   // 选中集合 Set（避免点击时 O(n) includes / 全量拷贝）
   const selectedKeySet = useMemo(() => new Set(selectedKeys || []), [selectedKeys]);
@@ -640,7 +655,8 @@ function CurrentBrowserCards({
                 {displayProfiles.map(p => {
                   const key = mkKey(bt, p);
                   const isDefault = isDefaultUserDir(browser, p);
-                  const isSibling = isDefaultSiblingDir(browser, p);
+                  const counts = dirProfileCounts[bt];
+                  const isSibling = isMultiUserDir(browser, p, counts);
                   const isSelected = !isDefault && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
                   const isLaunching = !isDefault && !isSelectMode && !isMultiSelectMode && launching === key;
 
@@ -652,6 +668,7 @@ function CurrentBrowserCards({
                       isSelected={isSelected}
                       isDefault={isDefault}
                       isSibling={isSibling}
+                      siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
                       launchStatus={internalLaunchStatuses[key]}
                       connStatus={internalConnectionStatuses[key]}
