@@ -1101,7 +1101,7 @@ fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
             let fresh = fs::metadata(&local_state_path)
                 .and_then(|m| m.modified())
                 .ok();
-            if fresh.is_some() && fresh.as_ref() == Some(mtime) {
+            if fresh.is_some() && &fresh == mtime {
                 return cached.clone();
             }
         }
