@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::SystemTime;
 use super::icons::{CHROME_ICO, EDGE_ICO};
 use winreg::enums::*;
 use winreg::RegKey;
