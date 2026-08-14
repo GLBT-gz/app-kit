@@ -622,10 +622,12 @@ pub fn detect_and_assign_ports(profiles: &[(String, String)]) -> Vec<PortEntry> 
 // ═══════════════════════════════════════════════════════
 
 /// read_profiles 进程级缓存：避免同一 Local State 文件被重复读取/解析
-/// key = (user_data_dir, is_edge), value = read_profiles 返回值
-static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), Vec<ProfileInfo>>>> = OnceLock::new();
+/// key = (user_data_dir, is_edge), value = (缓存时文件 mtime, read_profiles 返回值)
+/// 命中前校验 mtime，文件变化（如浏览器内改名/改头像）后自动失效重读
+static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), (Option<SystemTime>, Vec<ProfileInfo>)>>> =
+    OnceLock::new();
 
-fn profile_cache() -> &'static Mutex<HashMap<(String, bool), Vec<ProfileInfo>>> {
+fn profile_cache() -> &'static Mutex<HashMap<(String, bool), (Option<SystemTime>, Vec<ProfileInfo>)>> {
     PROFILE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1016,17 +1018,24 @@ fn get_browser_version(browser_type: &str) -> String {
 // ============ 读取用户配置 ============
 
 /// 读取浏览器用户配置（增强版）
-/// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合仅读取一次磁盘
+/// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合避免重复解析磁盘；
+/// 命中前校验 Local State 文件 mtime，文件变化后自动失效重读
 fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
-    // 进程级缓存：同一目录 + 同一 is_edge 参数仅读取一次
+    let local_state_path = Path::new(user_data_dir).join("Local State");
+    // 进程级缓存：同一目录 + 同一 is_edge 参数避免重复解析；
+    // 命中前校验 Local State 文件 mtime，文件已变化（改名/改头像等）则视为失效重读
     {
         let cache = profile_cache().lock().unwrap();
-        if let Some(cached) = cache.get(&(user_data_dir.to_string(), is_edge)) {
-            return cached.clone();
+        if let Some((mtime, cached)) = cache.get(&(user_data_dir.to_string(), is_edge)) {
+            let fresh = fs::metadata(&local_state_path)
+                .and_then(|m| m.modified())
+                .ok();
+            if fresh.is_some() && fresh.as_ref() == Some(mtime) {
+                return cached.clone();
+            }
         }
     }
 
-    let local_state_path = Path::new(user_data_dir).join("Local State");
     if !local_state_path.exists() {
         // 用户数据目录不存在 → 未安装该浏览器，无需报错
         if !Path::new(user_data_dir).exists() {
@@ -1206,11 +1215,14 @@ fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
         }
     });
 
-    // 写入缓存，后续相同参数的调用直接命中
+    // 写入缓存，后续相同参数的调用直接命中（记录文件 mtime，文件变化后自动失效）
+    let mtime = fs::metadata(&local_state_path)
+        .ok()
+        .and_then(|m| m.modified().ok());
     profile_cache()
         .lock()
         .unwrap()
-        .insert((user_data_dir.to_string(), is_edge), profiles.clone());
+        .insert((user_data_dir.to_string(), is_edge), (mtime, profiles.clone()));
 
     profiles
 }
