@@ -397,6 +397,20 @@ function CurrentBrowserCards({
     }
   }, [onLaunchProfile, closeCtxMenu, ctxRunningProfile, showToast]);
 
+  /** 关闭该配置：kill_browser_profile_process 按 user-data-dir + profile-directory
+   *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置 */
+  const doClose = useCallback(async (bt: string, p: BCPProfile) => {
+    closeCtxMenu();
+    try {
+      const msg = await killBrowserProfileProcess(bt, p.id, p.user_data_dir);
+      showToast(`「${p.name}」已关闭${msg ? ` (${msg})` : ""}`, "success");
+    } catch (e) {
+      const err = String(e);
+      // 后端在未匹配到进程时返回“未找到匹配的浏览器进程”
+      showToast(err.includes("未找到匹配") ? `「${p.name}」未在运行` : `关闭失败: ${e}`, "warning");
+    }
+  }, [closeCtxMenu, showToast]);
+
   // 右键弹菜单后：查询同目录运行中的 profile（用于调试打开前置关闭）
   useEffect(() => {
     if (!ctxMenu) return;
@@ -661,13 +675,13 @@ function CurrentBrowserCards({
         ))}
       </div>
 
-      {/* 右键菜单：打开 / 调试打开 */}
+      {/* 右键菜单：打开 / 调试打开 / 关闭 */}
       {ctxMenu && (
         <div
           className="current-card-ctx-menu"
           style={{
             left: Math.max(4, Math.min(ctxMenu.x, window.innerWidth - 168)),
-            top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 96)),
+            top: Math.max(4, Math.min(ctxMenu.y, window.innerHeight - 132)),
           }}
           onContextMenu={e => e.preventDefault()}
         >
@@ -686,6 +700,14 @@ function CurrentBrowserCards({
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
             调试打开
+          </button>
+          <button
+            className="current-card-ctx-item"
+            onClick={() => doClose(ctxMenu.bt, ctxMenu.p)}
+            title={`关闭「${ctxMenu.p.name}」（只关闭该配置自己的进程）`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+            关闭
           </button>
         </div>
       )}
