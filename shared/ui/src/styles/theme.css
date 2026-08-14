@@ -60,7 +60,7 @@
   --input: var(--border-input-h) var(--border-input-s) var(--border-input-l);
 }
 
-[data-theme="light"] {
+html[data-theme="light"] {
   color-scheme: light;
   --bg-app: #f5f5fa;
   --bg-topbar: #ffffff;
