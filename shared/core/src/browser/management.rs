@@ -229,6 +229,27 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 debug_port: port_opt.map(|p| p.to_string()),
                 cdp_reachable,
             });
+        } else if let Some(exe_name) = default_instance_exe(user_data_dir) {
+            // 默认目录兜底（目录级识别）：用户手动启动的浏览器进程命令行无 --user-data-dir，
+            // 无法精确匹配到 profile；检测到该浏览器存在「无 user-data-dir 的主进程」即视为默认目录在运行
+            let default_key = format!("{}#default-instance", exe_name);
+            if running_by_key.contains_key(&default_key) {
+                result.push(BrowserProcessState {
+                    user_data_dir: user_data_dir.clone(),
+                    profile_id: profile_id.clone(),
+                    is_running: true,
+                    debug_port: None,
+                    cdp_reachable: false,
+                });
+                continue;
+            }
+            result.push(BrowserProcessState {
+                user_data_dir: user_data_dir.clone(),
+                profile_id: profile_id.clone(),
+                is_running: false,
+                debug_port: None,
+                cdp_reachable: false,
+            });
         } else {
             result.push(BrowserProcessState {
                 user_data_dir: user_data_dir.clone(),
@@ -240,6 +261,18 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         }
     }
     result
+}
+
+/// 判断 user_data_dir 是否为内置浏览器的默认用户数据目录，返回对应 exe 名
+fn default_instance_exe(user_data_dir: &str) -> Option<&'static str> {
+    for (bt, exe_name) in [("edge", "msedge.exe"), ("chrome", "chrome.exe")] {
+        if let Some(def_dir) = get_user_data_dir(bt) {
+            if user_data_dir.eq_ignore_ascii_case(&def_dir) {
+                return Some(exe_name);
+            }
+        }
+    }
+    None
 }
 
 /// 通过 TCP 连接检测 CDP 端口是否可达（绕过浏览器 CORS 限制）
@@ -284,7 +317,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
         Ok(o) => {
             if !o.stdout.is_empty() {
                 let stdout = decode_windows_stdout(&o.stdout);
-                parse_process_json(&stdout, &mut result);
+                parse_process_json(&stdout, exe_name, &mut result);
             }
         }
         Err(_) => {}
@@ -310,7 +343,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
         {
             if !wmic_output.stdout.is_empty() {
                 let stdout = decode_windows_stdout(&wmic_output.stdout);
-                parse_wmic_list(&stdout, &mut result);
+                parse_wmic_list(&stdout, exe_name, &mut result);
             }
         }
     }
@@ -319,7 +352,7 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
 }
 
 /// 解析 PowerShell Get-CimInstance 输出的 JSON，并入 result
-fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
+fn parse_process_json(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
     let processes: Vec<serde_json::Value> = if let Ok(arr) =
         serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
     {
@@ -335,7 +368,7 @@ fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
             .get("CommandLine")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        extract_instance_from_cmdline(cmd_line, result);
+        extract_instance_from_cmdline(cmd_line, exe_name, result);
     }
 }
 
@@ -345,7 +378,7 @@ fn parse_process_json(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
 ///   CommandLine="C:\...\chrome.exe" --args...
 ///
 ///   空行分隔记录
-fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
+fn parse_wmic_list(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
     // 按空行分割记录
     let mut current_cmd_line: Option<String> = None;
     let mut has_cmd_line = false;
@@ -356,7 +389,7 @@ fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
             // 空行 = 记录结束
             if has_cmd_line {
                 if let Some(cmd) = current_cmd_line.take() {
-                    extract_instance_from_cmdline(&cmd, result);
+                    extract_instance_from_cmdline(&cmd, exe_name, result);
                 }
                 has_cmd_line = false;
             }
@@ -379,21 +412,36 @@ fn parse_wmic_list(stdout: &str, result: &mut HashMap<String, Option<u16>>) {
     // 最后一条记录可能没有尾随空行
     if has_cmd_line {
         if let Some(cmd) = current_cmd_line.take() {
-            extract_instance_from_cmdline(&cmd, result);
+            extract_instance_from_cmdline(&cmd, exe_name, result);
         }
     }
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
-fn extract_instance_from_cmdline(cmd_line: &str, result: &mut HashMap<String, Option<u16>>) {
+/// 额外识别「默认目录实例」：命令行无 --user-data-dir 但带 --profile-directory 的进程，
+/// 是用户手动启动的默认用户数据目录主进程（省略 --user-data-dir 时浏览器自动用默认目录），
+/// 以 `{exe}#default-instance` 为 key 标记，供 detect_browser_running_processes 目录级兜底匹配
+fn extract_instance_from_cmdline(
+    cmd_line: &str,
+    exe_name: &str,
+    result: &mut HashMap<String, Option<u16>>,
+) {
     let user_data_dir = extract_cmd_arg(cmd_line, "--user-data-dir");
     let profile = extract_cmd_arg(cmd_line, "--profile-directory");
     let port_str = extract_cmd_arg(cmd_line, "--remote-debugging-port");
 
-    if let (Some(ud), Some(pf)) = (user_data_dir, profile) {
-        let key = format!("{}\\{}", ud, pf);
-        let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
-        result.entry(key).or_insert(port);
+    match (user_data_dir, profile) {
+        (Some(ud), Some(pf)) => {
+            let key = format!("{}\\{}", ud, pf);
+            let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
+            result.entry(key).or_insert(port);
+        }
+        (None, Some(_)) => {
+            let key = format!("{}#default-instance", exe_name);
+            let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
+            result.entry(key).or_insert(port);
+        }
+        _ => {}
     }
 }
 
