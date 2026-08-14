@@ -30,8 +30,18 @@ export {
   detectDebugPorts,
   detectBrowserRunningProcesses,
   testBrowserAutomation,
+  ziniaoPatchStatus,
+  ziniaoPatchApply,
+  ziniaoListEnvs,
+  ziniaoListTabs,
+  ziniaoOpenTab,
+  ziniaoNavigate,
+  ziniaoEval,
+  ziniaoEvalAll,
+  ziniaoScreenshot,
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
+export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";

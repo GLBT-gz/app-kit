@@ -78,6 +78,67 @@ export async function ziniaoPatchApply(): Promise<string> {
   return tauriInvoke("ziniao_patch_apply");
 }
 
+// ── 紫鸟 CDP 批量管理（000 应用注册的命令，需 v10.8 patch） ──
+
+/** 紫鸟标签页 */
+export interface ZiniaoTab {
+  id: string;
+  title: string;
+  url: string;
+}
+
+/** 紫鸟环境实时状态 */
+export interface ZiniaoEnvStatus {
+  container_id: string;
+  port: number;
+  user_data_dir: string;
+  pid: number;
+  browser: string;
+  tabs: ZiniaoTab[];
+}
+
+/** 批量执行 JS 的单条结果 */
+export interface ZiniaoEvalResult {
+  port: number;
+  container_id: string;
+  value: unknown;
+}
+
+/** 列出所有运行中紫鸟环境（含标签页） */
+export async function ziniaoListEnvs(): Promise<ZiniaoEnvStatus[]> {
+  return tauriInvoke("ziniao_list_envs");
+}
+
+/** 列出指定端口环境的标签页 */
+export async function ziniaoListTabs(port: number): Promise<ZiniaoTab[]> {
+  return tauriInvoke("ziniao_list_tabs", { port });
+}
+
+/** 在指定环境新建标签页并导航 */
+export async function ziniaoOpenTab(port: number, url: string): Promise<string> {
+  return tauriInvoke("ziniao_open_tab", { port, url });
+}
+
+/** 指定环境第一个页面标签页导航 */
+export async function ziniaoNavigate(port: number, url: string): Promise<void> {
+  return tauriInvoke("ziniao_navigate", { port, url });
+}
+
+/** 指定环境执行 JS */
+export async function ziniaoEval(port: number, js: string): Promise<unknown> {
+  return tauriInvoke("ziniao_eval", { port, js });
+}
+
+/** 所有运行中环境批量执行 JS */
+export async function ziniaoEvalAll(js: string): Promise<ZiniaoEvalResult[]> {
+  return tauriInvoke("ziniao_eval_all", { js });
+}
+
+/** 指定环境截图，返回 PNG base64 */
+export async function ziniaoScreenshot(port: number): Promise<string> {
+  return tauriInvoke("ziniao_screenshot", { port });
+}
+
 /** 获取应用数据目录路径 */
 export async function getDataDirectory(): Promise<string> {
   return pluginInvoke("get_data_directory");
