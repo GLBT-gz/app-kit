@@ -418,17 +418,27 @@ fn parse_wmic_list(stdout: &str, exe_name: &str, result: &mut HashMap<String, Op
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
-/// 额外识别「默认目录实例」：命令行无 --user-data-dir 但带 --profile-directory 的进程，
-/// 是用户手动启动的默认用户数据目录主进程（省略 --user-data-dir 时浏览器自动用默认目录），
+/// 额外识别「默认目录实例」：默认用户数据目录的主进程（无 --type=，子进程才有）
+/// 可能带 --profile-directory，也可能是极简命令行（如仅 --no-startup-window），
+/// 但只要无 --user-data-dir 即视为默认目录实例（省略该参数时浏览器自动用默认目录），
 /// 以 `{exe}#default-instance` 为 key 标记，供 detect_browser_running_processes 目录级兜底匹配
 fn extract_instance_from_cmdline(
     cmd_line: &str,
     exe_name: &str,
     result: &mut HashMap<String, Option<u16>>,
 ) {
-    let user_data_dir = extract_cmd_arg(cmd_line, "--user-data-dir");
-    let profile = extract_cmd_arg(cmd_line, "--profile-directory");
-    let port_str = extract_cmd_arg(cmd_line, "--remote-debugging-port");
+    let args = cmd_args(cmd_line);
+    let get_arg = |flag: &str| {
+        let prefix = format!("{}=", flag);
+        args.iter()
+            .find_map(|a| a.strip_prefix(&prefix))
+            .map(|s| s.to_string())
+    };
+    let user_data_dir = get_arg("--user-data-dir");
+    let profile = get_arg("--profile-directory");
+    let port_str = get_arg("--remote-debugging-port");
+    // 子进程（crashpad/gpu/utility/renderer 等）都带 --type=，主进程没有
+    let is_child = args.iter().any(|a| a.starts_with("--type="));
 
     match (user_data_dir, profile) {
         (Some(ud), Some(pf)) => {
@@ -436,12 +446,24 @@ fn extract_instance_from_cmdline(
             let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
             result.entry(key).or_insert(port);
         }
-        (None, Some(_)) => {
+        (None, _) if !is_child => {
             let key = format!("{}#default-instance", exe_name);
             let port = port_str.and_then(|ps| ps.parse::<u16>().ok());
             result.entry(key).or_insert(port);
         }
         _ => {}
+    }
+}
+
+/// 拆分命令行参数（Windows 用 CommandLineToArgvW 处理引号/转义，其它平台按空格分割）
+fn cmd_args(cmd_line: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        split_windows_command_line(cmd_line)
+    }
+    #[cfg(not(windows))]
+    {
+        cmd_line.split(' ').map(|s| s.to_string()).collect()
     }
 }
 
