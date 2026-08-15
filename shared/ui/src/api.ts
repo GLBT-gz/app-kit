@@ -81,11 +81,12 @@ export async function installVersion(url: string, savePath: string): Promise<str
 
 // ── 紫鸟 app.asar patch（000 应用注册的命令） ──
 
-/** 检测紫鸟 app.asar 是否已打 v10.8 patch */
+/** 检测紫鸟 app.asar 补丁状态（v10.8 端口兜底 + v10.9 agent_mode 自动开启） */
 export async function ziniaoPatchStatus(): Promise<{
   installed: boolean;
   asar_path: string;
   patched: boolean;
+  v109: boolean;
   main_index_len: number;
   detail: string;
 }> {
@@ -93,7 +94,7 @@ export async function ziniaoPatchStatus(): Promise<{
   return tauriInvoke("ziniao_patch_status");
 }
 
-/** 一键打补丁（重打包 + 提权覆盖，会弹 UAC） */
+/** 一键打补丁（重打包 + 提权覆盖，会弹 UAC；未打或 v10.8 → 升级 v10.9） */
 export async function ziniaoPatchApply(): Promise<string> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_patch_apply");
   return tauriInvoke("ziniao_patch_apply");
@@ -165,6 +166,61 @@ export async function ziniaoEvalAll(js: string): Promise<ZiniaoEvalResult[]> {
 export async function ziniaoScreenshot(port: number): Promise<string> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_screenshot");
   return tauriInvoke("ziniao_screenshot", { port });
+}
+
+// ── 紫鸟 agent_mode 直控（v10.9 patch，登录后自动开 HTTP 服务） ──
+
+/** agent_mode 店铺信息 */
+export interface ZiniaoAgentBrowser {
+  browserOauth: string;
+  browserId: number;
+  browserName: string;
+  browserIp: string;
+  siteId: number;
+  isExpired: boolean;
+  proxyType: number;
+  isDynamic: boolean;
+  store_username: string;
+  tags: unknown[];
+  platform_id: number;
+  platform_name: string;
+}
+
+/** agent_mode 主程序状态 */
+export interface ZiniaoAgentStatus {
+  running: boolean;
+  port: number | null;
+  pid: number | null;
+}
+
+/** 自动打开紫鸟主程序（未运行则启动） */
+export async function ziniaoAgentLaunch(): Promise<{ launched: boolean; pid: number | null }> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_launch");
+  return tauriInvoke("ziniao_agent_launch");
+}
+
+/** 主程序状态 + 动态发现的 agent_mode 端口（等待约 40s） */
+export async function ziniaoAgentStatus(): Promise<ZiniaoAgentStatus> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_status");
+  return tauriInvoke("ziniao_agent_status");
+}
+
+/** 获取店铺列表（agent_mode 免认证） */
+export async function ziniaoAgentBrowserList(port: number): Promise<ZiniaoAgentBrowser[]> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_browser_list");
+  return tauriInvoke("ziniao_agent_browser_list", { port });
+}
+
+/** 直开指定店铺 */
+export async function ziniaoAgentStartBrowser(port: number, browserId: number): Promise<unknown> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_start_browser");
+  return tauriInvoke("ziniao_agent_start_browser", { port, browserId });
+}
+
+/** 店铺环境 CDP 端口（= 9222 + browserId % 5000） */
+export async function ziniaoAgentCdpPort(browserId: number): Promise<number> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_cdp_port");
+  return tauriInvoke("ziniao_agent_cdp_port", { browserId });
 }
 
 /** 获取应用数据目录路径 */

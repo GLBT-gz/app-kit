@@ -39,9 +39,15 @@ export {
   ziniaoEval,
   ziniaoEvalAll,
   ziniaoScreenshot,
+  ziniaoAgentLaunch,
+  ziniaoAgentStatus,
+  ziniaoAgentBrowserList,
+  ziniaoAgentStartBrowser,
+  ziniaoAgentCdpPort,
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./api";
+export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./api";
 export { isTauriRuntime } from "./api";
 
 // Components

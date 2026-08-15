@@ -545,8 +545,9 @@ function BrowserConfigInner({
     loading: boolean;
     patching: boolean;
     patched: boolean;
+    v109: boolean;
     detail: string;
-  }>({ supported: false, loading: false, patching: false, patched: false, detail: "" });
+  }>({ supported: false, loading: false, patching: false, patched: false, v109: false, detail: "" });
   const checkZiniaoPatch = useCallback(async () => {
     if (browser.browser_type !== "ziniao") return;
     setZiniaoPatch(prev => ({ ...prev, loading: true }));
@@ -557,6 +558,7 @@ function BrowserConfigInner({
         loading: false,
         patching: false,
         patched: st.patched,
+        v109: st.v109,
         detail: st.detail,
       });
     } catch {
@@ -975,17 +977,23 @@ function BrowserConfigInner({
             <div className="ziniao-patch-info">
               <div className="ziniao-patch-title">
                 <span className={`ziniao-patch-dot ${ziniaoPatch.patched ? 'ok' : 'warn'}`} />
-                {ziniaoPatch.loading ? '检测中…' : (ziniaoPatch.patched ? 'CDP 多开补丁已生效' : 'CDP 多开补丁未安装')}
+                {ziniaoPatch.loading
+                  ? '检测中…'
+                  : ziniaoPatch.v109
+                    ? '补丁 v10.9 已生效（CDP 多开 + agent_mode 直开环境）'
+                    : ziniaoPatch.patched
+                      ? '补丁 v10.8 已生效（CDP 多开，可升级 v10.9）'
+                      : 'CDP 多开补丁未安装'}
               </div>
               {!ziniaoPatch.loading && <div className="ziniao-patch-detail">{ziniaoPatch.detail}</div>}
             </div>
-            {!ziniaoPatch.patched && (
+            {!ziniaoPatch.v109 && (
               <button
                 className="btn btn-primary btn-sm"
                 disabled={ziniaoPatch.loading || ziniaoPatch.patching}
                 onClick={applyZiniaoPatch}
               >
-                {ziniaoPatch.patching ? '安装中…' : '一键安装'}
+                {ziniaoPatch.patching ? '安装中…' : ziniaoPatch.patched ? '升级到 v10.9' : '一键安装'}
               </button>
             )}
           </div>
