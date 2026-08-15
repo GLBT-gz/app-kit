@@ -41,6 +41,8 @@ export interface ShopListPanelProps {
   showBulkButtons?: boolean;
   /** 批量切换开始时回调（003 用于写日志） */
   onBatchToggle?: (togglingTo: boolean) => void;
+  /** 批量切换结束（mouseup/离开）回调（003 用于写日志） */
+  onBatchEnd?: () => void;
   emptyText?: string;
   /** 额外 CSS class（追加到根 .temu-shop-section） */
   className?: string;
@@ -70,6 +72,7 @@ export function ShopListPanel({
   hint,
   showBulkButtons = false,
   onBatchToggle,
+  onBatchEnd,
   emptyText = "暂无店铺数据",
   className,
 }: ShopListPanelProps) {
@@ -194,13 +197,15 @@ export function ShopListPanel({
   }, [enabledMap, onToggle, shopTableRef, onBatchToggle]);
 
   const handleListMouseUp = useCallback(() => {
+    const wasBatch = !!batchRef.current?.active;
     const td = toggleDragRef.current;
     if (td && !td.moved) onToggle(td.mallName);
     toggleDragRef.current = null;
     if (batchRef.current) batchRef.current.active = false;
     batchRef.current = null;
     toggledSet.current.clear();
-  }, [onToggle]);
+    if (wasBatch) onBatchEnd?.();
+  }, [onToggle, onBatchEnd]);
 
   return (
     <div className={`temu-shop-section${className ? ` ${className}` : ""}`}>
