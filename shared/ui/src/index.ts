@@ -75,6 +75,8 @@ export type { TabItem } from "./components/TabBar";
 export { ClearButton } from "./components/ClearButton";
 export { LogPanel, useLog } from "./components/LogPanel";
 export type { LogLevel, LogTable, LogEntry, UseLogReturn, LogPanelProps } from "./components/LogPanel";
+export { TestSection, TestPageLayout } from "./components/TestLayout";
+export type { TestSectionProps, TestPageLayoutProps } from "./components/TestLayout";
 export { HomePage } from "./components/HomePage";
 export type { HomePageCard, HomePageProps } from "./components/HomePage";
 

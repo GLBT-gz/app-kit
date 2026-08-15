@@ -1,0 +1,76 @@
+/* ========================================
+   TestPageLayout / TestSection — 测试页布局
+   类名与各项目历史实现保持一致（视觉零变化）
+   ======================================== */
+
+/* ── 测试面板分栏 ── */
+.test-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.test-panel-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 拖拽手柄 ── */
+.test-splitter {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.test-splitter:hover,
+.test-splitter:active {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+/* ── 右侧日志栏 ── */
+.test-log-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.test-log-sidebar > .log-panel {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+/* ── 测试模块卡片 ── */
+.test-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.test-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.test-section > :not(.test-section-header) {
+  padding: 14px 16px;
+}
