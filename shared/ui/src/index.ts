@@ -79,6 +79,18 @@ export { LogPanel, useLog } from "./components/LogPanel";
 export type { LogLevel, LogTable, LogEntry, UseLogReturn, LogPanelProps } from "./components/LogPanel";
 export { TestSection, TestPageLayout } from "./components/TestLayout";
 export type { TestSectionProps, TestPageLayoutProps } from "./components/TestLayout";
+export { SheetTable } from "./components/SheetTable";
+export type { SheetTableProps } from "./components/SheetTable";
+export { ViewToggle } from "./components/ViewToggle";
+export type { ViewToggleProps, ViewToggleItem } from "./components/ViewToggle";
+export {
+  useTableSelectionCopy,
+  toText,
+  VirtualTable,
+  DataTable,
+  MemoDataTable,
+} from "./components/table";
+export type { TableColumn } from "./components/table";
 export { HomePage } from "./components/HomePage";
 export type { HomePageCard, HomePageProps } from "./components/HomePage";
 
