@@ -44,6 +44,8 @@ export {
   ziniaoAgentBrowserList,
   ziniaoAgentStartBrowser,
   ziniaoAgentCdpPort,
+  ziniaoAgentRunning,
+  ziniaoAgentClose,
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./api";
