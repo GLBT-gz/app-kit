@@ -223,6 +223,18 @@ export async function ziniaoAgentCdpPort(browserId: number): Promise<number> {
   return tauriInvoke("ziniao_agent_cdp_port", { browserId });
 }
 
+/** 运行中的环境 browserId 列表（官方 getRunningInfo，SUCCESS 状态） */
+export async function ziniaoAgentRunning(port: number): Promise<number[]> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_running");
+  return tauriInvoke("ziniao_agent_running", { port });
+}
+
+/** 关闭指定环境（CDP Browser.close，等价窗口关闭） */
+export async function ziniaoAgentClose(browserId: number): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_close");
+  return tauriInvoke("ziniao_agent_close", { browserId });
+}
+
 /** 获取应用数据目录路径 */
 export async function getDataDirectory(): Promise<string> {
   return pluginInvoke("get_data_directory");
