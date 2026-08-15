@@ -87,6 +87,10 @@ export { Checkbox, Radio } from "./components/controls/Checkbox";
 export { Switch } from "./components/controls/Switch";
 export { Field } from "./components/controls/Field";
 
+// ── 日志助手（统一后端进度事件 → UI 日志级别） ──
+export { toLogLevel, logResultLines } from "./log";
+export type { ProgressPayload } from "./log";
+
 // Hooks（浏览器配置）
 export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
 export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
