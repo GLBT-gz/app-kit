@@ -72,6 +72,8 @@ export type { LaunchStatus, ConnectionStatus } from "./components/CurrentBrowser
 export { LAUNCH_LABELS, CONNECTION_LABELS } from "./components/CurrentBrowserCards";
 export { TabBar } from "./components/TabBar";
 export type { TabItem } from "./components/TabBar";
+export { ShopListPanel } from "./components/ShopListPanel";
+export type { ShopListPanelProps, ShopListShop } from "./components/ShopListPanel";
 export { ClearButton } from "./components/ClearButton";
 export { LogPanel, useLog } from "./components/LogPanel";
 export type { LogLevel, LogTable, LogEntry, UseLogReturn, LogPanelProps } from "./components/LogPanel";

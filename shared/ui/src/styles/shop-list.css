@@ -1,0 +1,247 @@
+/* ═══════════════════════════════════════════════════════════
+   ShopListPanel —— 店铺列表面板（收敛 002/003 各页面重复实现）
+   类名与各项目历史实现保持一致（temu-*），视觉零变化。
+   ═══════════════════════════════════════════════════════════ */
+
+.temu-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  height: 40px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.temu-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.temu-left-panel .temu-card-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.temu-card-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.temu-left-panel .temu-card-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.temu-restore-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.temu-restore-btn:hover {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+  border-color: var(--accent-color, #1890ff);
+}
+
+.temu-shop-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
+}
+.temu-shop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  transition: background 0.15s, transform 0.2s, opacity 0.2s;
+  user-select: none;
+}
+.temu-shop-item:last-child { border-bottom: none; }
+.temu-shop-item:hover { background: var(--bg-badge); }
+.temu-shop-item.disabled { opacity: 0.45; }
+.temu-shop-item.dragging { opacity: 0.4; outline: 2px dashed var(--accent-color, #1890ff); outline-offset: -2px; }
+
+.drop-indicator {
+  height: 0;
+  transition: height 0.1s, background 0.1s;
+}
+.drop-indicator.active {
+  height: 3px;
+  background: var(--accent-color, #1890ff);
+  border-radius: 2px;
+  margin: -1px 4px;
+  pointer-events: none;
+}
+
+.temu-shop-drag-handle {
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: grab;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  opacity: 0.5;
+}
+.temu-shop-item:hover .temu-shop-drag-handle { opacity: 1; }
+.temu-shop-drag-handle:active { cursor: grabbing; }
+
+.temu-shop-info {
+  flex: 1;
+  min-width: 0;
+}
+.temu-shop-info .temu-shop-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-running-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  color: #52c41a;
+  animation: shop-running-blink 1.2s ease-in-out infinite;
+}
+@keyframes shop-running-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.temu-shop-info .temu-shop-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.temu-shop-info .temu-shop-sub {
+  flex-shrink: 0;
+}
+.temu-shop-info .temu-shop-result {
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.temu-shop-info .temu-no-entity {
+  color: #e74c3c;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 0 4px;
+  border: 1px solid #e74c3c;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.temu-shop-empty {
+  padding: 32px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.temu-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.temu-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.temu-toggle-track {
+  width: 30px;
+  height: 17px;
+  background: var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: background 0.2s;
+}
+.temu-toggle input:checked + .temu-toggle-track {
+  background: var(--accent);
+}
+.temu-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.temu-toggle input:checked + .temu-toggle-track .temu-toggle-thumb {
+  transform: translateX(13px);
+}
+
+.temu-shop-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.temu-shop-section .temu-card-header {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
+}
+.temu-shop-section .temu-shop-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+/* 左侧卡片标题高度对齐 */
+.temu-card-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-badge);
+  padding: 0 6px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+.temu-card-count {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.temu-select-all-btn,
+.temu-deselect-all-btn,
+.temu-default-select-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.temu-select-all-btn:hover,
+.temu-deselect-all-btn:hover,
+.temu-default-select-btn:hover {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+  border-color: var(--accent-color, #1890ff);
+}
