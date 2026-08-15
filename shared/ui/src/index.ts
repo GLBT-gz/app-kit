@@ -78,6 +78,15 @@ export type { LogLevel, LogTable, LogEntry, UseLogReturn, LogPanelProps } from "
 export { HomePage } from "./components/HomePage";
 export type { HomePageCard, HomePageProps } from "./components/HomePage";
 
+// ── 基础控件（controls/，主题变量样式） ──
+export { Button } from "./components/controls/Button";
+export type { ButtonProps, ButtonVariant, ButtonSize } from "./components/controls/Button";
+export { TextInput, NumberInput, TextArea } from "./components/controls/TextInput";
+export { Select } from "./components/controls/Select";
+export { Checkbox, Radio } from "./components/controls/Checkbox";
+export { Switch } from "./components/controls/Switch";
+export { Field } from "./components/controls/Field";
+
 // Hooks（浏览器配置）
 export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
 export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
