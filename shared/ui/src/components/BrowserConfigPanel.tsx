@@ -4,6 +4,7 @@ import { getBrowserIcon } from "../utils/browser-icons";
 import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses } from "../api";
 import { ziniaoPatchStatus, ziniaoPatchApply } from "../ziniao-api";
 import type { ChildBrowserConfig } from "../types";
+import { Button } from "./controls/Button";
 
 // ════════════════════════════════════════════
 //  通用类型定义（兼容各项目的不同数据结构）
@@ -925,12 +926,12 @@ function BrowserConfigInner({
 
           {onCreateUserDataDir && (
             <div className="config-actions">
-              <button className="btn btn-primary" onClick={() => setNewUserModal(true)}>
+              <Button variant="primary" onClick={() => setNewUserModal(true)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
                 新增用户
-              </button>
-              <button
-                className="btn btn-danger-outline"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={async () => {
                   if (!window.confirm(`确定要关闭所有 ${browser.browser_name} 进程吗？`)) return;
                   try {
@@ -943,7 +944,7 @@ function BrowserConfigInner({
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4" y1="4" x2="20" y2="20"/><line x1="4" y1="20" x2="20" y2="4"/></svg>
                 清空进程
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -989,13 +990,14 @@ function BrowserConfigInner({
               {!ziniaoPatch.loading && <div className="ziniao-patch-detail">{ziniaoPatch.detail}</div>}
             </div>
             {!ziniaoPatch.v109 && (
-              <button
-                className="btn btn-primary btn-sm"
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={ziniaoPatch.loading || ziniaoPatch.patching}
                 onClick={applyZiniaoPatch}
               >
                 {ziniaoPatch.patching ? '安装中…' : ziniaoPatch.patched ? '升级到 v10.9' : '一键安装'}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -1083,22 +1085,22 @@ function BrowserConfigInner({
                         <div className="pc-actions">
                           <div className="pc-btn-row">
                             {onLaunchProfile && (
-                              <button className="btn btn-primary btn-sm" onClick={() => doLaunch(p, "")}>
+                              <Button variant="primary" size="sm" onClick={() => doLaunch(p, "")}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>启动
-                              </button>
+                              </Button>
                             )}
                             {onLaunchProfile && (
-                              <button className="btn btn-sm btn-debug" onClick={() => doDebugLaunch(p)} title="随机可用端口调试启动">
+                              <Button size="sm" className="ui-btn-debug" onClick={() => doDebugLaunch(p)} title="随机可用端口调试启动">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>调试启动
-                              </button>
+                              </Button>
                             )}
                             {onGetLaunchCommand && (
-                              <button className="btn btn-sm" onClick={() => doShowCommand(p, "")}>
+                              <Button size="sm" onClick={() => doShowCommand(p, "")}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5" /><path d="M21 3l-7 7M3 21l7-7" /></svg>命令
-                              </button>
+                              </Button>
                             )}
                             {onCreateShortcut && (
-                              <button className="btn btn-sm" onClick={async () => {
+                              <Button size="sm" onClick={async () => {
                                 try {
                                   const msg = await onCreateShortcut(browser.browser_type, p.id, p.user_data_dir, p.name, p.avatar_base64 ?? "", 0);
                                   if (msg.startsWith("overwrite:")) {
@@ -1109,7 +1111,7 @@ function BrowserConfigInner({
                                 } catch (e) { showToast(`创建快捷方式失败: ${e}`, "error"); }
                               }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>快捷方式
-                              </button>
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -1144,9 +1146,9 @@ function BrowserConfigInner({
             </div>
             <div className="modal-footer">
               {onLaunchProfile && (
-                <button className="btn btn-primary" onClick={() => { doLaunch(cmdModal.profile, cmdModal.portStr); setCmdModal(null); }}>启动浏览器</button>
+                <Button variant="primary" onClick={() => { doLaunch(cmdModal.profile, cmdModal.portStr); setCmdModal(null); }}>启动浏览器</Button>
               )}
-              <button className="btn" onClick={() => setCmdModal(null)}>关闭</button>
+              <Button onClick={() => setCmdModal(null)}>关闭</Button>
             </div>
           </div>
         </div>
@@ -1197,8 +1199,8 @@ function BrowserConfigInner({
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-primary" onClick={handleCreateUser} disabled={creating}>{creating ? "创建中..." : "创建并添加"}</button>
-              <button className="btn" onClick={() => { setNewUserModal(false); setNewUserName(""); setCustomParentDir(""); }} disabled={creating}>取消</button>
+              <Button variant="primary" onClick={handleCreateUser} disabled={creating}>{creating ? "创建中..." : "创建并添加"}</Button>
+              <Button onClick={() => { setNewUserModal(false); setNewUserName(""); setCustomParentDir(""); }} disabled={creating}>取消</Button>
             </div>
           </div>
         </div>

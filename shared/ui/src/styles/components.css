@@ -1,68 +1,6 @@
 /* ========================================
-   Buttons
+   Buttons（已收敛：统一使用 controls.css 的 .ui-btn 规范，见 <Button> 组件）
    ======================================== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-input);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-light);
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: var(--btn-text);
-  border-color: var(--accent);
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: var(--btn-text);
-}
-
-.btn-danger {
-  background: #a00;
-  color: #fff;
-  border-color: #a00;
-}
-
-.btn-danger:hover {
-  background: #c00;
-  border-color: #c00;
-  color: #fff;
-}
-
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-
-.btn-debug {
-  background: transparent;
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.btn-debug:hover {
-  background: var(--accent-10, rgba(99, 102, 241, 0.1));
-  color: var(--accent);
-  border-color: var(--accent);
-}
 
 /* 通用配置按钮 */
 .config-btn-remove {

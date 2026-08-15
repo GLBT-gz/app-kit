@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
+import { Button } from "./controls/Button";
 
 export interface ShortcutDef {
   id: string;
@@ -152,9 +153,9 @@ export function ShortcutsPanel({ extraShortcuts = [] }: { extraShortcuts?: Short
         <div>
           <h3 className="settings-section-title">快捷键设置</h3>
         </div>
-        <button className="btn btn-sm" onClick={resetAll} title="所有快捷键恢复为默认值">
+        <Button size="sm" onClick={resetAll} title="所有快捷键恢复为默认值">
           恢复默认
-        </button>
+        </Button>
       </div>
       <div className="shortcuts-list">
         {allDefs.map(def => (

@@ -1,6 +1,7 @@
 // ============================================================
 // 工具函数
 // ============================================================
+import { Button } from "./controls/Button";
 
 export function tryParseJSON(raw: string): unknown {
   try {
@@ -187,8 +188,8 @@ export function ConfirmDialog({ title, desc, onCancel, onConfirm }: ConfirmDialo
           <p style={{ margin: 0, lineHeight: 1.8, fontSize: 13 }}>{desc}</p>
         </div>
         <div className="modal-footer">
-          <button className="btn" onClick={onCancel}>取消</button>
-          <button className="btn btn-danger" onClick={onConfirm}>确认删除</button>
+          <Button onClick={onCancel}>取消</Button>
+          <Button variant="danger" onClick={onConfirm}>确认删除</Button>
         </div>
       </div>
     </div>

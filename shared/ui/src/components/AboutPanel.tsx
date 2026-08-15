@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { installVersion, getDataDirectory, getInstallDirectory, openDir } from "../api";
+import { Button } from "./controls/Button";
 
 interface VersionEntry {
   version: string;
@@ -141,8 +142,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
           </div>
           {resultMsg.type === "success" && savedPath && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <button
-                className="btn"
+              <Button
                 onClick={async () => {
                   try {
                     await openDir(savedPath);
@@ -152,7 +152,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
                 }}
               >
                 运行安装包
-              </button>
+              </Button>
               <span style={{ fontSize: 11, color: "var(--text-muted)", alignSelf: "center" }}>
                 运行后将自动安装，请先关闭当前程序
               </span>
@@ -190,9 +190,9 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       <div className="about-section about-history">
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <span style={{ fontSize: 12, color: "var(--text-muted)" }}>点击「下载此版本」选择保存路径</span>
-          <button className="btn btn-sm" onClick={fetchVersions} style={{ marginLeft: "auto" }}>
+          <Button size="sm" onClick={fetchVersions} style={{ marginLeft: "auto" }}>
             刷新列表
-          </button>
+          </Button>
         </div>
         {versions.length === 0 ? (
           <div className="about-history-empty">暂无版本记录（服务器未开启或网络不可达）</div>
@@ -207,13 +207,14 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
                   <span className="about-history-date">{formatDate(v.pub_date)}</span>
                 </div>
                 {v.notes && <p className="about-history-notes">{v.notes}</p>}
-                <button
-                  className="btn btn-sm about-history-btn"
+                <Button
+                  size="sm"
+                  className="about-history-btn"
                   onClick={() => doDownload(v)}
                   disabled={installing === v.version || isDownloading}
                 >
                   {installing === v.version ? "下载中…" : isCurrent ? "重新下载" : "下载此版本"}
-                </button>
+                </Button>
               </div>
             );
           })

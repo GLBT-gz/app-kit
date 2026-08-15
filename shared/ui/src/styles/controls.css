@@ -40,27 +40,37 @@
 .ui-input-sm { max-width: 90px; }
 .ui-input-mid { max-width: 240px; }
 
-/* ── 按钮 ── */
+/* ── 按钮（统一规范：default/primary/danger × sm/md）──
+   规范来源：app-kit components.css .btn 体系（002/005/006/007）与 010 pl-btn 体系
+   的共同点提炼，全项目按钮统一使用 <Button> 组件。
+   - 默认态：surface 底 + 边框（多数体系均有底）
+   - hover：accent 边框/文字 + accent-light 底（四套体系共同 hover 模式）
+   - danger：实心主题红（--error），替代硬编码 #a00/#d33 */
 .ui-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: background 0.15s, border-color 0.15s;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all 0.15s;
 }
-.ui-btn:hover:not(:disabled) { background: var(--bg-card-hover); }
+.ui-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 .ui-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.ui-btn-sm { padding: 2px 8px; font-size: 12px; }
-.ui-btn-md { padding: 5px 14px; }
+.ui-btn-sm { padding: 3px 8px; font-size: 11px; }
+.ui-btn-md { padding: 6px 12px; font-size: 12px; }
 .ui-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
-.ui-btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-.ui-btn-danger { color: var(--error); border-color: var(--error); }
-.ui-btn-danger:hover:not(:disabled) { background: var(--error); color: var(--btn-text); }
+.ui-btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--btn-text); }
+.ui-btn-danger { background: var(--error); border-color: var(--error); color: #fff; }
+.ui-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 85%, #000); border-color: color-mix(in srgb, var(--error) 85%, #000); color: #fff; }
+.ui-btn-debug { background: transparent; color: var(--accent); border-color: var(--accent); }
+.ui-btn-debug:hover:not(:disabled) { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
 
 /* ── 复选框 / 单选框 ── */
 .ui-check,
