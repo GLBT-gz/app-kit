@@ -16,9 +16,8 @@
  *   import { PlatformConfigPanel } from "@appkit/ui";
  *   <PlatformConfigPanel />
  */
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useData } from "../data";
+import { CustomSelect } from "./CustomSelect";
 
 // ── 类型定义 ──
 
@@ -49,112 +48,6 @@ export function registerPlatforms(platforms: PlatformDef[]): void {
 /** 获取当前已注册的平台列表 */
 export function getRegisteredPlatforms(): PlatformDef[] {
   return _platforms;
-}
-
-// ── CustomSelect（portal 下拉框） ──
-
-function CustomSelect({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: BrowserOption[];
-  value: string | null;
-  onChange: (key: string | null) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    if (dropdownRef.current) {
-      dropdownRef.current.style.position = "fixed";
-      dropdownRef.current.style.top = `${rect.bottom + 4}px`;
-      dropdownRef.current.style.left = `${rect.left}px`;
-      dropdownRef.current.style.width = `${rect.width}px`;
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    let rafId: number | null = null;
-
-    const handle = (e: MouseEvent) => {
-      if (triggerRef.current?.contains(e.target as Node)) return;
-      if (dropdownRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-
-    const onScroll = () => {
-      if (rafId !== null) return; // 已排入 RAF，下一帧统一更新
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        if (!triggerRef.current || !dropdownRef.current) return;
-        const rect = triggerRef.current.getBoundingClientRect();
-        dropdownRef.current.style.top = `${rect.bottom + 4}px`;
-        dropdownRef.current.style.left = `${rect.left}px`;
-        dropdownRef.current.style.width = `${rect.width}px`;
-      });
-    };
-
-    document.addEventListener("mousedown", handle);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      document.removeEventListener("mousedown", handle);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, [open]);
-
-  const selected = options.find((o) => o.key === value);
-
-  return (
-    <div className="custom-select" ref={triggerRef}>
-      <div
-        className="custom-select-trigger"
-        onClick={() => setOpen((v) => !v)}
-        tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setOpen((v) => !v);
-          }
-        }}
-      >
-        <span className={`custom-select-value${selected ? "" : " placeholder"}`}>
-          {selected ? selected.displayName : placeholder || "选择配置"}
-        </span>
-        <span className={`custom-select-arrow${open ? " open" : ""}`}>▼</span>
-      </div>
-      {open &&
-        createPortal(
-          <div className="custom-select-dropdown" ref={dropdownRef}>
-            {options.length === 0 ? (
-              <div className="custom-select-option disabled">暂无可用配置</div>
-            ) : (
-              options.map((opt) => (
-                <div
-                  key={opt.key}
-                  className={`custom-select-option${opt.key === value ? " active" : ""}`}
-                  onClick={() => {
-                    onChange(opt.key);
-                    setOpen(false);
-                  }}
-                >
-                  {opt.displayName}
-                </div>
-              ))
-            )}
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
 }
 
 // ── PlatformProfileSelector（单个平台选择器） ──
