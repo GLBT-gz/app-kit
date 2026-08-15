@@ -1,0 +1,353 @@
+/* ═══════════════════════════════════════════════════════════
+   紫鸟自动化公共组件样式（前缀 zn-）
+   由 @appkit/ui 的 ZiniaoOpsPanel / ZiniaoTestPanel / ZiniaoStoreList 使用，
+   项目无需再写这些样式，直接 import "@appkit/ui/styles/index.css" 即可。
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 通用 ── */
+.zn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  overflow-y: auto;
+}
+
+.zn-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.zn-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.zn-sub {
+  font-size: 12px;
+  color: var(--text-secondary, #999);
+}
+
+.zn-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input, #444);
+  background: var(--bg-input, #2a2a2a);
+  color: var(--text-primary, #eee);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.zn-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4a9eff);
+}
+.zn-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.zn-btn.danger {
+  border-color: #d32f2f;
+  color: #d32f2f;
+}
+.zn-btn.primary {
+  border-color: var(--accent, #4a9eff);
+  color: var(--accent, #4a9eff);
+}
+
+.zn-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  display: inline-block;
+}
+.zn-badge.ok {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.zn-badge.warn {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.12);
+}
+.zn-badge.err {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.zn-input {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input, #444);
+  background: var(--bg-input, #2a2a2a);
+  color: var(--text-primary, #eee);
+  box-sizing: border-box;
+  outline: none;
+}
+.zn-input:focus {
+  border-color: var(--accent, #4a9eff);
+}
+.zn-js {
+  font-family: var(--font-mono, monospace);
+}
+
+.zn-hint {
+  color: var(--text-secondary, #999);
+  font-size: 12px;
+}
+.zn-empty {
+  color: var(--text-secondary, #999);
+  font-size: 13px;
+  text-align: center;
+  padding: 22px 0;
+}
+.zn-error {
+  color: #ef4444;
+  font-size: 13px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* ── 自动化主界面（左右分栏） ── */
+.zn-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  flex: 1;
+  box-sizing: border-box;
+}
+
+.zn-ops-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 16px 0;
+}
+
+.zn-ops-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  gap: 0;
+}
+
+/* 左列：店铺列表 */
+.zn-ops-left {
+  width: 340px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 12px;
+  box-sizing: border-box;
+}
+
+.zn-ops-left-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 分隔条（可拖拽） */
+.zn-splitter {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: transparent;
+}
+.zn-splitter:hover,
+.zn-splitter.active {
+  background: var(--border, #444);
+}
+
+/* 右列：日志 + 表格 + 规则说明 */
+.zn-ops-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-left: 12px;
+  box-sizing: border-box;
+}
+
+.zn-card {
+  border: 1px dashed var(--border, #444);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.zn-card-head {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 店铺列表行（左列卡片式） */
+.zn-shop {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+}
+.zn-shop:hover {
+  border-color: var(--accent, #4a9eff);
+}
+.zn-shop.active {
+  border-color: var(--accent, #4a9eff);
+}
+.zn-shop-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.zn-shop-meta {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
+}
+.zn-shop-ops {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.zn-shop-state {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  display: inline-block;
+}
+.zn-shop-state.on {
+  color: #0a7d33;
+  background: rgba(16, 185, 129, 0.12);
+}
+.zn-shop-state.off {
+  color: #8a8a8a;
+  background: rgba(128, 128, 128, 0.1);
+}
+
+/* 全量表格（右列表格） */
+.zn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+.zn-table th {
+  text-align: left;
+  padding: 4px 6px;
+  opacity: 0.7;
+}
+.zn-table td {
+  padding: 6px;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+  vertical-align: top;
+}
+.zn-table .mono {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.zn-shot img {
+  max-width: 220px;
+  margin-top: 6px;
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+}
+
+/* ── 测试页（左模块右日志） ── */
+.zn-test {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.zn-test-left {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.zn-test-module {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+}
+.zn-test-module-head {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zn-test-splitter {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: transparent;
+}
+.zn-test-splitter:hover,
+.zn-test-splitter.active {
+  background: var(--border, #444);
+}
+
+.zn-test-log {
+  width: 360px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 0 12px 8px;
+  box-sizing: border-box;
+}
+
+/* ── 规则说明 ── */
+.zn-guide {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary, #aaa);
+}
+.zn-guide code {
+  font-family: var(--font-mono, monospace);
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 4px;
+  padding: 1px 5px;
+}

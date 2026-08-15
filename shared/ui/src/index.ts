@@ -140,3 +140,10 @@ export type { PlatformDef, BrowserOption, PlatformConfigPanelProps } from "./com
 // ── 自动化设置 ──
 export { AutomationSettings } from "./components/AutomationSettings";
 export type { AutomationSettingsProps } from "./components/AutomationSettings";
+
+// ── 紫鸟自动化 ──
+export { ZiniaoStoreList } from "./components/ziniao/ZiniaoStoreList";
+export type { ZiniaoStoreListProps } from "./components/ziniao/ZiniaoStoreList";
+export { ZiniaoOpsPanel } from "./components/ziniao/ZiniaoOpsPanel";
+export { ZiniaoTestPanel } from "./components/ziniao/ZiniaoTestPanel";
+export type { ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
