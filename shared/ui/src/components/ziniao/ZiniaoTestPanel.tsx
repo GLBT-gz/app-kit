@@ -1,23 +1,9 @@
 import { useCallback, useState } from "react";
-import {
-  ziniaoAgentLaunch,
-  ziniaoAgentStatus,
-  ziniaoAgentBrowserList,
-  ziniaoAgentStartBrowser,
-  ziniaoAgentCdpPort,
-  ziniaoAgentRunning,
-  ziniaoAgentClose,
-  ziniaoEval,
-  ziniaoScreenshot,
-  ziniaoPatchStatus,
-  ziniaoPatchApply,
-  isTauriRuntime,
-} from "../../api";
-import type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "../../api";
+import { ziniaoPatchStatus, ziniaoPatchApply } from "../../ziniao-api";
+import { isTauriRuntime } from "../../tauri-utils";
 import { useLog, LogPanel } from "../LogPanel";
+import { useZiniaoAgent } from "../../hooks/useZiniaoAgent";
 import { ZiniaoStoreList } from "./ZiniaoStoreList";
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** 紫鸟补丁状态（对应 tauri ziniao_patch_status） */
 export interface ZiniaoPatchInfo {
@@ -34,130 +20,33 @@ export interface ZiniaoPatchInfo {
  *
  * 参考 Temu 运营工具测试页：左侧功能模块，右侧运行日志。
  * 覆盖：补丁检查/安装、自动打开紫鸟、店铺解析、打开/关闭店铺、CDP 控制、一键验收。
+ * 核心步骤逻辑由公共 hook useZiniaoAgent 提供，本组件只负责布局与补丁模块。
  */
 export function ZiniaoTestPanel() {
-  const [busy, setBusy] = useState(false);
-  const [agent, setAgent] = useState<ZiniaoAgentStatus | null>(null);
-  const [shops, setShops] = useState<ZiniaoAgentBrowser[]>([]);
   const [patch, setPatch] = useState<ZiniaoPatchInfo | null>(null);
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
-  const [shots, setShots] = useState<Record<string, string>>({});
-  const [shopState, setShopState] = useState<Record<string, string>>({});
-  const [running, setRunning] = useState<Set<number>>(new Set());
   const [logWidth, setLogWidth] = useState(360);
 
   const logCtx = useLog({ eventName: null, storageKey: "ziniao:test-log" });
   const { log } = logCtx;
 
-  const setShop = (id: number, st: string) =>
-    setShopState((prev) => ({ ...prev, [String(id)]: st }));
-
-  const refreshRunning = async (port: number) => {
-    const ids = await ziniaoAgentRunning(port);
-    setRunning(new Set(ids));
-    return ids;
-  };
-
-  // ① 打开紫鸟
-  const stepLaunch = async (): Promise<string> => {
-    const r = await ziniaoAgentLaunch();
-    return r.launched ? `已启动紫鸟主程序 (PID ${r.pid})` : `紫鸟已在运行 (PID ${r.pid})`;
-  };
-
-  // ② 店铺列表
-  const stepList = async (): Promise<string> => {
-    const st = await ziniaoAgentStatus();
-    setAgent(st);
-    if (!st.running) return "紫鸟主程序未运行";
-    if (!st.port) {
-      return "未发现 agent_mode 服务：请确认紫鸟已登录且 v10.9 补丁已安装（登录后约 30s 内自动开启）";
-    }
-    const [list, ids] = await Promise.all([
-      ziniaoAgentBrowserList(st.port),
-      refreshRunning(st.port),
-    ]);
-    setShops(list);
-    if (list.length > 0 && selectedShopId === null) setSelectedShopId(list[0].browserId);
-    return `agent_mode 端口 :${st.port}，共 ${list.length} 个店铺，${ids.length} 个已打开`;
-  };
-
-  // ③ 打开店铺
-  const stepOpen = async (shop: ZiniaoAgentBrowser): Promise<string> => {
-    const port = agent?.port;
-    if (!port) throw new Error("请先执行「店铺列表」");
-    setShop(shop.browserId, "直开中…");
-    try {
-      await ziniaoAgentStartBrowser(port, shop.browserId);
-      const cdp = await ziniaoAgentCdpPort(shop.browserId);
-      setShop(shop.browserId, `已直开，CDP :${cdp}（启动中…）`);
-      for (let i = 0; i < 60; i++) {
-        await sleep(1000);
-        const ids = await refreshRunning(port);
-        if (ids.includes(shop.browserId)) {
-          setShop(shop.browserId, "已打开");
-          return `已打开 ${shop.browserName} (browserId=${shop.browserId})，CDP :${cdp}（第 ${i + 1} 秒确认）`;
-        }
-      }
-      return `已请求直开 ${shop.browserName}，60s 内未确认。冷启动含内核下载可能需 1-3 分钟`;
-    } catch (e) {
-      setShop(shop.browserId, "直开失败");
-      throw e;
-    }
-  };
-
-  // 关闭店铺
-  const stepClose = async (shop: ZiniaoAgentBrowser): Promise<string> => {
-    const port = agent?.port;
-    if (!port) throw new Error("请先执行「店铺列表」");
-    setShop(shop.browserId, "关闭中…");
-    try {
-      await ziniaoAgentClose(shop.browserId);
-      for (let i = 0; i < 20; i++) {
-        await sleep(1000);
-        const ids = await refreshRunning(port);
-        if (!ids.includes(shop.browserId)) {
-          setShop(shop.browserId, "已关闭");
-          return `已关闭 ${shop.browserName}（第 ${i + 1} 秒确认）`;
-        }
-      }
-      setShop(shop.browserId, "未确认关闭");
-      return `已发送关闭 ${shop.browserName}，但 20s 内状态仍为运行中`;
-    } catch (e) {
-      setShop(shop.browserId, "关闭失败");
-      throw e;
-    }
-  };
-
-  // ④ CDP 验证
-  const stepCdp = async (shop: ZiniaoAgentBrowser): Promise<string> => {
-    const cdp = await ziniaoAgentCdpPort(shop.browserId);
-    setShop(shop.browserId, "CDP 连接中…");
-    let info = "";
-    for (let i = 0; i < 60; i++) {
-      try {
-        const v = await ziniaoEval(cdp, `JSON.stringify({ title: document.title, url: location.href })`);
-        info = `:${cdp} → ${v}`;
-        break;
-      } catch {
-        await sleep(1500);
-      }
-    }
-    if (!info) {
-      setShop(shop.browserId, "CDP 超时");
-      throw new Error(`CDP :${cdp} 内核 90s 内未就绪（冷启动含内核下载可能更久）`);
-    }
-    let shotNote = "";
-    try {
-      const b64 = await ziniaoScreenshot(cdp);
-      setShots((prev) => ({ ...prev, [String(shop.browserId)]: b64 }));
-      shotNote = `，截图 ${Math.round((b64.length * 3) / 4)}B`;
-    } catch {
-      shotNote = "（截图失败）";
-    }
-    setShop(shop.browserId, "CDP 正常");
-    return `CDP 控制 ${info}${shotNote}`;
-  };
+  const {
+    busy,
+    agent,
+    shops,
+    shots,
+    shopState,
+    running,
+    refreshRunning,
+    stepLaunch,
+    stepList,
+    stepOpen,
+    stepClose,
+    stepCdp,
+    run,
+    acceptAll,
+  } = useZiniaoAgent(log);
 
   // 补丁状态检查
   const stepPatchStatus = async (): Promise<string> => {
@@ -177,47 +66,9 @@ export function ZiniaoTestPanel() {
   };
 
   // 一键验收：补丁检查 → ①→②→③（第一个未打开）→④
-  const acceptAll = async () => {
-    setBusy(true);
-    try {
-      log(`0. 检查补丁 → ${await stepPatchStatus()}`);
-      log(`① 自动打开紫鸟 → ${await stepLaunch()}`);
-      const st = await ziniaoAgentStatus();
-      setAgent(st);
-      if (!st.running || !st.port) {
-        log("② 获取店铺列表 → 未发现 agent_mode 服务（需登录 + v10.9 补丁）", "error");
-        return;
-      }
-      log(`② 获取店铺列表 → agent_mode :${st.port}，拉取中…`);
-      const list = await ziniaoAgentBrowserList(st.port);
-      const ids = await refreshRunning(st.port);
-      setShops(list);
-      log(`  共 ${list.length} 个店铺，${ids.length} 个已打开`);
-      if (list.length === 0) return;
-      const first = list.find((s) => !ids.includes(s.browserId)) ?? list[0];
-      setSelectedShopId(first.browserId);
-      log(`③ 打开店铺 → ${first.browserName} (browserId=${first.browserId})`);
-      await ziniaoAgentStartBrowser(st.port, first.browserId);
-      const cdp = await ziniaoAgentCdpPort(first.browserId);
-      log(`  直开请求成功，等待内核就绪 (:${cdp})…`);
-      log(`④ CDP 控制 → ${await stepCdp(first)}`);
-      log("✅ 全部通过", "success");
-    } catch (e) {
-      log(`验收失败: ${e}`, "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const run = async (label: string, fn: () => Promise<string>) => {
-    setBusy(true);
-    try {
-      log(`${label} → ${await fn()}`);
-    } catch (e) {
-      log(`${label} 失败: ${e}`, "error");
-    } finally {
-      setBusy(false);
-    }
+  const acceptAllWithPatch = async () => {
+    log(`0. 检查补丁 → ${await stepPatchStatus()}`);
+    acceptAll((first) => setSelectedShopId(first.browserId));
   };
 
   // 选中店铺对象
@@ -267,7 +118,7 @@ export function ZiniaoTestPanel() {
           <div className="zn-test-module-head">一键验收</div>
           <div className="zn-hint">补丁检查 → 打开紫鸟 → 店铺列表 → 打开首个未打开店铺 → CDP 验证（含截图）</div>
           <div>
-            <button className="zn-btn primary" disabled={busy} onClick={acceptAll}>
+            <button className="zn-btn primary" disabled={busy} onClick={acceptAllWithPatch}>
               {busy ? "验收中…" : "▶ 一键验收"}
             </button>
           </div>

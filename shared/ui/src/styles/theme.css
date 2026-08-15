@@ -31,6 +31,7 @@
 
   --success: #4caf88;
   --error: #e05555;
+  --warn: #eab308;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
   --font-mono: "Maple Mono", Consolas, "Cascadia Code", "Fira Code", monospace;
@@ -90,6 +91,7 @@ html[data-theme="light"] {
 
   --success: #4caf88;
   --error: #e05555;
+  --warn: #b8860b;
 
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   --btn-text: #ffffff;

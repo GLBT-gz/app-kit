@@ -1,4 +1,4 @@
-import type { ZiniaoAgentBrowser } from "../../api";
+import type { ZiniaoAgentBrowser } from "../../ziniao-api";
 
 /**
  * 紫鸟店铺列表表格（公共组件）

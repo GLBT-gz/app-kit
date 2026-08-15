@@ -30,6 +30,12 @@ export {
   detectDebugPorts,
   detectBrowserRunningProcesses,
   testBrowserAutomation,
+} from "./api";
+export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
+export { isTauriRuntime } from "./tauri-utils";
+
+// ── 紫鸟自动化 API（独立模块，保持 api.ts 中性） ──
+export {
   ziniaoPatchStatus,
   ziniaoPatchApply,
   ziniaoListEnvs,
@@ -46,11 +52,9 @@ export {
   ziniaoAgentCdpPort,
   ziniaoAgentRunning,
   ziniaoAgentClose,
-} from "./api";
-export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
-export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./api";
-export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./api";
-export { isTauriRuntime } from "./api";
+} from "./ziniao-api";
+export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
+export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";
@@ -81,6 +85,8 @@ export { usePlatformOptions } from "./hooks/usePlatformOptions";
 export { usePlatformSelections } from "./hooks/usePlatformSelections";
 export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";
 export { useWheelTabSwitch } from "./hooks/useWheelTabSwitch";
+export { useZiniaoAgent } from "./hooks/useZiniaoAgent";
+export type { UseZiniaoAgentReturn, ZnLogFn, SetShopState } from "./hooks/useZiniaoAgent";
 
 // 工具
 export {

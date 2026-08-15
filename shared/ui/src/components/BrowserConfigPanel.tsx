@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { safeGetJSON, safeSetJSON, LS_KEYS } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses, ziniaoPatchStatus, ziniaoPatchApply } from "../api";
+import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses } from "../api";
+import { ziniaoPatchStatus, ziniaoPatchApply } from "../ziniao-api";
 import type { ChildBrowserConfig } from "../types";
 
 // ════════════════════════════════════════════
