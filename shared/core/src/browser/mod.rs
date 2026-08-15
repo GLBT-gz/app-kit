@@ -2,6 +2,13 @@ pub mod edge_avatars;
 pub mod icons;
 pub mod launch;
 pub mod management;
+// management.rs 拆出的实现子模块（pub 项经 management 重导出）
+mod browser_register;
+mod browser_process;
+mod browser_kill;
+mod browser_avatar;
+mod browser_paths;
+mod browser_profiles;
 pub mod profile;
 
 use serde::{Deserialize, Serialize};
