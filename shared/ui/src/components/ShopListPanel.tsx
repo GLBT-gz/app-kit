@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { Switch } from "./controls/Switch";
 
 // ═══════════════════════════════════════════════════════════
 // ShopListPanel —— 店铺列表面板（收敛 002/003 各页面重复实现）：
@@ -246,10 +247,12 @@ export function ShopListPanel({
                   {shopSummaries?.[s.mall_name] && <span className="temu-shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
                 </div>
               </div>
-              <div className="temu-toggle" onMouseDown={(e) => handleToggleMouseDown(e, s.mall_name)}>
-                <input type="checkbox" checked={!!enabledMap[s.mall_name]} readOnly />
-                <span className="temu-toggle-track"><span className="temu-toggle-thumb" /></span>
-              </div>
+              <Switch
+                checked={!!enabledMap[s.mall_name]}
+                onMouseDown={(e) => handleToggleMouseDown(e, s.mall_name)}
+                onChange={() => {}}
+                readOnly
+              />
             </div>,
           ]).concat(
             <div key={`gap-${orderedShops.length}`} className={`drop-indicator${dropIdx === orderedShops.length ? " active" : ""}`} />

@@ -157,44 +157,6 @@
   color: var(--text-muted);
 }
 
-.temu-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.temu-toggle input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.temu-toggle-track {
-  width: 30px;
-  height: 17px;
-  background: var(--border);
-  border-radius: 9px;
-  position: relative;
-  transition: background 0.2s;
-}
-.temu-toggle input:checked + .temu-toggle-track {
-  background: var(--accent);
-}
-.temu-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 13px;
-  height: 13px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-}
-.temu-toggle input:checked + .temu-toggle-track .temu-toggle-thumb {
-  transform: translateX(13px);
-}
-
 .temu-shop-section {
   flex: 1;
   display: flex;
