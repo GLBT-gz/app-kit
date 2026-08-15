@@ -223,6 +223,14 @@
   background: var(--bg-badge, #252736);
 }
 
+/* 汇总表（如 001 采购订单按 SKU 汇总） */
+.log-entry-summary-table {
+  margin-top: 6px;
+}
+.log-entry-summary-table th {
+  color: var(--accent, #3b82f6);
+}
+
 /* ── 折叠模式：最小化面板 ── */
 .log-panel-collapsible.log-panel:not(:has(.log-panel-body)) .log-panel-header {
   border-bottom: none;

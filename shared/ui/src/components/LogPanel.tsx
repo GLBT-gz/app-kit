@@ -17,6 +17,9 @@ export type LogLevel = "info" | "success" | "error" | "warn" | "step" | "debug";
 export interface LogTable {
   headers: string[];
   rows: string[][];
+  /** 可选：汇总表（如 001 采购订单的"按 SKU 汇总"统计表） */
+  summaryHeaders?: string[];
+  summaryRows?: string[][];
 }
 
 /** 单条日志条目 */
@@ -169,14 +172,24 @@ export function useLog(options?: {
   useEffect(() => {
     if (!eventName) return;
 
-    const unlistenPromise = listen<{ level?: string; msg?: string; headers?: string[]; rows?: string[][] }>(
+    const unlistenPromise = listen<{
+      level?: string;
+      msg?: string;
+      headers?: string[];
+      rows?: string[][];
+      summaryHeaders?: string[];
+      summaryRows?: string[][];
+    }>(
       eventName,
       (event) => {
         const level = (event.payload?.level as LogLevel) ?? "info";
         const msg = event.payload?.msg ?? "";
         const headers = event.payload?.headers;
         const rows = event.payload?.rows;
-        const table = headers && rows ? { headers, rows } : undefined;
+        const summaryHeaders = event.payload?.summaryHeaders;
+        const summaryRows = event.payload?.summaryRows;
+        const hasSummary = !!summaryHeaders && !!summaryRows && summaryHeaders.length > 0 && summaryRows.length > 0;
+        const table = headers && rows ? { headers, rows, ...(hasSummary ? { summaryHeaders, summaryRows } : {}) } : undefined;
         if (msg || table) addLog(msg || "", level, table);
       },
     );
@@ -364,59 +377,90 @@ function LogEntryItem({ entry }: { entry: LogEntry }) {
         <span className="log-entry-msg">{entry.msg}</span>
       </div>
 
-      {/* 内嵌表格 */}
+      {/* 内嵌表格（主表 + 可选汇总表） */}
       {entry.table && entry.table.headers && entry.table.rows && (
         <div className="log-entry-table-wrap">
-          <table className="log-entry-table">
-            <thead>
-              <tr>
-                {entry.table.headers.map((h, i) => (
-                  <th key={i}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                // 计算第一列的 rowSpan（连续重复值合并）
-                const rows = entry.table!.rows;
-                const spans: (number | undefined)[] = [];
-                for (let i = 0; i < rows.length; i++) {
-                  if (i === 0 || rows[i][0] !== rows[i - 1][0] || rows[i][2] !== rows[i - 1][2]) {
-                    let count = 1;
-                    for (let j = i + 1; j < rows.length; j++) {
-                      if (rows[j][0] === rows[i][0] && rows[j][2] === rows[i][2]) count++;
-                      else break;
-                    }
-                    spans[i] = count;
-                  } else {
-                    spans[i] = undefined;
-                  }
-                }
-                return rows.map((row, ri) => (
+          <MainTable table={entry.table} />
+          {entry.table.summaryHeaders &&
+            entry.table.summaryHeaders.length > 0 &&
+            entry.table.summaryRows &&
+            entry.table.summaryRows.length > 0 && (
+            <table className="log-entry-table log-entry-summary-table">
+              <thead>
+                <tr>
+                  {entry.table.summaryHeaders.map((h, i) => (
+                    <th key={i}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entry.table.summaryRows.map((row, ri) => (
                   <tr key={ri}>
-                    {row.map((cell, ci) => {
-                      if (ci === 0) {
-                        const span = spans[ri];
-                        if (span === undefined) return null;
-                        return <td key={ci} rowSpan={span}>{cell}</td>;
-                      }
-                      // 特殊列颜色
-                      const h = entry.table!.headers[ci];
-                      let cellStyle: React.CSSProperties | undefined;
-                      if (h === '公式得数/备货件数' && cell !== '-') {
-                         const salesIdx = entry.table!.headers.indexOf('近7日销量');
-                         const s = salesIdx >= 0 ? parseInt(row[salesIdx]) : NaN;
-                         cellStyle = { color: !isNaN(s) && s >= 5 ? '#2563eb' : '#93c5fd', fontWeight: 600 };
-                       }
-                      return <td key={ci} style={cellStyle}>{cell}</td>;
-                    })}
+                    {row.map((cell, ci) => (
+                      <td key={ci}>{cell}</td>
+                    ))}
                   </tr>
-                ));
-              })()}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// ── 主表渲染（第一列按连续重复值合并 rowSpan，特殊列着色） ──
+
+function MainTable({ table }: { table: LogTable }) {
+  return (
+    <table className="log-entry-table">
+      <thead>
+        <tr>
+          {table.headers.map((h, i) => (
+            <th key={i}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {(() => {
+          // 计算第一列的 rowSpan（连续重复值合并）
+          const rows = table.rows;
+          const spans: (number | undefined)[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            if (i === 0 || rows[i][0] !== rows[i - 1][0] || rows[i][2] !== rows[i - 1][2]) {
+              let count = 1;
+              for (let j = i + 1; j < rows.length; j++) {
+                if (rows[j][0] === rows[i][0] && rows[j][2] === rows[i][2]) count++;
+                else break;
+              }
+              spans[i] = count;
+            } else {
+              spans[i] = undefined;
+            }
+          }
+          return rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => {
+                if (ci === 0) {
+                  const span = spans[ri];
+                  if (span === undefined) return null;
+                  return <td key={ci} rowSpan={span}>{cell}</td>;
+                }
+                // 特殊列颜色
+                const h = table.headers[ci];
+                let cellStyle: React.CSSProperties | undefined;
+                if (h === '公式得数/备货件数' && cell !== '-') {
+                  const salesIdx = table.headers.indexOf('近7日销量');
+                  const s = salesIdx >= 0 ? parseInt(row[salesIdx]) : NaN;
+                  cellStyle = { color: !isNaN(s) && s >= 5 ? '#2563eb' : '#93c5fd', fontWeight: 600 };
+                }
+                return <td key={ci} style={cellStyle}>{cell}</td>;
+              })}
+            </tr>
+          ));
+        })()}
+      </tbody>
+    </table>
   );
 }
