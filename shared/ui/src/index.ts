@@ -42,6 +42,7 @@ export {
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./api";
+export { isTauriRuntime } from "./api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";

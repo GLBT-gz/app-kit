@@ -5,12 +5,31 @@ import type { AppConfig, BrowserInfo, LaunchInfo, PortEntry, BrowserProcessState
 const PLUGIN_PREFIX = "plugin:appkit-core|";
 
 /**
+ * 是否运行在 Tauri 运行时中。
+ *
+ * 在浏览器里直接打开 vite dev server 时没有 `window.__TAURI_INTERNALS__`，
+ * 此时 `@tauri-apps/api` 的 invoke 会抛 `Cannot read properties of undefined (reading 'invoke')`。
+ * 所有 Tauri 命令调用前应先检测，给出友好提示而非裸 TypeError。
+ */
+export function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+}
+
+/** 非 Tauri 环境下的统一错误信息 */
+export function tauriRuntimeError(cmd: string): Error {
+  return new Error(
+    `命令 ${cmd} 需要 Tauri 运行时。当前处于浏览器预览模式（vite dev server），请通过桌面应用运行：npm run tauri dev`
+  );
+}
+
+/**
  * 带诊断提示的插件命令调用
  *
  * 当命令未找到时，在控制台输出清晰的排查指引，
  * 避免"Command xxx not found"这种难以定位的错误。
  */
 async function pluginInvoke<T>(cmdName: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauriRuntime()) throw tauriRuntimeError(cmdName);
   const fullCmd = PLUGIN_PREFIX + cmdName;
   try {
     return await tauriInvoke<T>(fullCmd, args);
@@ -70,11 +89,13 @@ export async function ziniaoPatchStatus(): Promise<{
   main_index_len: number;
   detail: string;
 }> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_patch_status");
   return tauriInvoke("ziniao_patch_status");
 }
 
 /** 一键打补丁（重打包 + 提权覆盖，会弹 UAC） */
 export async function ziniaoPatchApply(): Promise<string> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_patch_apply");
   return tauriInvoke("ziniao_patch_apply");
 }
 
@@ -106,36 +127,43 @@ export interface ZiniaoEvalResult {
 
 /** 列出所有运行中紫鸟环境（含标签页） */
 export async function ziniaoListEnvs(): Promise<ZiniaoEnvStatus[]> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_list_envs");
   return tauriInvoke("ziniao_list_envs");
 }
 
 /** 列出指定端口环境的标签页 */
 export async function ziniaoListTabs(port: number): Promise<ZiniaoTab[]> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_list_tabs");
   return tauriInvoke("ziniao_list_tabs", { port });
 }
 
 /** 在指定环境新建标签页并导航 */
 export async function ziniaoOpenTab(port: number, url: string): Promise<string> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_open_tab");
   return tauriInvoke("ziniao_open_tab", { port, url });
 }
 
 /** 指定环境第一个页面标签页导航 */
 export async function ziniaoNavigate(port: number, url: string): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_navigate");
   return tauriInvoke("ziniao_navigate", { port, url });
 }
 
 /** 指定环境执行 JS */
 export async function ziniaoEval(port: number, js: string): Promise<unknown> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval");
   return tauriInvoke("ziniao_eval", { port, js });
 }
 
 /** 所有运行中环境批量执行 JS */
 export async function ziniaoEvalAll(js: string): Promise<ZiniaoEvalResult[]> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval_all");
   return tauriInvoke("ziniao_eval_all", { js });
 }
 
 /** 指定环境截图，返回 PNG base64 */
 export async function ziniaoScreenshot(port: number): Promise<string> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_screenshot");
   return tauriInvoke("ziniao_screenshot", { port });
 }
 
