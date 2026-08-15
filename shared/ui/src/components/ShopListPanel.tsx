@@ -40,6 +40,8 @@ export interface ShopListPanelProps {
   hint?: string;
   /** 显示 全选/全不选/默认选择 按钮组 */
   showBulkButtons?: boolean;
+  /** 店铺无主体（entity）时显示「未配置主体」标签（仅 Temu 每周店铺分析等需要按主体核算的场景开启） */
+  showNoEntity?: boolean;
   /** 批量切换开始时回调（003 用于写日志） */
   onBatchToggle?: (togglingTo: boolean) => void;
   /** 批量切换结束（mouseup/离开）回调（003 用于写日志） */
@@ -72,6 +74,7 @@ export function ShopListPanel({
   currentShop,
   hint,
   showBulkButtons = false,
+  showNoEntity = false,
   onBatchToggle,
   onBatchEnd,
   emptyText = "暂无店铺数据",
@@ -243,7 +246,7 @@ export function ShopListPanel({
                 </div>
                 <div className="temu-shop-meta">
                   <span className="temu-shop-sub">{(s.alias || s.mall_name)}{s.owner ? ` · ${s.owner}` : ""}</span>
-                  {!s.entity && <span className="temu-no-entity">未配置主体</span>}
+                  {showNoEntity && !s.entity && <span className="temu-no-entity">未配置主体</span>}
                   {shopSummaries?.[s.mall_name] && <span className="temu-shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
                 </div>
               </div>
