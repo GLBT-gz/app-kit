@@ -179,6 +179,12 @@ export async function ziniaoAgentRunning(port: number): Promise<number[]> {
   return tauriInvoke("ziniao_agent_running", { port });
 }
 
+/** 官方关闭指定环境（agent_mode stopBrowser action，需端口；失败可回退 CDP close） */
+export async function ziniaoAgentStopBrowser(port: number, browserId: number): Promise<unknown> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_stop_browser");
+  return tauriInvoke("ziniao_agent_stop_browser", { port, browserId });
+}
+
 /** 关闭指定环境（CDP Browser.close，等价窗口关闭） */
 export async function ziniaoAgentClose(browserId: number): Promise<void> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_close");

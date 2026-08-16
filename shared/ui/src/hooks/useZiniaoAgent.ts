@@ -8,6 +8,7 @@ import {
   ziniaoAgentStartBrowser,
   ziniaoAgentCdpPort,
   ziniaoAgentRunning,
+  ziniaoAgentStopBrowser,
   ziniaoAgentClose,
   ziniaoActivate,
   ziniaoEnterShop,
@@ -130,12 +131,17 @@ export function useZiniaoAgent(log: ZnLogFn) {
     }
   };
 
-  // 关闭店铺（CDP Browser.close）
+  // 关闭店铺：优先 agent_mode 官方 stopBrowser（走紫鸟状态清理），失败回退 CDP Browser.close
   const stepClose = async (shop: ZiniaoAgentBrowser): Promise<string> => {
     const port = await ensurePort();
     setShop(shop.browserId, "关闭中…");
     try {
-      await ziniaoAgentClose(shop.browserId);
+      try {
+        await ziniaoAgentStopBrowser(port, shop.browserId);
+      } catch (e) {
+        log(`官方 stopBrowser 失败，回退 CDP close: ${e}`, "warn");
+        await ziniaoAgentClose(shop.browserId);
+      }
       for (let i = 0; i < 20; i++) {
         await sleep(1000);
         const ids = await refreshRunning(port);
