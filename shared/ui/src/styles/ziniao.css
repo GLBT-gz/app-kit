@@ -51,10 +51,6 @@
   border-color: var(--error);
   color: var(--error);
 }
-.zn-btn.primary {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
 .zn-badge {
   font-size: 12px;
@@ -155,60 +151,4 @@
   margin-top: 6px;
   border: 1px solid var(--border);
   border-radius: 4px;
-}
-
-/* ── 测试页（左模块右日志） ── */
-.zn-test {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.zn-test-left {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-sizing: border-box;
-}
-
-.zn-test-module {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bg-card);
-}
-.zn-test-module-head {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.zn-test-splitter {
-  width: 4px;
-  cursor: col-resize;
-  flex-shrink: 0;
-  border-radius: 2px;
-  background: transparent;
-}
-.zn-test-splitter:hover,
-.zn-test-splitter.active {
-  background: var(--border);
-}
-
-.zn-test-log {
-  width: 360px;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 12px 0 12px 8px;
-  box-sizing: border-box;
 }

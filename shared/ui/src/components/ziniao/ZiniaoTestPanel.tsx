@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import {
   ziniaoPatchStatus,
   ziniaoPatchApply,
@@ -8,7 +8,8 @@ import {
   ziniaoScreenshot,
 } from "../../ziniao-api";
 import { isTauriRuntime } from "../../tauri-utils";
-import { useLog, LogPanel } from "../LogPanel";
+import { useLog } from "../LogPanel";
+import { TestSection, TestPageLayout } from "../TestLayout";
 import { useZiniaoAgent } from "../../hooks/useZiniaoAgent";
 import { ZiniaoStoreList } from "./ZiniaoStoreList";
 
@@ -25,8 +26,8 @@ export interface ZiniaoPatchInfo {
 /**
  * 紫鸟测试页（公共组件）
  *
- * 参考 Temu 运营工具测试页：左侧功能模块，右侧运行日志。
- * 覆盖：补丁检查/安装、自动打开紫鸟、店铺解析、打开/关闭店铺、CDP 控制、一键验收。
+ * 布局参考 007 库存周转测试页：左侧测试模块（TestSection 卡片，序号从 1 开始），右侧可拖拽日志栏。
+ * 覆盖：补丁检查/安装、自动打开紫鸟、店铺解析、打开/关闭店铺、CDP 控制。
  * 核心步骤逻辑由公共 hook useZiniaoAgent 提供，本组件只负责布局与补丁模块。
  */
 export function ZiniaoTestPanel() {
@@ -55,7 +56,6 @@ export function ZiniaoTestPanel() {
     stepClose,
     stepCdp,
     run,
-    acceptAll,
   } = useZiniaoAgent(log);
 
   // 补丁状态检查
@@ -73,12 +73,6 @@ export function ZiniaoTestPanel() {
     const msg = await ziniaoPatchApply();
     setPatchNote(msg);
     return msg;
-  };
-
-  // 一键验收：补丁检查 → ①→②→③（第一个未打开）→④
-  const acceptAllWithPatch = async () => {
-    log(`0. 检查补丁 → ${await stepPatchStatus()}`);
-    acceptAll((first) => setSelectedShopId(first.browserId));
   };
 
   // 对选中店铺执行 JS
@@ -110,26 +104,6 @@ export function ZiniaoTestPanel() {
   // 选中店铺对象
   const selectedShop = shops.find((s) => s.browserId === selectedShopId) ?? null;
 
-  // 日志宽度拖拽
-  const handleSplitterDown = useCallback(() => {
-    const onMove = (ev: MouseEvent) => {
-      const rect = document.querySelector(".zn-test")?.getBoundingClientRect();
-      if (!rect) return;
-      const w = rect.right - ev.clientX;
-      setLogWidth(Math.min(Math.max(w, 240), 600));
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, []);
-
   const shopSelect = (
     <select
       className="zn-input"
@@ -147,21 +121,20 @@ export function ZiniaoTestPanel() {
   );
 
   return (
-    <div className="zn-test">
-      {/* 左侧：功能模块 */}
-      <div className="zn-test-left">
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">一键验收</div>
-          <div className="zn-hint">补丁检查 → 打开紫鸟 → 店铺列表 → 打开首个未打开店铺 → CDP 验证（含截图）</div>
-          <div>
-            <button className="zn-btn primary" disabled={busy} onClick={acceptAllWithPatch}>
-              {busy ? "验收中…" : "▶ 一键验收"}
-            </button>
-          </div>
+    <TestPageLayout
+      log={logCtx}
+      logWidth={logWidth}
+      onLogWidthChange={setLogWidth}
+      minWidth={240}
+      emptyText="选择模块后点击「运行」查看输出"
+    >
+      <div className="test-modules">
+        <div className="test-panel-header">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+          <span>紫鸟功能测试</span>
         </div>
 
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">0. 紫鸟补丁（自动化集成配置）</div>
+        <TestSection title="1. 紫鸟补丁（自动化集成配置）">
           <div className="zn-shop-ops">
             <button className="zn-btn" disabled={busy} onClick={() => run("检查补丁", stepPatchStatus)}>
               检查补丁状态
@@ -177,10 +150,9 @@ export function ZiniaoTestPanel() {
           </div>
           {patch && <div className="zn-hint">detail: {patch.detail}</div>}
           {patchNote && <div className="zn-hint">提示: {patchNote}</div>}
-        </div>
+        </TestSection>
 
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">① 自动打开紫鸟（启动后请手动登录）</div>
+        <TestSection title="2. 自动打开紫鸟（启动后请手动登录）">
           <div className="zn-shop-ops">
             <button className="zn-btn" disabled={busy} onClick={() => run("打开紫鸟", stepLaunch)}>
               打开紫鸟
@@ -191,10 +163,9 @@ export function ZiniaoTestPanel() {
               <span className="zn-badge warn">未检测到运行中</span>
             )}
           </div>
-        </div>
+        </TestSection>
 
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">② 店铺列表（解析已有店铺）</div>
+        <TestSection title="3. 店铺列表（解析已有店铺）">
           <div className="zn-shop-ops">
             <button className="zn-btn" disabled={busy} onClick={() => run("获取店铺列表", stepList)}>
               获取店铺列表
@@ -216,10 +187,9 @@ export function ZiniaoTestPanel() {
               {shops.length} 个店铺 / 运行 {running.size}
             </span>
           </div>
-        </div>
+        </TestSection>
 
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">③ 打开 / 关闭店铺</div>
+        <TestSection title="4. 打开 / 关闭店铺">
           <div className="zn-shop-ops">{shopSelect}</div>
           <div className="zn-shop-ops">
             <button
@@ -237,10 +207,9 @@ export function ZiniaoTestPanel() {
               关闭选中店铺
             </button>
           </div>
-        </div>
+        </TestSection>
 
-        <div className="zn-test-module">
-          <div className="zn-test-module-head">④ CDP 控制（验证 / JS / 导航 / 截图）</div>
+        <TestSection title="5. CDP 控制（验证 / JS / 导航 / 截图）">
           <div className="zn-shop-ops">{shopSelect}</div>
           <div className="zn-shop-ops">
             <button
@@ -280,11 +249,10 @@ export function ZiniaoTestPanel() {
               截图
             </button>
           </div>
-        </div>
+        </TestSection>
 
         {shops.length > 0 && (
-          <div className="zn-test-module">
-            <div className="zn-test-module-head">店铺明细</div>
+          <TestSection title="6. 店铺明细">
             <ZiniaoStoreList
               shops={shops}
               running={running}
@@ -295,21 +263,13 @@ export function ZiniaoTestPanel() {
               onClose={(s) => run(`关闭 ${s.browserName}`, () => stepClose(s))}
               onCdp={(s) => run(`CDP ${s.browserName}`, () => stepCdp(s))}
             />
-          </div>
+          </TestSection>
         )}
 
         {!isTauriRuntime() && (
           <div className="zn-error">当前处于浏览器预览模式（无 Tauri 运行时），无法调用紫鸟命令。请通过桌面应用运行。</div>
         )}
       </div>
-
-      {/* 拖拽分隔条 */}
-      <div className="zn-test-splitter" onMouseDown={handleSplitterDown} title="拖拽调整日志宽度" />
-
-      {/* 右侧：日志 */}
-      <div className="zn-test-log" style={{ width: logWidth }}>
-        <LogPanel log={logCtx} title="运行日志" emptyText="选择模块后点击「运行」查看输出" />
-      </div>
-    </div>
+    </TestPageLayout>
   );
 }
