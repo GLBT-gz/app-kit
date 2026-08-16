@@ -201,11 +201,13 @@ export function useZiniaoAgent(log: ZnLogFn) {
     return `已进入 ${shop.browserName} :${cdp} → ${msg}`;
   };
 
-  // 统一 log 包装：label + fn()，busy 包裹
-  const run = async (label: string, fn: () => Promise<string>) => {
+  // 统一 log 包装：label + fn()，busy 包裹。
+  // quiet=true 时不再输出汇总行（调用方已自行分级输出明细/汇总）。
+  const run = async (label: string, fn: () => Promise<string>, quiet = false) => {
     setBusy(true);
     try {
-      log(`${label} → ${await fn()}`);
+      const msg = await fn();
+      if (!quiet) log(`${label} → ${msg}`);
     } catch (e) {
       log(`${label} 失败: ${e}`, "error");
     } finally {
