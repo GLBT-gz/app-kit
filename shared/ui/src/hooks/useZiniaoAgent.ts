@@ -196,6 +196,16 @@ export function useZiniaoAgent(log: ZnLogFn) {
     }
   };
 
+  // 并发版：不设置全局 busy，多个操作可并行执行（乐观更新）。
+  // 用于达人寄样页左侧单店铺操作（打开/关闭/进入），批量/串行场景仍用 run。
+  const runAsync = async (label: string, fn: () => Promise<string>) => {
+    try {
+      log(`${label} → ${await fn()}`);
+    } catch (e) {
+      log(`${label} 失败: ${e}`, "error");
+    }
+  };
+
   // 一键验收：①→②→③（第一个未打开店铺）→④
   const acceptAll = async (onFirst: (shop: ZiniaoAgentBrowser) => void) => {
     setBusy(true);
@@ -251,6 +261,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     stepEnter,
     stepEnterShop,
     run,
+    runAsync,
     acceptAll,
   };
 }
