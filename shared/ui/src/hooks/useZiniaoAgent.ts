@@ -100,10 +100,13 @@ export function useZiniaoAgent(log: ZnLogFn) {
 
   // ③ 打开店铺（browserId 必须传字符串，后端处理）；确认打开后自动进入店铺
   // （处于紫鸟检测页时自动点击「打开账号」，页面加载中则重试，无需手动进入）
+  // 全程分步日志：准备打开 → 正在直开 → 已打开自动进入 → 进入成功/失败
   const stepOpen = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    log(`准备打开 ${shop.browserName} (browserId=${shop.browserId})…`, "step");
     const port = await ensurePort();
     setShop(shop.browserId, "直开中…");
     try {
+      log(`正在直开 ${shop.browserName}（请求 agent 服务）…`, "info");
       await ziniaoAgentStartBrowser(port, shop.browserId);
       const cdp = await ziniaoAgentCdpPort(shop.browserId);
       setShop(shop.browserId, `已直开，CDP :${cdp}（启动中…）`);
@@ -111,7 +114,8 @@ export function useZiniaoAgent(log: ZnLogFn) {
         await sleep(1000);
         const ids = await refreshRunning(port);
         if (ids.includes(shop.browserId)) {
-          setShop(shop.browserId, "已打开，进入中…");
+          setShop(shop.browserId, "已打开，自动进入店铺…");
+          log(`已打开 ${shop.browserName}，自动进入店铺（检测「打开账号」页）…`, "info");
           // 自动进入：内核刚起页面可能未加载完，最多重试 5 次（每次间隔 2s）
           let enterNote = "";
           for (let t = 0; t < 5; t++) {
@@ -119,31 +123,38 @@ export function useZiniaoAgent(log: ZnLogFn) {
               const msg = await ziniaoEnterShop(cdp);
               setShop(shop.browserId, "已进入");
               enterNote = `，已自动进入：${msg}`;
+              log(`已成功进入 ${shop.browserName}：${msg}`, "success");
               break;
             } catch (e) {
               if (t === 4) {
                 enterNote = `，自动进入未完成: ${e}`;
+                log(`自动进入 ${shop.browserName} 未完成：${e}`, "warn");
               } else {
                 await sleep(2000);
               }
             }
           }
-          return `已打开 ${shop.browserName} (browserId=${shop.browserId})，CDP :${cdp}（第 ${i + 1} 秒确认）${enterNote}`;
+          return `已成功打开 ${shop.browserName} (browserId=${shop.browserId})，CDP :${cdp}（第 ${i + 1} 秒确认）${enterNote}`;
         }
       }
-      return `已请求直开 ${shop.browserName}，60s 内未确认。冷启动含内核下载可能需 1-3 分钟`;
+      const failMsg = `已请求直开 ${shop.browserName}，60s 内未确认（冷启动含内核下载可能需 1-3 分钟）`;
+      log(failMsg, "warn");
+      return failMsg;
     } catch (e) {
       setShop(shop.browserId, "直开失败");
+      log(`打开 ${shop.browserName} 失败: ${e}`, "error");
       throw e;
     }
   };
 
   // 关闭店铺：优先 agent_mode 官方 stopBrowser（走紫鸟状态清理），失败回退 CDP Browser.close
   const stepClose = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    log(`准备关闭 ${shop.browserName} (browserId=${shop.browserId})…`, "step");
     const port = await ensurePort();
     setShop(shop.browserId, "关闭中…");
     try {
       try {
+        log(`正在关闭 ${shop.browserName}（请求 agent 停止）…`, "info");
         await ziniaoAgentStopBrowser(port, shop.browserId);
       } catch (e) {
         log(`官方 stopBrowser 失败，回退 CDP close: ${e}`, "warn");
@@ -154,13 +165,16 @@ export function useZiniaoAgent(log: ZnLogFn) {
         const ids = await refreshRunning(port);
         if (!ids.includes(shop.browserId)) {
           setShop(shop.browserId, "已关闭");
+          log(`已成功关闭 ${shop.browserName}（第 ${i + 1} 秒确认）`, "success");
           return `已关闭 ${shop.browserName}（第 ${i + 1} 秒确认）`;
         }
       }
-      setShop(shop.browserId, "未确认关闭");
-      return `已发送关闭 ${shop.browserName}，但 20s 内状态仍为运行中`;
+      const failMsg = `已发送关闭 ${shop.browserName}，但 20s 内状态仍为运行中`;
+      log(failMsg, "warn");
+      return failMsg;
     } catch (e) {
       setShop(shop.browserId, "关闭失败");
+      log(`关闭 ${shop.browserName} 失败: ${e}`, "error");
       throw e;
     }
   };
@@ -200,17 +214,21 @@ export function useZiniaoAgent(log: ZnLogFn) {
 
   // 进入店铺（激活页面窗口置前，不重新打开；适用于已打开的环境）
   const stepEnter = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    log(`准备激活 ${shop.browserName}…`, "step");
     const cdp = await ziniaoAgentCdpPort(shop.browserId);
     await ziniaoActivate(cdp);
     setShop(shop.browserId, "已激活");
+    log(`已成功激活 ${shop.browserName} (CDP :${cdp})`, "success");
     return `已进入 ${shop.browserName}（激活 :${cdp}）`;
   };
 
   // 进入店铺（含「打开账号」）：激活 + 若处于紫鸟账号检测扩展页则点击「打开账号」进入真实页面
   const stepEnterShop = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    log(`准备进入 ${shop.browserName}（检测「打开账号」页）…`, "step");
     const cdp = await ziniaoAgentCdpPort(shop.browserId);
     const msg = await ziniaoEnterShop(cdp);
     setShop(shop.browserId, "已进入");
+    log(`已成功进入 ${shop.browserName}：${msg}`, "success");
     return `已进入 ${shop.browserName} :${cdp} → ${msg}`;
   };
 
