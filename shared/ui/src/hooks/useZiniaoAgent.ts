@@ -108,14 +108,22 @@ export function useZiniaoAgent(log: ZnLogFn) {
     try {
       log(`正在直开 ${shop.browserName}（请求 agent 服务）…`, "info");
       await ziniaoAgentStartBrowser(port, shop.browserId);
-      const cdp = await ziniaoAgentCdpPort(shop.browserId);
-      setShop(shop.browserId, `已直开，CDP :${cdp}（启动中…）`);
+      setShop(shop.browserId, "已直开（启动中…）");
       for (let i = 0; i < 60; i++) {
         await sleep(1000);
         const ids = await refreshRunning(port);
         if (ids.includes(shop.browserId)) {
+          // 确认打开后再取 CDP 端口：内核已监听，公式或扫描探测才可靠
+          let cdp = 0;
+          try {
+            cdp = await ziniaoAgentCdpPort(shop.browserId);
+          } catch (e) {
+            log(`获取 ${shop.browserName} CDP 端口失败（跳过自动进入）：${e}`, "warn");
+            setShop(shop.browserId, "已打开");
+            return `已成功打开 ${shop.browserName} (browserId=${shop.browserId})（第 ${i + 1} 秒确认，CDP 未知）`;
+          }
           setShop(shop.browserId, "已打开，自动进入店铺…");
-          log(`已打开 ${shop.browserName}，自动进入店铺（检测「打开账号」页）…`, "info");
+          log(`已打开 ${shop.browserName}（CDP :${cdp}），自动进入店铺…`, "info");
           // 自动进入：前端驱动轮询（每轮输出状态，替代 30s 无反馈黑盒）。
           // 最多 6 轮，每轮约 1-2s + 间隔 2.5s；找不到时后端 note 会列出内核 target 定位
           let enterNote = "";
