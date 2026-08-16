@@ -9,6 +9,7 @@ import {
   ziniaoAgentCdpPort,
   ziniaoAgentRunning,
   ziniaoAgentClose,
+  ziniaoActivate,
   ziniaoEval,
   ziniaoScreenshot,
 } from "../ziniao-api";
@@ -166,6 +167,14 @@ export function useZiniaoAgent(log: ZnLogFn) {
     return `CDP 控制 ${info}${shotNote}`;
   };
 
+  // 进入店铺（激活页面窗口置前，不重新打开；适用于已打开的环境）
+  const stepEnter = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    const cdp = await ziniaoAgentCdpPort(shop.browserId);
+    await ziniaoActivate(cdp);
+    setShop(shop.browserId, "已激活");
+    return `已进入 ${shop.browserName}（激活 :${cdp}）`;
+  };
+
   // 统一 log 包装：label + fn()，busy 包裹
   const run = async (label: string, fn: () => Promise<string>) => {
     setBusy(true);
@@ -230,6 +239,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     stepOpen,
     stepClose,
     stepCdp,
+    stepEnter,
     run,
     acceptAll,
   };

@@ -752,11 +752,11 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
   };
 
   return (
-    <div className="current-card-ctx-menu" style={menuStyle} onContextMenu={e => e.preventDefault()}>
+    <div className="ctx-menu" style={menuStyle} onContextMenu={e => e.preventDefault()}>
       {ctxIsDefault ? (
         <>
           <button
-            className="current-card-ctx-item"
+            className="ctx-item"
             onClick={() => run(onOpen)}
             title={`正常启动「${p.name}」（不带调试端口）`}
           >
@@ -764,7 +764,7 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
             启动
           </button>
           <button
-            className="current-card-ctx-item"
+            className="ctx-item"
             onClick={() => run(onKillAll)}
             title={`全部终止「${p.name}」所属浏览器（关闭全部窗口与进程，含独立目录实例）`}
           >
@@ -775,7 +775,7 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
       ) : (
         <>
           <button
-            className="current-card-ctx-item"
+            className="ctx-item"
             onClick={() => run(onOpen)}
             title={`正常启动「${p.name}」（不带调试端口）`}
           >
@@ -783,7 +783,7 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
             打开
           </button>
           <button
-            className="current-card-ctx-item"
+            className="ctx-item"
             onClick={() => run(onDebugOpen)}
             title={`以随机可用端口调试启动（--remote-debugging-port）`}
           >
@@ -791,7 +791,7 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
             调试打开
           </button>
           <button
-            className="current-card-ctx-item"
+            className="ctx-item"
             onClick={() => run(onClose)}
             title={`关闭「${p.name}」（只关闭该配置自己的进程）`}
           >

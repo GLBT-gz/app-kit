@@ -42,6 +42,7 @@ export {
   ziniaoListTabs,
   ziniaoOpenTab,
   ziniaoNavigate,
+  ziniaoActivate,
   ziniaoEval,
   ziniaoEvalAll,
   ziniaoScreenshot,
@@ -183,6 +184,9 @@ export type { PlatformDef, BrowserOption, PlatformConfigPanelProps } from "./com
 // ── 自动化设置 ──
 export { AutomationSettings } from "./components/AutomationSettings";
 export type { AutomationSettingsProps } from "./components/AutomationSettings";
+
+export { ContextMenu, openContextMenu, CTX_MENU_EVENT } from "./components/ContextMenu";
+export type { ContextMenuItem } from "./components/ContextMenu";
 
 // ── 紫鸟自动化 ──
 export { ZiniaoStoreList } from "./components/ziniao/ZiniaoStoreList";

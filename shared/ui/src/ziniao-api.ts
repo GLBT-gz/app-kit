@@ -76,6 +76,12 @@ export async function ziniaoNavigate(port: number, url: string): Promise<void> {
   return tauriInvoke("ziniao_navigate", { port, url });
 }
 
+/** 激活指定环境页面（窗口置前，Page.bringToFront） */
+export async function ziniaoActivate(port: number): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_activate");
+  return tauriInvoke("ziniao_activate", { port });
+}
+
 /** 指定环境执行 JS */
 export async function ziniaoEval(port: number, js: string): Promise<unknown> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval");
