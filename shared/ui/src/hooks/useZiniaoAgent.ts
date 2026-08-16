@@ -123,7 +123,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
           for (let t = 0; t < 8; t++) {
             let poll;
             try {
-              poll = await ziniaoEnterShopPoll(cdp);
+              poll = await ziniaoEnterShopPoll(cdp, shop.browserName);
             } catch (e) {
               log(`自动进入 ${shop.browserName} 第 ${t + 1} 次调用失败：${e}`, "warn");
               await sleep(2500);
@@ -237,7 +237,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     const cdp = await ziniaoAgentCdpPort(shop.browserId);
     let msg = "";
     for (let t = 0; t < 6; t++) {
-      const poll = await ziniaoEnterShopPoll(cdp);
+      const poll = await ziniaoEnterShopPoll(cdp, shop.browserName);
       if (poll.entered) {
         msg = poll.note;
         break;

@@ -108,10 +108,11 @@ export interface ZiniaoEnterPoll {
   note: string;
 }
 
-/** 单轮自动进入检查（约 3-5s）：店铺页出现返回 entered=true，否则尝试点击检测页「打开账号」 */
-export async function ziniaoEnterShopPoll(port: number): Promise<ZiniaoEnterPoll> {
+/** 单轮自动进入检查（约 3-5s）：店铺页出现返回 entered=true，否则在目标店铺（name）
+ * 的检测扩展页上点击「打开账号」（店铺名校验，防误点其他店铺） */
+export async function ziniaoEnterShopPoll(port: number, name: string): Promise<ZiniaoEnterPoll> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_enter_shop_poll");
-  return tauriInvoke("ziniao_enter_shop_poll", { port });
+  return tauriInvoke("ziniao_enter_shop_poll", { port, name });
 }
 
 /** 指定环境执行 JS */
