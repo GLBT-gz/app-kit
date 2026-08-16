@@ -217,17 +217,38 @@ export async function getTiktokShopLocation(cdp: number): Promise<string> {
   return typeof v === "string" ? v : String(v);
 }
 
-/** 解析侧边栏菜单 */
+/** 解析侧边栏菜单（先等待菜单渲染就绪，避免页面刚进入时解析出 0 项） */
 export async function parseTiktokShopMenu(cdp: number): Promise<TiktokShopMenu> {
-  const v = await ziniaoEval(cdp, TTS_PARSE_MENU_JS);
-  if (typeof v !== "string") throw new Error("解析结果不是字符串: " + JSON.stringify(v));
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(v);
-  } catch (e) {
-    throw new Error("解析结果 JSON 解析失败: " + e);
+  // 1. 等待侧边栏就绪：.p-menu-inner 存在且已渲染链接/分组（最多 ~4s）
+  const readyJs = `(() => {
+    const inner = document.querySelector(".p-menu-inner");
+    if (!inner) return false;
+    return !!inner.querySelector("a.sidebar-item-link, .p-menu-inline");
+  })()`;
+  for (let i = 0; i < 10; i++) {
+    const v = await ziniaoEval(cdp, readyJs);
+    if (v === true) break;
+    await sleep(400);
   }
-  return parsed as TiktokShopMenu;
+  // 2. 正式解析；若结果为 0 项（菜单可能仍在异步加载），等 1s 重试一次
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const v = await ziniaoEval(cdp, TTS_PARSE_MENU_JS);
+    if (typeof v !== "string") throw new Error("解析结果不是字符串: " + JSON.stringify(v));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(v);
+    } catch (e) {
+      throw new Error("解析结果 JSON 解析失败: " + e);
+    }
+    const menu = parsed as TiktokShopMenu;
+    const total = menu.links.length + menu.groups.reduce((n, g) => n + g.items.length, 0);
+    if (attempt === 0 && menu.ok && total === 0) {
+      await sleep(1000);
+      continue;
+    }
+    return menu;
+  }
+  throw new Error("侧边栏菜单解析失败");
 }
 
 /** 抓取侧边栏 `.p-menu-inner` 的完整 outerHTML（用于排查菜单结构/懒加载，导出给开发者） */
