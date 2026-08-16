@@ -13,6 +13,8 @@ export async function ziniaoPatchStatus(): Promise<{
   asar_path: string;
   patched: boolean;
   v109: boolean;
+  /** v109 注入为旧版（启动后 33s 窗口，错过即永久失效），需重装为常驻版 */
+  v109_stale: boolean;
   version: string;
   /** 架构类型：patch（v6.25.16 系需补丁）/ native（6.24.2 系原生支持） */
   arch: string;
@@ -146,6 +148,12 @@ export interface ZiniaoAgentStatus {
 export async function ziniaoAgentLaunch(): Promise<{ launched: boolean; pid: number | null }> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_launch");
   return tauriInvoke("ziniao_agent_launch");
+}
+
+/** 强制停止所有紫鸟主进程（含子进程树）。用于装/重装补丁后自动重启加载新代码 */
+export async function ziniaoAgentStop(): Promise<number> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_stop");
+  return tauriInvoke("ziniao_agent_stop");
 }
 
 /** 主程序状态 + 动态发现的 agent_mode 端口（等待约 40s） */

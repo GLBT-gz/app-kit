@@ -3,6 +3,7 @@ import {
   ziniaoPatchStatus,
   ziniaoPatchApply,
   ziniaoAgentProcStatus,
+  ziniaoAgentStop,
   ziniaoAgentCdpPort,
   ziniaoEval,
   ziniaoNavigate,
@@ -23,6 +24,8 @@ export interface ZiniaoPatchInfo {
   asar_path: string;
   patched: boolean;
   v109: boolean;
+  /** v109 注入为旧版（启动后 33s 窗口，错过即永久失效），需重装为常驻版 */
+  v109_stale: boolean;
   version: string;
   /** 架构类型：patch（v6.25.16 系需补丁）/ native（6.24.2 系原生支持） */
   arch: string;
@@ -56,6 +59,8 @@ function TtsItemRow({
 function patchStatusText(st: ZiniaoPatchInfo): string {
   if (!st.installed) return "未安装紫鸟（未找到 app.asar）";
   if (st.arch === "native") return "新架构（6.24.2+）原生支持，无需补丁";
+  if (st.v109 && st.v109_stale)
+    return "补丁为旧版（启动后 33 秒内未登录即永久失效），点「一键检测」自动重装";
   if (st.v109) return "补丁已安装（agent_mode 自动开启）";
   if (st.patched) return "部分补丁（缺 agent_mode 自动开启），可一键升级";
   // 未打补丁：透出后端 detail（区分 6.25.16 端口公式缺失 / 6.26.6 web_driver 需凭证）
@@ -121,27 +126,27 @@ export function ZiniaoTestPanel() {
     return msg;
   };
 
-  // 一键检测：补丁 → 打开紫鸟 → agent 端口 → 店铺列表
-  // （用户核心诉求：紫鸟是否启动、能否控制；补丁缺失时自动安装）
+  // 一键检测（全自动）：补丁 → 自动停/装/重启紫鸟 → agent → 店铺列表
+  // 用户只需点一次：补丁缺失/旧版自动重装并重启紫鸟，无需手动操作
   const stepOneClickTest = async (): Promise<string> => {
-    // ① 补丁检查（patch 架构未装 v109 时自动安装）
+    // ① 补丁检查：patch 型未打或旧版注入 → 自动「停紫鸟 → 装补丁 → 重启紫鸟」
     const st = await ziniaoPatchStatus();
     setPatch(st);
     log(`① 检查补丁 → ${patchStatusText(st)}`, "info");
-    if (st.installed && st.arch === "patch" && !st.v109) {
-      const proc = await ziniaoAgentProcStatus();
-      if (proc.running) {
-        return "补丁未安装，且紫鸟正在运行（装补丁要求紫鸟完全退出）：请完全退出紫鸟后重新点击「一键检测」";
-      }
-      log("  补丁未就绪：自动安装（如需管理员权限将弹 UAC 确认）…", "warn");
+    if (st.installed && st.arch === "patch" && (!st.v109 || st.v109_stale)) {
+      log("  补丁需要处理：自动停止紫鸟 → 安装补丁 → 自动重启（已打开的店铺环境会关闭）…", "warn");
+      const killed = await ziniaoAgentStop();
+      log(`  已停止紫鸟进程 ${killed} 个`, "info");
       const msg = await ziniaoPatchApply();
       setPatchNote(msg);
       setPatch(await ziniaoPatchStatus());
       log(`  补丁安装 → ${msg}`, msg.includes("失败") ? "error" : "success");
+      log(`  自动重启紫鸟 → ${await stepLaunch()}`, "info");
+    } else {
+      // ② 补丁无问题：确保紫鸟运行
+      log(`② 打开紫鸟 → ${await stepLaunch()}`, "info");
     }
-    // ② 打开紫鸟（已在运行则跳过）
-    log(`② 打开紫鸟 → ${await stepLaunch()}`, "info");
-    // ③ agent 端口 + 店铺列表（未就绪时返回具体原因，不再无声等待）
+    // ③ 探测 agent（10 秒内出结果）+ 店铺列表
     const listMsg = await stepList();
     const failed = !listMsg.startsWith("agent_mode");
     log(`③ 获取店铺列表 → ${listMsg}`, failed ? "error" : "success");
@@ -305,18 +310,30 @@ export function ZiniaoTestPanel() {
             </span>
             <span
               className={`zn-badge ${
-                !patch ? "" : patch.arch === "native" || patch.v109 ? "ok" : patch.patched ? "warn" : "err"
+                !patch
+                  ? ""
+                  : patch.arch === "native"
+                    ? "ok"
+                    : patch.v109 && patch.v109_stale
+                      ? "warn"
+                      : patch.v109
+                        ? "ok"
+                        : patch.patched
+                          ? "warn"
+                          : "err"
               }`}
             >
               {!patch
                 ? "补丁未知（点一键检测或检查补丁）"
                 : patch.arch === "native"
                   ? "原生支持，无需补丁"
-                  : patch.v109
-                    ? "补丁已装"
-                    : patch.patched
-                      ? "部分补丁"
-                      : "未打补丁"}
+                  : patch.v109 && patch.v109_stale
+                    ? "补丁旧版"
+                    : patch.v109
+                      ? "补丁已装"
+                      : patch.patched
+                        ? "部分补丁"
+                        : "未打补丁"}
             </span>
             <span className="zn-sub">{shops.length} 个店铺</span>
           </div>
@@ -327,12 +344,30 @@ export function ZiniaoTestPanel() {
             <button className="zn-btn" disabled={busy} onClick={() => run("检查补丁", stepPatchStatus)}>
               检查补丁状态
             </button>
-            <button className="zn-btn" disabled={busy || patch?.v109} onClick={() => run("安装补丁", stepPatchApply)}>
-              {patch?.v109 ? "已是最新" : "一键安装补丁"}
+            <button
+              className="zn-btn"
+              disabled={busy || (patch?.v109 && !patch?.v109_stale)}
+              onClick={() => run("安装补丁", stepPatchApply)}
+            >
+              {patch?.v109 && !patch?.v109_stale
+                ? "已是最新"
+                : patch?.v109
+                  ? "一键升级（旧版注入）"
+                  : "一键安装补丁"}
             </button>
             {patch && (
-              <span className={`zn-badge ${patch.v109 ? "ok" : patch.patched ? "warn" : "err"}`}>
-                {patch.v109 ? "已打补丁" : patch.patched ? "部分补丁" : "未打补丁"}
+              <span
+                className={`zn-badge ${
+                  patch.v109 && !patch.v109_stale ? "ok" : patch.v109 || patch.patched ? "warn" : "err"
+                }`}
+              >
+                {patch.v109 && !patch.v109_stale
+                  ? "已打补丁"
+                  : patch.v109
+                    ? "旧版补丁"
+                    : patch.patched
+                      ? "部分补丁"
+                      : "未打补丁"}
               </span>
             )}
           </div>
