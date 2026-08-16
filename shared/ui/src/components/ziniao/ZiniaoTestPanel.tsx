@@ -149,21 +149,29 @@ export function ZiniaoTestPanel() {
     if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
     const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
     const menu = await parseTiktokShopMenu(cdp);
-    if (!menu.ok) return `解析失败: ${menu.error ?? "未知错误"}`;
+    if (!menu.ok) {
+      const msg = `解析失败: ${menu.error ?? "未知错误"}`;
+      log(`解析TikTok菜单 → ${msg}`, "error");
+      return "";
+    }
     setTtsMenu(menu);
     setTtsMenuShopId(selectedShop.browserId);
     safeSetJSON(`tts-menu-${selectedShop.browserId}`, menu);
     const total = menu.links.length + menu.groups.reduce((n, g) => n + g.items.length, 0);
-    return `解析成功：${menu.groups.length} 个分组 / ${total} 个菜单项，已缓存`;
+    const msg = `解析成功：${menu.groups.length} 个分组 / ${total} 个菜单项，已缓存`;
+    log(`解析TikTok菜单 → ${msg}`, "success");
+    return "";
   };
 
-  // 切换到指定菜单项（展开父分组 → 点击 → 轮询验证 URL）
+  // 切换到指定菜单项（展开父分组 → 点击 → 轮询验证 URL），成功/失败分级着色
   const switchTtsItem = (item: TiktokShopMenuItem, groupId?: string) =>
     run(`切换 ${item.name}`, async () => {
       if (!selectedShop) throw new Error("请先选择店铺");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      return navigateTiktokShopRoute(cdp, item, groupId, (m, l) => log(m, l));
-    });
+      const msg = await navigateTiktokShopRoute(cdp, item, groupId, (m, l) => log(m, l));
+      log(`切换 ${item.name} → ${msg}`, msg.startsWith("切换成功") ? "success" : "error");
+      return "";
+    }, true);
 
   // 依次切换全部菜单项，统计成功/失败
   const testAllTtsRoutes = () =>
@@ -190,8 +198,8 @@ export function ZiniaoTestPanel() {
       const summary = `成功 ${ok}/${targets.length}${fails.length ? `，失败：${fails.join("；")}` : ""}`;
       if (fails.length) log(`全部路由切换测试 → ${summary}`, "error");
       else log(`全部路由切换测试 → ${summary}`, "success");
-      return summary;
-    });
+      return "";
+    }, true);
 
   // 选中店铺对象
   const selectedShop = shops.find((s) => s.browserId === selectedShopId) ?? null;
@@ -376,7 +384,7 @@ export function ZiniaoTestPanel() {
             <button
               className="zn-btn"
               disabled={busy || !selectedShop}
-              onClick={() => run("解析TikTok菜单", parseTtsMenu)}
+              onClick={() => run("解析TikTok菜单", parseTtsMenu, true)}
             >
               解析左侧菜单
             </button>
