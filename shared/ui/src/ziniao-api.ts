@@ -82,6 +82,12 @@ export async function ziniaoActivate(port: number): Promise<void> {
   return tauriInvoke("ziniao_activate", { port });
 }
 
+/** 进入店铺：激活页面，若处于紫鸟账号检测扩展页则点击「打开账号」 */
+export async function ziniaoEnterShop(port: number): Promise<string> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_enter_shop");
+  return tauriInvoke("ziniao_enter_shop", { port });
+}
+
 /** 指定环境执行 JS */
 export async function ziniaoEval(port: number, js: string): Promise<unknown> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval");

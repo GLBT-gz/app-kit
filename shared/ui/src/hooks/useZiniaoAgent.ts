@@ -10,6 +10,7 @@ import {
   ziniaoAgentRunning,
   ziniaoAgentClose,
   ziniaoActivate,
+  ziniaoEnterShop,
   ziniaoEval,
   ziniaoScreenshot,
 } from "../ziniao-api";
@@ -175,6 +176,14 @@ export function useZiniaoAgent(log: ZnLogFn) {
     return `已进入 ${shop.browserName}（激活 :${cdp}）`;
   };
 
+  // 进入店铺（含「打开账号」）：激活 + 若处于紫鸟账号检测扩展页则点击「打开账号」进入真实页面
+  const stepEnterShop = async (shop: ZiniaoAgentBrowser): Promise<string> => {
+    const cdp = await ziniaoAgentCdpPort(shop.browserId);
+    const msg = await ziniaoEnterShop(cdp);
+    setShop(shop.browserId, "已进入");
+    return `已进入 ${shop.browserName} :${cdp} → ${msg}`;
+  };
+
   // 统一 log 包装：label + fn()，busy 包裹
   const run = async (label: string, fn: () => Promise<string>) => {
     setBusy(true);
@@ -240,6 +249,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     stepClose,
     stepCdp,
     stepEnter,
+    stepEnterShop,
     run,
     acceptAll,
   };

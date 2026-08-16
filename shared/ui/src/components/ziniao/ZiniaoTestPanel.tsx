@@ -54,6 +54,7 @@ export function ZiniaoTestPanel() {
     stepList,
     stepOpen,
     stepClose,
+    stepEnterShop,
     stepCdp,
     run,
   } = useZiniaoAgent(log);
@@ -193,7 +194,7 @@ export function ZiniaoTestPanel() {
           </div>
         </TestSection>
 
-        <TestSection title="4. 打开 / 关闭店铺">
+        <TestSection title="4. 打开 / 关闭 / 进入店铺">
           <div className="zn-shop-ops">{shopSelect}</div>
           <div className="zn-shop-ops">
             <button
@@ -202,6 +203,14 @@ export function ZiniaoTestPanel() {
               onClick={() => selectedShop && run(`打开 ${selectedShop.browserName}`, () => stepOpen(selectedShop))}
             >
               打开选中店铺
+            </button>
+            <button
+              className="zn-btn"
+              disabled={busy || !selectedShop}
+              title="激活页面；若处于紫鸟账号检测扩展页则点击「打开账号」进入店铺"
+              onClick={() => selectedShop && run(`进入 ${selectedShop.browserName}`, () => stepEnterShop(selectedShop))}
+            >
+              进入选中店铺
             </button>
             <button
               className="zn-btn danger"

@@ -43,6 +43,7 @@ export {
   ziniaoOpenTab,
   ziniaoNavigate,
   ziniaoActivate,
+  ziniaoEnterShop,
   ziniaoEval,
   ziniaoEvalAll,
   ziniaoScreenshot,
