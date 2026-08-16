@@ -95,8 +95,8 @@ export function ZiniaoTestPanel() {
     setPatch(st);
     if (!st.installed) return `未安装紫鸟（未找到 app.asar）`;
     if (st.arch === "native") return `新架构（6.24.2+）原生支持：CDP 多开由 debuggPort 参数控制，agent HTTP 服务由 --port 参数开启，无需补丁`;
-    if (st.v109) return `已安装 v10.9 补丁（含 agent_mode 自动开启）`;
-    if (st.patched) return `已安装 v10.8 补丁（端口兜底），但缺 agent_mode 自动开启，可一键升级`;
+    if (st.v109) return `已安装补丁（agent_mode 自动开启）`;
+    if (st.patched) return `已安装部分补丁（端口兜底），但缺 agent_mode 自动开启，可一键升级`;
     // 未打补丁：透出后端 detail（区分 6.25.16 端口公式缺失 / 6.26.6 web_driver 需凭证）
     return st.detail;
   };
@@ -254,11 +254,11 @@ export function ZiniaoTestPanel() {
               检查补丁状态
             </button>
             <button className="zn-btn" disabled={busy || patch?.v109} onClick={() => run("安装补丁", stepPatchApply)}>
-              {patch?.v109 ? "已是最新" : "一键安装 v10.9"}
+              {patch?.v109 ? "已是最新" : "一键安装补丁"}
             </button>
             {patch && (
               <span className={`zn-badge ${patch.v109 ? "ok" : patch.patched ? "warn" : "err"}`}>
-                {patch.v109 ? "v10.9" : patch.patched ? "v10.8" : "未打补丁"}
+                {patch.v109 ? "已打补丁" : patch.patched ? "部分补丁" : "未打补丁"}
               </span>
             )}
           </div>

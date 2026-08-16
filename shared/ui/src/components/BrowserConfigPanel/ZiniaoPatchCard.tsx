@@ -33,9 +33,9 @@ export function ZiniaoPatchCard({
             : native
               ? '新架构（6.24.2+）原生支持，无需补丁'
               : state.v109
-                ? '补丁 v10.9 已生效（CDP 多开 + agent_mode 直开环境）'
+                ? '补丁已生效（CDP 多开 + agent_mode 直开环境）'
                 : state.patched
-                  ? '补丁 v10.8 已生效（CDP 多开，可升级 v10.9）'
+                  ? '补丁部分生效（CDP 多开，agent_mode 未自动开启，可一键升级）'
                   : 'CDP 多开补丁未安装'}
         </div>
         {!state.loading && <div className="ziniao-patch-detail">{state.detail}</div>}
@@ -47,7 +47,7 @@ export function ZiniaoPatchCard({
           disabled={state.loading || state.patching}
           onClick={onApply}
         >
-          {state.patching ? '安装中…' : state.patched ? '升级到 v10.9' : '一键安装'}
+          {state.patching ? '安装中…' : state.patched ? '一键升级' : '一键安装'}
         </Button>
       )}
     </div>
