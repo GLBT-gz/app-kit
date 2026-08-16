@@ -24,7 +24,8 @@ export interface TiktokShopMenuItem {
   selected: boolean;
 }
 
-/** 可展开分组（订单/商品/物流…，data-expose-id / data-tid 为稳定 ID） */
+/** 可展开分组（订单/商品/物流…）。注意：data-expose-id/data-tid 在 SPA 路由切换后会重新分配，
+ *  只能用于本次解析展示，不可用于跨页面定位（定位目标项一律按 href 查找 + 向上找父分组展开） */
 export interface TiktokShopMenuGroup {
   id: string;
   name: string;
@@ -89,52 +90,44 @@ export const TTS_PARSE_MENU_JS = `(() => {
   return JSON.stringify(result);
 })()`;
 
-/** 展开指定分组（真实鼠标点击 header，isTrusted=true）。返回 clicked / already / no_group / no_header / invisible / eval_failed */
-export async function expandTiktokShopGroup(cdp: number, groupId: string): Promise<string> {
-  const js = `(() => {
-    const g = document.querySelector('.p-menu-inline[data-expose-id="${groupId}"]') || document.querySelector('.p-menu-inline[data-tid="${groupId}"]');
-    if (!g) return JSON.stringify({ status: "no_group" });
-    const header = g.querySelector(":scope > .p-menu-item-header");
-    if (!header) return JSON.stringify({ status: "no_header" });
-    if (header.getAttribute("aria-expanded") === "true") return JSON.stringify({ status: "already" });
-    const r = header.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) return JSON.stringify({ status: "invisible" });
-    return JSON.stringify({ status: "clicked", x: r.x + r.width / 2, y: r.y + r.height / 2 });
-  })()`;
-  const v = await ziniaoEval(cdp, js);
-  const d = typeof v === "string" ? (JSON.parse(v) as { status: string; x?: number; y?: number }) : null;
-  if (!d) return "eval_failed";
-  if (d.status === "clicked" && typeof d.x === "number" && typeof d.y === "number") {
-    await ziniaoMouseClick(cdp, d.x, d.y);
-  }
-  return d.status;
-}
-
-/** 查询分组是否已展开 */
-export async function isTiktokShopGroupExpanded(cdp: number, groupId: string): Promise<boolean> {
-  const js = `(() => {
-    const g = document.querySelector('.p-menu-inline[data-expose-id="${groupId}"]') || document.querySelector('.p-menu-inline[data-tid="${groupId}"]');
-    const h = g && g.querySelector(":scope > .p-menu-item-header");
-    return h ? h.getAttribute("aria-expanded") === "true" : false;
-  })()`;
-  const v = await ziniaoEval(cdp, js);
-  return v === true;
-}
-
 /**
  * 真实鼠标点击指定 href 的菜单项（isTrusted=true，绕过商家后台 isTrusted 守卫）。
- * 返回 clicked / no_target / invisible（尺寸为 0）/ covered（被弹层遮挡）/ eval_failed
+ *
+ * - 目标不可见（折叠在分组内）时：自动向上找 `.p-menu-inline` 父分组，真实点击 header 展开，
+ *   返回 "expanding"（已点击 header，需等目标可见后重试）。
+ * - 找不到目标时：内部轮询等待出现（菜单懒加载/路由切换后重渲染），约 2s 后仍无返回 "no_target"。
+ *
+ * 返回 clicked / expanding / already_expanded / no_target / covered / no_expander / eval_failed
  */
 export async function clickTiktokShopLink(cdp: number, href: string): Promise<string> {
   const js = `(() => {
     const href = ${JSON.stringify(href)};
-    let target = null;
-    document.querySelectorAll("a.sidebar-item-link").forEach((a) => {
-      if (!target && (a.getAttribute("href") || "") === href) target = a;
-    });
+    const findTarget = () => {
+      let t = null;
+      document.querySelectorAll("a.sidebar-item-link").forEach((a) => {
+        if (!t && (a.getAttribute("href") || "") === href) t = a;
+      });
+      return t;
+    };
+    const target = findTarget();
     if (!target) return JSON.stringify({ status: "no_target" });
     const r = target.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) return JSON.stringify({ status: "invisible" });
+    if (r.width === 0 || r.height === 0) {
+      // 不可见：向上找折叠分组，点 header 展开
+      const group = target.closest(".p-menu-inline");
+      const header = group && group.querySelector(":scope > .p-menu-item-header");
+      if (!header) return JSON.stringify({ status: "no_expander" });
+      if (header.getAttribute("aria-expanded") === "true") return JSON.stringify({ status: "already_expanded" });
+      const hr = header.getBoundingClientRect();
+      if (hr.width === 0 || hr.height === 0) return JSON.stringify({ status: "no_expander" });
+      const hx = hr.x + hr.width / 2;
+      const hy = hr.y + hr.height / 2;
+      const hhit = document.elementFromPoint(hx, hy);
+      if (hhit && hhit !== header && !header.contains(hhit) && !hhit.contains(header)) {
+        return JSON.stringify({ status: "covered" });
+      }
+      return JSON.stringify({ status: "expanding", x: hx, y: hy });
+    }
     const cx = r.x + r.width / 2;
     const cy = r.y + r.height / 2;
     const hit = document.elementFromPoint(cx, cy);
@@ -143,13 +136,21 @@ export async function clickTiktokShopLink(cdp: number, href: string): Promise<st
     }
     return JSON.stringify({ status: "clicked", x: cx, y: cy });
   })()`;
-  const v = await ziniaoEval(cdp, js);
-  const d = typeof v === "string" ? (JSON.parse(v) as { status: string; x?: number; y?: number }) : null;
-  if (!d) return "eval_failed";
-  if (d.status === "clicked" && typeof d.x === "number" && typeof d.y === "number") {
-    await ziniaoMouseClick(cdp, d.x, d.y);
+  // 找不到目标时轮询等待（菜单懒加载/重渲染），最多约 2s
+  for (let i = 0; i < 7; i++) {
+    const v = await ziniaoEval(cdp, js);
+    const d = typeof v === "string" ? (JSON.parse(v) as { status: string; x?: number; y?: number }) : null;
+    if (!d) return "eval_failed";
+    if (d.status === "no_target") {
+      await sleep(300);
+      continue;
+    }
+    if (d.status === "clicked" || d.status === "expanding") {
+      if (typeof d.x === "number" && typeof d.y === "number") await ziniaoMouseClick(cdp, d.x, d.y);
+    }
+    return d.status;
   }
-  return d.status;
+  return "no_target";
 }
 
 /** 查询目标菜单项是否可见（展开动画完成后才可点击） */
@@ -213,45 +214,54 @@ export async function parseTiktokShopMenu(cdp: number): Promise<TiktokShopMenu> 
 }
 
 /**
- * 切换到指定菜单项：展开父分组（可选）→ 点击目标 → 轮询 URL 验证生效。
+ * 切换到指定菜单项：点击目标（不可见时自动展开父分组）→ 轮询 URL 验证生效。
+ *
+ * 定位完全基于 href（不依赖 data-expose-id，SPA 路由切换后分组 id 会重新分配）。
  *
  * @param item 目标菜单项（href 必填）
- * @param groupId 目标所在分组 id（顶层直达链接无需传）
  * @param log 可选日志回调
  * @returns 结果消息（成功 / 失败原因）
  */
 export async function navigateTiktokShopRoute(
   cdp: number,
   item: TiktokShopMenuItem,
-  groupId?: string,
   log?: TtsLogFn,
 ): Promise<string> {
   const targetPath = pathOf(item.href, "https://seller-local.tiktok.com/");
 
-  // 1. 展开父分组（若未展开），并以「目标项可见」作为展开完成的信号
-  if (groupId) {
-    const st = await expandTiktokShopGroup(cdp, groupId);
-    if (st === "no_group") return `分组「${groupId}」不存在，菜单可能已改版`;
-    if (st === "no_header") return `分组「${groupId}」缺少展开标题`;
-    if (st === "clicked") log?.("  展开分组中…", "step");
-    // 轮询目标链接可见（覆盖展开动画），最多 3s
-    for (let i = 0; i < 10; i++) {
-      await sleep(300);
-      if (await isTiktokShopLinkVisible(cdp, item.href)) break;
+  // 1. 点击目标；不可见时自动展开父分组后重试（最多 3 轮：展开 → 等可见 → 再点）
+  let clicked = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ck = await clickTiktokShopLink(cdp, item.href);
+    if (ck === "clicked") {
+      clicked = true;
+      break;
     }
-    if (!(await isTiktokShopLinkVisible(cdp, item.href))) {
-      return `展开超时：分组「${groupId}」3s 内菜单项「${item.name}」仍不可见（菜单可能已改版或页面被拦截）`;
+    if (ck === "expanding") {
+      log?.("  展开分组中…", "step");
+      // 等目标可见（展开动画完成），最多 5s
+      for (let i = 0; i < 10; i++) {
+        await sleep(500);
+        if (await isTiktokShopLinkVisible(cdp, item.href)) break;
+      }
+      if (!(await isTiktokShopLinkVisible(cdp, item.href))) {
+        return `展开超时：展开父分组后 5s 内菜单项「${item.name}」仍不可见`;
+      }
+      continue; // 已展开，重新点击目标
     }
+    if (ck === "no_target") return `未找到菜单项「${item.name}」（${item.href}）`;
+    if (ck === "covered") return `菜单项「${item.name}」被其他元素遮挡（页面可能有弹层/遮罩）`;
+    if (ck === "no_expander") return `菜单项「${item.name}」不可见且找不到可展开的父分组`;
+    if (ck === "already_expanded") {
+      // header 已展开但目标仍不可见（渲染异常），再等一次
+      await sleep(500);
+      continue;
+    }
+    return `点击失败：${item.name}（${ck}）`;
   }
+  if (!clicked) return `点击失败：${item.name}（展开重试超限）`;
 
-  // 2. 真实鼠标点击目标菜单项（isTrusted=true）
-  const ck = await clickTiktokShopLink(cdp, item.href);
-  if (ck === "no_target") return `未找到菜单项「${item.name}」（${item.href}）`;
-  if (ck === "invisible") return `菜单项「${item.name}」不可见（尺寸为 0，可能未展开）`;
-  if (ck === "covered") return `菜单项「${item.name}」被其他元素遮挡（页面可能有弹层/遮罩）`;
-  if (ck !== "clicked") return `真实点击失败：${item.name}（${ck}）`;
-
-  // 3. 轮询验证：SPA 跳转后 pathname 应与目标一致（最多 6s）
+  // 2. 轮询验证：SPA 跳转后 pathname 应与目标一致（最多 6s）
   for (let i = 0; i < 12; i++) {
     await sleep(500);
     try {
@@ -262,7 +272,7 @@ export async function navigateTiktokShopRoute(
     }
   }
 
-  // 4. 失败诊断：区分「点击未生效」与「跳转后被重定向」
+  // 3. 失败诊断：区分「点击未生效」与「跳转后被重定向」
   const diag = await getTiktokShopSwitchDiagnose(cdp, item.href);
   return `切换未生效：${item.name} → ${diag}（期望 ${targetPath}）`;
 }

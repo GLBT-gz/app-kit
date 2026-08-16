@@ -63,9 +63,8 @@ export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
 export {
   TTS_PARSE_MENU_JS,
   parseTiktokShopMenu,
-  expandTiktokShopGroup,
-  isTiktokShopGroupExpanded,
   clickTiktokShopLink,
+  isTiktokShopLinkVisible,
   getTiktokShopLocation,
   navigateTiktokShopRoute,
 } from "./tiktokshop";

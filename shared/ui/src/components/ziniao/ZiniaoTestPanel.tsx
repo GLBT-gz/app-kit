@@ -29,21 +29,19 @@ export interface ZiniaoPatchInfo {
 /** TikTok Shop 侧边栏菜单项行（含「切换」按钮） */
 function TtsItemRow({
   item,
-  groupId,
   disabled,
   onSwitch,
 }: {
   item: TiktokShopMenuItem;
-  groupId?: string;
   disabled: boolean;
-  onSwitch: (item: TiktokShopMenuItem, groupId?: string) => void;
+  onSwitch: (item: TiktokShopMenuItem) => void;
 }) {
   return (
     <div className={`tts-item${item.selected ? " selected" : ""}`}>
       <span className="tts-item-name" title={item.name}>{item.name}</span>
       <span className="tts-item-href" title={item.href}>{item.href}</span>
       {item.selected && <span className="zn-badge ok">当前</span>}
-      <button className="tts-switch-btn" disabled={disabled} onClick={() => onSwitch(item, groupId)}>
+      <button className="tts-switch-btn" disabled={disabled} onClick={() => onSwitch(item)}>
         切换
       </button>
     </div>
@@ -163,12 +161,12 @@ export function ZiniaoTestPanel() {
     return "";
   };
 
-  // 切换到指定菜单项（展开父分组 → 点击 → 轮询验证 URL），成功/失败分级着色
-  const switchTtsItem = (item: TiktokShopMenuItem, groupId?: string) =>
+  // 切换到指定菜单项（自动展开父分组 → 真实点击 → 轮询验证 URL），成功/失败分级着色
+  const switchTtsItem = (item: TiktokShopMenuItem) =>
     run(`切换 ${item.name}`, async () => {
       if (!selectedShop) throw new Error("请先选择店铺");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const msg = await navigateTiktokShopRoute(cdp, item, groupId, (m, l) => log(m, l));
+      const msg = await navigateTiktokShopRoute(cdp, item, (m, l) => log(m, l));
       log(`切换 ${item.name} → ${msg}`, msg.startsWith("切换成功") ? "success" : "error");
       return "";
     }, true);
@@ -178,20 +176,20 @@ export function ZiniaoTestPanel() {
     run("全部路由切换测试", async () => {
       if (!selectedShop || !ttsMenu) throw new Error("请先解析侧边栏菜单");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const targets: { item: TiktokShopMenuItem; groupId?: string }[] = [
-        ...ttsMenu.links.map((item) => ({ item, groupId: undefined })),
-        ...ttsMenu.groups.flatMap((g) => g.items.map((item) => ({ item, groupId: g.id }))),
+      const targets: TiktokShopMenuItem[] = [
+        ...ttsMenu.links,
+        ...ttsMenu.groups.flatMap((g) => g.items),
       ];
       if (targets.length === 0) return "菜单为空，无可切换项";
       let ok = 0;
       const fails: string[] = [];
-      for (const t of targets) {
-        const msg = await navigateTiktokShopRoute(cdp, t.item, t.groupId, (m, l) => log(m, l));
+      for (const item of targets) {
+        const msg = await navigateTiktokShopRoute(cdp, item, (m, l) => log(m, l));
         if (msg.startsWith("切换成功")) {
           ok++;
           log(`  ✓ ${msg}`, "success");
         } else {
-          fails.push(`${t.item.name}: ${msg}`);
+          fails.push(`${item.name}: ${msg}`);
           log(`  ✗ ${msg}`, "error");
         }
       }
@@ -417,13 +415,7 @@ export function ZiniaoTestPanel() {
                     <span className="tts-group-count">{g.items.length} 项</span>
                   </div>
                   {g.items.map((it) => (
-                    <TtsItemRow
-                      key={it.href}
-                      item={it}
-                      groupId={g.id}
-                      disabled={busy || !selectedShop}
-                      onSwitch={switchTtsItem}
-                    />
+                    <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
                   ))}
                 </div>
               ))}
