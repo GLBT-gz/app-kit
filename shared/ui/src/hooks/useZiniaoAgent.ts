@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import {
   ziniaoAgentLaunch,
   ziniaoAgentStatus,
+  ziniaoAgentProcStatus,
   ziniaoAgentBrowserList,
   ziniaoAgentStartBrowser,
   ziniaoAgentCdpPort,
@@ -50,6 +51,12 @@ export function useZiniaoAgent(log: ZnLogFn) {
   // ① 打开紫鸟
   const stepLaunch = async (): Promise<string> => {
     const r = await ziniaoAgentLaunch();
+    // 立即刷新进程运行状态（轻量，不探测 agent_mode），避免徽标误报"未检测到运行中"
+    try {
+      setAgent(await ziniaoAgentProcStatus());
+    } catch {
+      /* 忽略，保持原状态 */
+    }
     return r.launched ? `已启动紫鸟主程序 (PID ${r.pid})` : `紫鸟已在运行 (PID ${r.pid})`;
   };
 

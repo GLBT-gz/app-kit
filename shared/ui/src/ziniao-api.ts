@@ -131,6 +131,12 @@ export async function ziniaoAgentStatus(): Promise<ZiniaoAgentStatus> {
   return tauriInvoke("ziniao_agent_status");
 }
 
+/** 主程序轻量状态：仅查进程是否运行（不探测 agent_mode 端口，O(1)） */
+export async function ziniaoAgentProcStatus(): Promise<ZiniaoAgentStatus> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_proc_status");
+  return tauriInvoke("ziniao_agent_proc_status");
+}
+
 /** 获取店铺列表（agent_mode 免认证） */
 export async function ziniaoAgentBrowserList(port: number): Promise<ZiniaoAgentBrowser[]> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_browser_list");

@@ -158,7 +158,11 @@ export function ZiniaoTestPanel() {
               打开紫鸟
             </button>
             {agent?.running ? (
-              <span className="zn-badge ok">agent_mode :{agent.port ?? "?"}</span>
+              agent?.port ? (
+                <span className="zn-badge ok">agent_mode :{agent.port}</span>
+              ) : (
+                <span className="zn-badge warn">紫鸟已运行（agent_mode 未就绪，点「店铺列表」探测）</span>
+              )
             ) : (
               <span className="zn-badge warn">未检测到运行中</span>
             )}
