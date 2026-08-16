@@ -217,7 +217,7 @@ export function ZiniaoTestPanel() {
     run(`切换 ${item.name}`, async () => {
       if (!selectedShop) throw new Error("请先选择店铺");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const res = await ziniaoSwitchMenu(cdp, item.href);
+      const res = await ziniaoSwitchMenu(cdp, item.href || item.name);
       const msg = res.note + (res.matched_by ? `（匹配:${res.matched_by}）` : "");
       log(`切换 ${item.name} → ${msg}`, res.note.startsWith("切换成功") ? "success" : "error");
       return "";
@@ -252,7 +252,7 @@ export function ZiniaoTestPanel() {
       let ok = 0;
       const fails: string[] = [];
       for (const item of targets) {
-        const res = await ziniaoSwitchMenu(cdp, item.href);
+        const res = await ziniaoSwitchMenu(cdp, item.href || item.name);
         if (res.note.startsWith("切换成功")) {
           ok++;
           log(`  ✓ ${res.note}`, "success");
