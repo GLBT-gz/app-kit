@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ziniaoPatchStatus,
   ziniaoPatchApply,
@@ -7,6 +7,9 @@ import {
   ziniaoNavigate,
   ziniaoScreenshot,
 } from "../../ziniao-api";
+import { parseTiktokShopMenu, navigateTiktokShopRoute } from "../../tiktokshop";
+import type { TiktokShopMenu, TiktokShopMenuItem } from "../../tiktokshop";
+import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { isTauriRuntime } from "../../tauri-utils";
 import { useLog } from "../LogPanel";
 import { TestSection, TestPageLayout } from "../TestLayout";
@@ -23,6 +26,30 @@ export interface ZiniaoPatchInfo {
   detail: string;
 }
 
+/** TikTok Shop 侧边栏菜单项行（含「切换」按钮） */
+function TtsItemRow({
+  item,
+  groupId,
+  disabled,
+  onSwitch,
+}: {
+  item: TiktokShopMenuItem;
+  groupId?: string;
+  disabled: boolean;
+  onSwitch: (item: TiktokShopMenuItem, groupId?: string) => void;
+}) {
+  return (
+    <div className={`tts-item${item.selected ? " selected" : ""}`}>
+      <span className="tts-item-name" title={item.name}>{item.name}</span>
+      <span className="tts-item-href" title={item.href}>{item.href}</span>
+      {item.selected && <span className="zn-badge ok">当前</span>}
+      <button className="tts-switch-btn" disabled={disabled} onClick={() => onSwitch(item, groupId)}>
+        切换
+      </button>
+    </div>
+  );
+}
+
 /**
  * 紫鸟测试页（公共组件）
  *
@@ -35,6 +62,8 @@ export function ZiniaoTestPanel() {
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [logWidth, setLogWidth] = useState(360);
+  const [ttsMenu, setTtsMenu] = useState<TiktokShopMenu | null>(null);
+  const [ttsMenuShopId, setTtsMenuShopId] = useState<number | null>(null);
   const [js, setJs] = useState(`JSON.stringify({ title: document.title, url: location.href })`);
   const [navUrl, setNavUrl] = useState("");
 
@@ -101,6 +130,68 @@ export function ZiniaoTestPanel() {
     setShots((prev) => ({ ...prev, [String(selectedShop.browserId)]: b64 }));
     return `截图 ${selectedShop.browserName} :${cdp} → ${Math.round((b64.length * 3) / 4)}B`;
   };
+
+  // ── TikTok Shop 侧边栏：切换店铺时自动加载该店铺的菜单缓存 ──
+  useEffect(() => {
+    if (selectedShopId === null) return;
+    const cached = safeGetJSON<TiktokShopMenu>(`tts-menu-${selectedShopId}`);
+    if (cached && cached.ok) {
+      setTtsMenu(cached);
+      setTtsMenuShopId(selectedShopId);
+    } else {
+      setTtsMenu(null);
+      setTtsMenuShopId(null);
+    }
+  }, [selectedShopId]);
+
+  // 解析左侧菜单 → 展示 + 缓存（localStorage tts-menu-{browserId}）
+  const parseTtsMenu = async (): Promise<string> => {
+    if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
+    const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+    const menu = await parseTiktokShopMenu(cdp);
+    if (!menu.ok) return `解析失败: ${menu.error ?? "未知错误"}`;
+    setTtsMenu(menu);
+    setTtsMenuShopId(selectedShop.browserId);
+    safeSetJSON(`tts-menu-${selectedShop.browserId}`, menu);
+    const total = menu.links.length + menu.groups.reduce((n, g) => n + g.items.length, 0);
+    return `解析成功：${menu.groups.length} 个分组 / ${total} 个菜单项，已缓存`;
+  };
+
+  // 切换到指定菜单项（展开父分组 → 点击 → 轮询验证 URL）
+  const switchTtsItem = (item: TiktokShopMenuItem, groupId?: string) =>
+    run(`切换 ${item.name}`, async () => {
+      if (!selectedShop) throw new Error("请先选择店铺");
+      const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+      return navigateTiktokShopRoute(cdp, item, groupId, (m, l) => log(m, l));
+    });
+
+  // 依次切换全部菜单项，统计成功/失败
+  const testAllTtsRoutes = () =>
+    run("全部路由切换测试", async () => {
+      if (!selectedShop || !ttsMenu) throw new Error("请先解析侧边栏菜单");
+      const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+      const targets: { item: TiktokShopMenuItem; groupId?: string }[] = [
+        ...ttsMenu.links.map((item) => ({ item, groupId: undefined })),
+        ...ttsMenu.groups.flatMap((g) => g.items.map((item) => ({ item, groupId: g.id }))),
+      ];
+      if (targets.length === 0) return "菜单为空，无可切换项";
+      let ok = 0;
+      const fails: string[] = [];
+      for (const t of targets) {
+        const msg = await navigateTiktokShopRoute(cdp, t.item, t.groupId, (m, l) => log(m, l));
+        if (msg.startsWith("切换成功")) {
+          ok++;
+          log(`  ✓ ${msg}`, "success");
+        } else {
+          fails.push(`${t.item.name}: ${msg}`);
+          log(`  ✗ ${msg}`, "error");
+        }
+      }
+      const summary = `成功 ${ok}/${targets.length}${fails.length ? `，失败：${fails.join("；")}` : ""}`;
+      if (fails.length) log(`全部路由切换测试 → ${summary}`, "error");
+      else log(`全部路由切换测试 → ${summary}`, "success");
+      return summary;
+    });
 
   // 选中店铺对象
   const selectedShop = shops.find((s) => s.browserId === selectedShopId) ?? null;
@@ -278,6 +369,59 @@ export function ZiniaoTestPanel() {
             />
           </TestSection>
         )}
+
+        <TestSection title="7. TikTok Shop 侧边栏（解析/缓存/路由切换）">
+          <div className="zn-shop-ops">{shopSelect}</div>
+          <div className="zn-shop-ops">
+            <button
+              className="zn-btn"
+              disabled={busy || !selectedShop}
+              onClick={() => run("解析TikTok菜单", parseTtsMenu)}
+            >
+              解析左侧菜单
+            </button>
+            <button
+              className="zn-btn"
+              disabled={busy || !selectedShop || !ttsMenu}
+              onClick={testAllTtsRoutes}
+            >
+              全部路由切换测试
+            </button>
+            {ttsMenu && (
+              <span className="zn-sub">
+                {ttsMenuShopId === selectedShopId ? "（当前店铺解析）" : "（缓存）"} ·
+                {ttsMenu.groups.length} 组 /{" "}
+                {ttsMenu.links.length + ttsMenu.groups.reduce((n, g) => n + g.items.length, 0)} 项
+                {ttsMenu.path ? ` · ${ttsMenu.path}` : ""}
+              </span>
+            )}
+          </div>
+          {ttsMenu && (
+            <div className="tts-menu">
+              {ttsMenu.links.map((it) => (
+                <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
+              ))}
+              {ttsMenu.groups.map((g) => (
+                <div className="tts-group" key={g.id}>
+                  <div className="tts-group-header">
+                    <span className="tts-group-name">{g.name}</span>
+                    {g.expanded && <span className="zn-badge ok">已展开</span>}
+                    <span className="tts-group-count">{g.items.length} 项</span>
+                  </div>
+                  {g.items.map((it) => (
+                    <TtsItemRow
+                      key={it.href}
+                      item={it}
+                      groupId={g.id}
+                      disabled={busy || !selectedShop}
+                      onSwitch={switchTtsItem}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </TestSection>
 
         {!isTauriRuntime() && (
           <div className="zn-error">当前处于浏览器预览模式（无 Tauri 运行时），无法调用紫鸟命令。请通过桌面应用运行。</div>
