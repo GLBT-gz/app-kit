@@ -107,13 +107,17 @@ export function useZiniaoAgent(log: ZnLogFn) {
     setShop(shop.browserId, "直开中…");
     try {
       log(`正在直开 ${shop.browserName}（请求 agent 服务）…`, "info");
-      await ziniaoAgentStartBrowser(port, shop.browserId);
+      const openResp = await ziniaoAgentStartBrowser(port, shop.browserId);
+      // 诊断：完整响应打日志（确认 CDP 端口是否由响应字段返回，v6.26.6 可能不回 9222 公式）
+      log(`startBrowser 响应：${JSON.stringify(openResp).slice(0, 400)}`, "debug");
       setShop(shop.browserId, "已直开（启动中…）");
       for (let i = 0; i < 60; i++) {
         await sleep(1000);
         const ids = await refreshRunning(port);
         if (ids.includes(shop.browserId)) {
           // 确认打开后再取 CDP 端口：内核已监听，公式或扫描探测才可靠
+          // 再等 2s：agent 状态就绪可能早于内核 CDP 监听完成
+          await sleep(2000);
           let cdp = 0;
           try {
             cdp = await ziniaoAgentCdpPort(shop.browserId);
