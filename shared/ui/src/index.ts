@@ -47,6 +47,7 @@ export {
   ziniaoScreenshot,
   ziniaoAgentLaunch,
   ziniaoAgentStatus,
+  ziniaoAgentProcStatus,
   ziniaoAgentBrowserList,
   ziniaoAgentStartBrowser,
   ziniaoAgentCdpPort,

@@ -76,10 +76,21 @@ export function useZiniaoAgent(log: ZnLogFn) {
     return `agent_mode 端口 :${st.port}，共 ${list.length} 个店铺，${ids.length} 个已打开`;
   };
 
+  // 获取 agent_mode 端口：优先用本实例已探测状态，否则实时探测一次。
+  // 用途：缓存店铺列表页（达人寄样）未执行「店铺列表」时也能直接打开/关闭店铺。
+  const ensurePort = async (): Promise<number> => {
+    if (agent?.port) return agent.port;
+    const st = await ziniaoAgentStatus();
+    setAgent(st);
+    if (!st.port) {
+      throw new Error("未发现 agent_mode 服务：请先执行「店铺列表」，或确认紫鸟已登录且 v10.9 补丁已安装");
+    }
+    return st.port;
+  };
+
   // ③ 打开店铺（browserId 必须传字符串，后端处理）
   const stepOpen = async (shop: ZiniaoAgentBrowser): Promise<string> => {
-    const port = agent?.port;
-    if (!port) throw new Error("请先执行「店铺列表」");
+    const port = await ensurePort();
     setShop(shop.browserId, "直开中…");
     try {
       await ziniaoAgentStartBrowser(port, shop.browserId);
@@ -102,8 +113,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
 
   // 关闭店铺（CDP Browser.close）
   const stepClose = async (shop: ZiniaoAgentBrowser): Promise<string> => {
-    const port = agent?.port;
-    if (!port) throw new Error("请先执行「店铺列表」");
+    const port = await ensurePort();
     setShop(shop.browserId, "关闭中…");
     try {
       await ziniaoAgentClose(shop.browserId);
