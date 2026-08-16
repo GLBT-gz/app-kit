@@ -93,6 +93,27 @@ export async function ziniaoEnterShop(port: number): Promise<string> {
   return tauriInvoke("ziniao_enter_shop", { port });
 }
 
+/** 单轮自动进入检查结果（前端驱动轮询，每轮都有可见进度） */
+export interface ZiniaoEnterPoll {
+  /** 已进入店铺页（true 时 seller_url 有值），前端应停止轮询 */
+  entered: boolean;
+  seller_url: string | null;
+  /** 检测到紫鸟扩展页（检测页候选）数量 */
+  ext_pages: number;
+  /** 本轮是否点击了「打开账号」 */
+  clicked: boolean;
+  /** 最后评估的页面 URL */
+  last_url: string;
+  /** 未进入时的原因提示（前端直接展示） */
+  note: string;
+}
+
+/** 单轮自动进入检查（约 3-5s）：店铺页出现返回 entered=true，否则尝试点击检测页「打开账号」 */
+export async function ziniaoEnterShopPoll(port: number): Promise<ZiniaoEnterPoll> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_enter_shop_poll");
+  return tauriInvoke("ziniao_enter_shop_poll", { port });
+}
+
 /** 指定环境执行 JS */
 export async function ziniaoEval(port: number, js: string): Promise<unknown> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval");
