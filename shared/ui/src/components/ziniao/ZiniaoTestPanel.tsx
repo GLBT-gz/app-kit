@@ -7,7 +7,7 @@ import {
   ziniaoNavigate,
   ziniaoScreenshot,
 } from "../../ziniao-api";
-import { parseTiktokShopMenu, navigateTiktokShopRoute } from "../../tiktokshop";
+import { parseTiktokShopMenu, navigateTiktokShopRoute, exportTiktokShopMenuHtml } from "../../tiktokshop";
 import type { TiktokShopMenu, TiktokShopMenuItem } from "../../tiktokshop";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { isTauriRuntime } from "../../tauri-utils";
@@ -170,6 +170,17 @@ export function ZiniaoTestPanel() {
       log(`切换 ${item.name} → ${msg}`, msg.startsWith("切换成功") ? "success" : "error");
       return "";
     }, true);
+
+  // 导出侧边栏完整 HTML 到日志（排查菜单结构/懒加载用）：先手动展开 1-2 个分组再点此按钮
+  const exportTtsMenuHtml = () =>
+    run("导出菜单 HTML", async () => {
+      if (!selectedShop) throw new Error("请先选择店铺");
+      const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+      const html = await exportTiktokShopMenuHtml(cdp);
+      if (!html) throw new Error(".p-menu-inner 不存在，请确认已进入商家后台");
+      log("--TTS-HTML--" + html, "info");
+      return `已导出 ${html.length} 字符，请复制日志中 --TTS-HTML-- 开头的完整内容`;
+    });
 
   // 依次切换全部菜单项，统计成功/失败
   const testAllTtsRoutes = () =>
@@ -392,6 +403,14 @@ export function ZiniaoTestPanel() {
               onClick={testAllTtsRoutes}
             >
               全部路由切换测试
+            </button>
+            <button
+              className="zn-btn"
+              disabled={busy || !selectedShop}
+              onClick={exportTtsMenuHtml}
+              title="先手动展开 1-2 个分组再点，导出侧边栏完整 HTML 到日志"
+            >
+              导出菜单 HTML
             </button>
             {ttsMenu && (
               <span className="zn-sub">

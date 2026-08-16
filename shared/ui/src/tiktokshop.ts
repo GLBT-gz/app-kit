@@ -60,31 +60,48 @@ function pathOf(href: string, base: string): string {
 //  注入 JS
 // ────────────────────────────────────────────────────────────
 
-/** 解析侧边栏菜单（返回 JSON 字符串，前端 JSON.parse） */
+/** 解析侧边栏菜单（返回 JSON 字符串，前端 JSON.parse）。
+ *  选择器做了改版兼容：子项优先 `a.sidebar-item-link`，其次任意 `a[href]`；标题优先 `.p-menu-item-title-txt`，其次 textContent。 */
 export const TTS_PARSE_MENU_JS = `(() => {
   const inner = document.querySelector(".p-menu-inner");
   if (!inner) return JSON.stringify({ ok: false, error: "未找到侧边栏 .p-menu-inner（未登录或不在商家后台）" });
   const title = (el) => {
-    const t = el && el.querySelector ? el.querySelector(".p-menu-item-title-txt") : null;
-    return t ? (t.textContent || "").trim() : "";
+    if (!el) return "";
+    const t = el.querySelector ? el.querySelector(".p-menu-item-title-txt") : null;
+    const s = (t && t.textContent ? t.textContent : el.textContent || "").trim();
+    return s.length > 30 ? s.slice(0, 30) : s;
   };
+  const hrefOf = (a) => (a.getAttribute("href") || "").trim();
   const toItem = (a) => ({
     name: title(a),
-    href: (a.getAttribute("href") || "").trim(),
+    href: hrefOf(a),
     key: (a.getAttribute("_key") || "").trim(),
     selected: !!a.querySelector(".p-menu-item-selected"),
   });
+  // 收集范围内带有效 href 的菜单项（去重）
+  const collect = (scope, directOnly) => {
+    const items = [];
+    const list = directOnly
+      ? scope.querySelectorAll(":scope > a.sidebar-item-link, :scope > a[href]")
+      : scope.querySelectorAll(":scope > a.sidebar-item-link, :scope > a[href], :scope a.sidebar-item-link, :scope a[href]");
+    list.forEach((a) => {
+      const h = hrefOf(a);
+      if (!h || h.startsWith("#")) return;
+      if (items.some((it) => it.href === h)) return;
+      items.push(toItem(a));
+    });
+    return items;
+  };
   const result = { ok: true, path: location.pathname + location.search, links: [], groups: [] };
-  inner.querySelectorAll(":scope > a.sidebar-item-link").forEach((a) => result.links.push(toItem(a)));
+  result.links = collect(inner, true);
   inner.querySelectorAll(":scope > div.p-menu-inline").forEach((g) => {
     const header = g.querySelector(":scope > .p-menu-item-header");
-    const items = [];
-    g.querySelectorAll(":scope > .p-menu-inline-content > a.sidebar-item-link").forEach((a) => items.push(toItem(a)));
+    const content = g.querySelector(":scope > .p-menu-inline-content") || g;
     result.groups.push({
       id: (g.getAttribute("data-expose-id") || g.getAttribute("data-tid") || "").trim(),
       name: title(header),
       expanded: header ? header.getAttribute("aria-expanded") === "true" : false,
-      items,
+      items: collect(content, false),
     });
   });
   return JSON.stringify(result);
@@ -211,6 +228,17 @@ export async function parseTiktokShopMenu(cdp: number): Promise<TiktokShopMenu> 
     throw new Error("解析结果 JSON 解析失败: " + e);
   }
   return parsed as TiktokShopMenu;
+}
+
+/** 抓取侧边栏 `.p-menu-inner` 的完整 outerHTML（用于排查菜单结构/懒加载，导出给开发者） */
+export async function exportTiktokShopMenuHtml(cdp: number): Promise<string> {
+  const js = `(() => {
+    const inner = document.querySelector(".p-menu-inner");
+    if (!inner) return "";
+    return inner.outerHTML;
+  })()`;
+  const v = await ziniaoEval(cdp, js);
+  return typeof v === "string" ? v : "";
 }
 
 /**

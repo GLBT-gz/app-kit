@@ -67,6 +67,7 @@ export {
   isTiktokShopLinkVisible,
   getTiktokShopLocation,
   navigateTiktokShopRoute,
+  exportTiktokShopMenuHtml,
 } from "./tiktokshop";
 export type { TiktokShopMenuItem, TiktokShopMenuGroup, TiktokShopMenu, TtsLogFn } from "./tiktokshop";
 
