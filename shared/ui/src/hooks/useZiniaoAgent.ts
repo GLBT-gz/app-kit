@@ -65,6 +65,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
 
   // ② 店铺列表（含运行状态）
   const stepList = async (): Promise<string> => {
+    log("正在探测 agent 服务端口（最长约 40 秒；若紫鸟在补丁安装前启动会立即返回重启提示）…", "step");
     const st = await ziniaoAgentStatus();
     setAgent(st);
     if (!st.running) return "紫鸟主程序未运行";
