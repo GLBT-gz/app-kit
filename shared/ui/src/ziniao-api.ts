@@ -94,6 +94,12 @@ export async function ziniaoEval(port: number, js: string): Promise<unknown> {
   return tauriInvoke("ziniao_eval", { port, js });
 }
 
+/** 页面坐标 (x, y) 处真实鼠标左键点击（isTrusted=true，绕过商家后台 isTrusted 守卫） */
+export async function ziniaoMouseClick(port: number, x: number, y: number): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_mouse_click");
+  return tauriInvoke("ziniao_mouse_click", { port, x, y });
+}
+
 /** 所有运行中环境批量执行 JS */
 export async function ziniaoEvalAll(js: string): Promise<ZiniaoEvalResult[]> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval_all");
