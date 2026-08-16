@@ -9,8 +9,8 @@ import {
   ziniaoNavigate,
   ziniaoScreenshot,
 } from "../../ziniao-api";
-import { parseTiktokShopMenu, navigateTiktokShopRoute, exportTiktokShopMenuHtml } from "../../tiktokshop";
-import type { TiktokShopMenu, TiktokShopMenuItem } from "../../tiktokshop";
+import { ziniaoParseSidebar, ziniaoSwitchMenu } from "../../ziniao-api";
+import type { ZiniaoSidebarItem, ZiniaoSidebarParse } from "../../ziniao-api";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { isTauriRuntime } from "../../tauri-utils";
 import { useLog } from "../LogPanel";
@@ -39,9 +39,9 @@ function TtsItemRow({
   disabled,
   onSwitch,
 }: {
-  item: TiktokShopMenuItem;
+  item: ZiniaoSidebarItem;
   disabled: boolean;
-  onSwitch: (item: TiktokShopMenuItem) => void;
+  onSwitch: (item: ZiniaoSidebarItem) => void;
 }) {
   return (
     <div className={`tts-item${item.selected ? " selected" : ""}`}>
@@ -79,7 +79,7 @@ export function ZiniaoTestPanel() {
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [logWidth, setLogWidth] = useState(360);
-  const [ttsMenu, setTtsMenu] = useState<TiktokShopMenu | null>(null);
+  const [ttsMenu, setTtsMenu] = useState<ZiniaoSidebarParse | null>(null);
   const [ttsMenuShopId, setTtsMenuShopId] = useState<number | null>(null);
   const [js, setJs] = useState(`JSON.stringify({ title: document.title, url: location.href })`);
   const [navUrl, setNavUrl] = useState("");
@@ -183,7 +183,7 @@ export function ZiniaoTestPanel() {
   // ── TikTok Shop 侧边栏：切换店铺时自动加载该店铺的菜单缓存 ──
   useEffect(() => {
     if (selectedShopId === null) return;
-    const cached = safeGetJSON<TiktokShopMenu>(`tts-menu-${selectedShopId}`);
+    const cached = safeGetJSON<ZiniaoSidebarParse>(`tts-menu-${selectedShopId}`);
     if (cached && cached.ok) {
       setTtsMenu(cached);
       setTtsMenuShopId(selectedShopId);
@@ -197,9 +197,9 @@ export function ZiniaoTestPanel() {
   const parseTtsMenu = async (): Promise<string> => {
     if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
     const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-    const menu = await parseTiktokShopMenu(cdp);
+    const menu = await ziniaoParseSidebar(cdp);
     if (!menu.ok) {
-      const msg = `解析失败: ${menu.error ?? "未知错误"}`;
+      const msg = `解析失败: ${menu.error ?? "未知错误"} · ${menu.note}`;
       log(`解析TikTok菜单 → ${msg}`, "error");
       return "";
     }
@@ -207,30 +207,36 @@ export function ZiniaoTestPanel() {
     setTtsMenuShopId(selectedShop.browserId);
     safeSetJSON(`tts-menu-${selectedShop.browserId}`, menu);
     const total = menu.links.length + menu.groups.reduce((n, g) => n + g.items.length, 0);
-    const msg = `解析成功：${menu.groups.length} 个分组 / ${total} 个菜单项，已缓存`;
+    const msg = `解析成功：${menu.groups.length} 个分组 / ${total} 个菜单项 · ${menu.note}，已缓存`;
     log(`解析TikTok菜单 → ${msg}`, "success");
     return "";
   };
 
-  // 切换到指定菜单项（自动展开父分组 → 真实点击 → 轮询验证 URL），成功/失败分级着色
-  const switchTtsItem = (item: TiktokShopMenuItem) =>
+  // 切换到指定菜单项（定位→展开父分组→物理点击→URL 轮询验证均由后端完成），成功/失败分级着色
+  const switchTtsItem = (item: ZiniaoSidebarItem) =>
     run(`切换 ${item.name}`, async () => {
       if (!selectedShop) throw new Error("请先选择店铺");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const msg = await navigateTiktokShopRoute(cdp, item, (m, l) => log(m, l));
-      log(`切换 ${item.name} → ${msg}`, msg.startsWith("切换成功") ? "success" : "error");
+      const res = await ziniaoSwitchMenu(cdp, item.href);
+      const msg = res.note + (res.matched_by ? `（匹配:${res.matched_by}）` : "");
+      log(`切换 ${item.name} → ${msg}`, res.note.startsWith("切换成功") ? "success" : "error");
       return "";
     }, true);
 
-  // 导出侧边栏完整 HTML 到日志（排查菜单结构/懒加载用）：先手动展开 1-2 个分组再点此按钮
+  // 菜单结构诊断：输出后端双策略解析（精准优先 + 语义兜底）的解析方式/失败原因
   const exportTtsMenuHtml = () =>
-    run("导出菜单 HTML", async () => {
+    run("菜单结构诊断", async () => {
       if (!selectedShop) throw new Error("请先选择店铺");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const html = await exportTiktokShopMenuHtml(cdp);
-      if (!html) throw new Error(".p-menu-inner 不存在，请确认已进入商家后台");
-      log("--TTS-HTML--" + html, "info");
-      return `已导出 ${html.length} 字符，请复制日志中 --TTS-HTML-- 开头的完整内容`;
+      const menu = await ziniaoParseSidebar(cdp);
+      if (!menu.ok) {
+        const msg = `解析失败: ${menu.error ?? "未知错误"} · ${menu.note}`;
+        log(`菜单结构诊断 → ${msg}`, "error");
+        return "";
+      }
+      const msg = `${menu.note}（${menu.groups.length} 组 / ${menu.items.length} 项，当前页 ${menu.path}）`;
+      log(`菜单结构诊断 → ${msg}`, "info");
+      return "";
     });
 
   // 依次切换全部菜单项，统计成功/失败
@@ -238,7 +244,7 @@ export function ZiniaoTestPanel() {
     run("全部路由切换测试", async () => {
       if (!selectedShop || !ttsMenu) throw new Error("请先解析侧边栏菜单");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const targets: TiktokShopMenuItem[] = [
+      const targets: ZiniaoSidebarItem[] = [
         ...ttsMenu.links,
         ...ttsMenu.groups.flatMap((g) => g.items),
       ];
@@ -246,13 +252,13 @@ export function ZiniaoTestPanel() {
       let ok = 0;
       const fails: string[] = [];
       for (const item of targets) {
-        const msg = await navigateTiktokShopRoute(cdp, item, (m, l) => log(m, l));
-        if (msg.startsWith("切换成功")) {
+        const res = await ziniaoSwitchMenu(cdp, item.href);
+        if (res.note.startsWith("切换成功")) {
           ok++;
-          log(`  ✓ ${msg}`, "success");
+          log(`  ✓ ${res.note}`, "success");
         } else {
-          fails.push(`${item.name}: ${msg}`);
-          log(`  ✗ ${msg}`, "error");
+          fails.push(`${item.name}: ${res.note}`);
+          log(`  ✗ ${res.note}`, "error");
         }
       }
       const summary = `成功 ${ok}/${targets.length}${fails.length ? `，失败：${fails.join("；")}` : ""}`;
@@ -541,7 +547,7 @@ export function ZiniaoTestPanel() {
                 <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
               ))}
               {ttsMenu.groups.map((g) => (
-                <div className="tts-group" key={g.id}>
+                <div className="tts-group" key={g.name}>
                   <div className="tts-group-header">
                     <span className="tts-group-name">{g.name}</span>
                     {g.expanded && <span className="zn-badge ok">已展开</span>}

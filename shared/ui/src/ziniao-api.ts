@@ -139,6 +139,68 @@ export async function ziniaoScreenshot(port: number): Promise<string> {
   return tauriInvoke("ziniao_screenshot", { port });
 }
 
+// ── TikTok Shop 卖家中心左侧导航（站点知识在 Rust 平台层，一次命令） ──
+
+/** 左侧导航菜单项 */
+export interface ZiniaoSidebarItem {
+  name: string;
+  href: string;
+  visible: boolean;
+  selected: boolean;
+  x: number;
+  y: number;
+}
+
+/** 可展开分组（订单/商品/物流…） */
+export interface ZiniaoSidebarGroup {
+  name: string;
+  expanded: boolean;
+  items: ZiniaoSidebarItem[];
+}
+
+/** 左侧导航解析结果 */
+export interface ZiniaoSidebarParse {
+  ok: boolean;
+  error: string | null;
+  page_url: string;
+  page_title: string;
+  /** 解析时的 location.pathname + search */
+  path: string;
+  /** 顶层直达链接 */
+  links: ZiniaoSidebarItem[];
+  /** 可展开分组 */
+  groups: ZiniaoSidebarGroup[];
+  /** 全部菜单项（links + groups.items 合并） */
+  items: ZiniaoSidebarItem[];
+  /** 解析方式/失败原因说明 */
+  note: string;
+}
+
+/** 菜单切换结果 */
+export interface ZiniaoSwitchMenuResult {
+  matched: boolean;
+  /** precise-href / precise-name / semantic-href / semantic-name */
+  matched_by: string;
+  matched_name: string;
+  matched_href: string;
+  url_before: string;
+  url_after: string;
+  url_changed: boolean;
+  note: string;
+}
+
+/** 解析 TikTok Shop 卖家中心左侧导航（精准优先、语义兜底） */
+export async function ziniaoParseSidebar(port: number): Promise<ZiniaoSidebarParse> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_parse_sidebar");
+  return tauriInvoke("ziniao_parse_sidebar", { port });
+}
+
+/** 切换左侧导航菜单（query 支持路由路径如 /order 或菜单文本如「订单」） */
+export async function ziniaoSwitchMenu(port: number, query: string): Promise<ZiniaoSwitchMenuResult> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_switch_menu");
+  return tauriInvoke("ziniao_switch_menu", { port, query });
+}
+
 // ── 紫鸟 agent_mode 直控（v10.9 patch，登录后自动开 HTTP 服务） ──
 
 /** agent_mode 店铺信息 */

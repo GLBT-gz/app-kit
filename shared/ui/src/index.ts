@@ -55,21 +55,12 @@ export {
   ziniaoAgentCdpPort,
   ziniaoAgentRunning,
   ziniaoAgentClose,
+  ziniaoParseSidebar,
+  ziniaoSwitchMenu,
 } from "./ziniao-api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
 export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
-
-// ── TikTok Shop 商家后台自动化（侧边栏菜单解析 + 路由切换） ──
-export {
-  TTS_PARSE_MENU_JS,
-  parseTiktokShopMenu,
-  clickTiktokShopLink,
-  isTiktokShopLinkVisible,
-  getTiktokShopLocation,
-  navigateTiktokShopRoute,
-  exportTiktokShopMenuHtml,
-} from "./tiktokshop";
-export type { TiktokShopMenuItem, TiktokShopMenuGroup, TiktokShopMenu, TtsLogFn } from "./tiktokshop";
+export type { ZiniaoSidebarItem, ZiniaoSidebarGroup, ZiniaoSidebarParse, ZiniaoSwitchMenuResult } from "./ziniao-api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";
