@@ -13,6 +13,9 @@ export async function ziniaoPatchStatus(): Promise<{
   asar_path: string;
   patched: boolean;
   v109: boolean;
+  version: string;
+  /** 架构类型：patch（v6.25.16 系需补丁）/ native（6.24.2 系原生支持） */
+  arch: string;
   main_index_len: number;
   detail: string;
 }> {

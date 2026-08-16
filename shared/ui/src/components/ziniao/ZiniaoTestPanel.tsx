@@ -22,6 +22,9 @@ export interface ZiniaoPatchInfo {
   asar_path: string;
   patched: boolean;
   v109: boolean;
+  version: string;
+  /** 架构类型：patch（v6.25.16 系需补丁）/ native（6.24.2 系原生支持） */
+  arch: string;
   main_index_len: number;
   detail: string;
 }
@@ -91,6 +94,7 @@ export function ZiniaoTestPanel() {
     const st = await ziniaoPatchStatus();
     setPatch(st);
     if (!st.installed) return `未安装紫鸟（未找到 app.asar）`;
+    if (st.arch === "native") return `新架构（6.24.2+）原生支持：CDP 多开由 debuggPort 参数控制，agent HTTP 服务由 --port 参数开启，无需补丁`;
     if (st.v109) return `已安装 v10.9 补丁（含 agent_mode 自动开启）`;
     if (st.patched) return `已安装 v10.8 补丁（端口兜底），但缺 agent_mode 自动开启，可一键升级`;
     return `未打补丁：多环境 CDP 端口冲突，且 agent_mode 不会自动开启`;

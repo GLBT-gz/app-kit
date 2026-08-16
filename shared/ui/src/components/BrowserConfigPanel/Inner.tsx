@@ -153,7 +153,7 @@ export function BrowserConfigInner({
   }, []);
 
   // ── 紫鸟 CDP patch 状态（无痕化集成；仅 ziniao 且命令可用时展示） ──
-  const [ziniaoPatch, setZiniaoPatch] = useState<ZiniaoPatchState>({ supported: false, loading: false, patching: false, patched: false, v109: false, detail: "" });
+  const [ziniaoPatch, setZiniaoPatch] = useState<ZiniaoPatchState>({ supported: false, loading: false, patching: false, patched: false, v109: false, arch: "", detail: "" });
   const checkZiniaoPatch = useCallback(async () => {
     if (browser.browser_type !== "ziniao") return;
     setZiniaoPatch(prev => ({ ...prev, loading: true }));
@@ -165,6 +165,7 @@ export function BrowserConfigInner({
         patching: false,
         patched: st.patched,
         v109: st.v109,
+        arch: st.arch,
         detail: st.detail,
       });
     } catch {
