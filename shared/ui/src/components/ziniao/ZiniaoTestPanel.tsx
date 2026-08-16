@@ -1,5 +1,12 @@
 import { useCallback, useState } from "react";
-import { ziniaoPatchStatus, ziniaoPatchApply } from "../../ziniao-api";
+import {
+  ziniaoPatchStatus,
+  ziniaoPatchApply,
+  ziniaoAgentCdpPort,
+  ziniaoEval,
+  ziniaoNavigate,
+  ziniaoScreenshot,
+} from "../../ziniao-api";
 import { isTauriRuntime } from "../../tauri-utils";
 import { useLog, LogPanel } from "../LogPanel";
 import { useZiniaoAgent } from "../../hooks/useZiniaoAgent";
@@ -27,6 +34,8 @@ export function ZiniaoTestPanel() {
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [logWidth, setLogWidth] = useState(360);
+  const [js, setJs] = useState(`JSON.stringify({ title: document.title, url: location.href })`);
+  const [navUrl, setNavUrl] = useState("");
 
   const logCtx = useLog({ eventName: null, storageKey: "ziniao:test-log" });
   const { log } = logCtx;
@@ -38,6 +47,7 @@ export function ZiniaoTestPanel() {
     shots,
     shopState,
     running,
+    setShots,
     refreshRunning,
     stepLaunch,
     stepList,
@@ -69,6 +79,32 @@ export function ZiniaoTestPanel() {
   const acceptAllWithPatch = async () => {
     log(`0. 检查补丁 → ${await stepPatchStatus()}`);
     acceptAll((first) => setSelectedShopId(first.browserId));
+  };
+
+  // 对选中店铺执行 JS
+  const runJs = async (): Promise<string> => {
+    if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
+    const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+    const v = await ziniaoEval(cdp, js);
+    return `eval ${selectedShop.browserName} :${cdp} → ${JSON.stringify(v)}`;
+  };
+
+  // 对选中店铺导航到 URL
+  const runNav = async (): Promise<string> => {
+    if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
+    if (!navUrl) throw new Error("请输入目标 URL");
+    const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+    await ziniaoNavigate(cdp, navUrl);
+    return `导航 ${selectedShop.browserName} :${cdp} → ${navUrl}`;
+  };
+
+  // 对选中店铺独立截图（不经过 CDP 验证流程）
+  const shotOnly = async (): Promise<string> => {
+    if (!selectedShop) throw new Error("请先在店铺下拉中选择一个店铺");
+    const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
+    const b64 = await ziniaoScreenshot(cdp);
+    setShots((prev) => ({ ...prev, [String(selectedShop.browserId)]: b64 }));
+    return `截图 ${selectedShop.browserName} :${cdp} → ${Math.round((b64.length * 3) / 4)}B`;
   };
 
   // 选中店铺对象
@@ -204,7 +240,7 @@ export function ZiniaoTestPanel() {
         </div>
 
         <div className="zn-test-module">
-          <div className="zn-test-module-head">④ CDP 控制（eval + 截图）</div>
+          <div className="zn-test-module-head">④ CDP 控制（验证 / JS / 导航 / 截图）</div>
           <div className="zn-shop-ops">{shopSelect}</div>
           <div className="zn-shop-ops">
             <button
@@ -213,6 +249,35 @@ export function ZiniaoTestPanel() {
               onClick={() => selectedShop && run(`CDP ${selectedShop.browserName}`, () => stepCdp(selectedShop))}
             >
               CDP 验证 + 截图
+            </button>
+          </div>
+          <div className="zn-shop-ops">
+            <span className="zn-sub">执行 JS：</span>
+            <textarea
+              className="zn-input zn-js"
+              value={js}
+              rows={2}
+              style={{ flex: 1, resize: "vertical" }}
+              onChange={(e) => setJs(e.target.value)}
+            />
+            <button className="zn-btn" disabled={busy || !selectedShop} onClick={() => run("执行 JS", runJs)}>
+              执行
+            </button>
+          </div>
+          <div className="zn-shop-ops">
+            <span className="zn-sub">导航到：</span>
+            <input
+              className="zn-input"
+              value={navUrl}
+              placeholder="https://…"
+              style={{ flex: 1 }}
+              onChange={(e) => setNavUrl(e.target.value)}
+            />
+            <button className="zn-btn" disabled={busy || !selectedShop} onClick={() => run("导航", runNav)}>
+              导航
+            </button>
+            <button className="zn-btn" disabled={busy || !selectedShop} onClick={() => run("截图", shotOnly)}>
+              截图
             </button>
           </div>
         </div>

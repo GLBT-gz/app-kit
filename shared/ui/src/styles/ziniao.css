@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
    紫鸟自动化公共组件样式（前缀 zn-）
-   由 @appkit/ui 的 ZiniaoOpsPanel / ZiniaoTestPanel / ZiniaoStoreList 使用，
+   由 @appkit/ui 的 ZiniaoTestPanel / ZiniaoStoreList 使用，
    项目无需再写这些样式，直接 import "@appkit/ui/styles/index.css" 即可。
 
    颜色规范：一律使用主题变量（var(--bg-*)/var(--text-*)/var(--accent)/
@@ -23,12 +23,6 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.zn-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
 }
 
 .zn-sub {
@@ -102,12 +96,6 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-.zn-empty {
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-align: center;
-  padding: 22px 0;
-}
 .zn-error {
   color: var(--error);
   font-size: 13px;
@@ -116,124 +104,7 @@
   padding: 8px 12px;
 }
 
-/* ── 自动化主界面（左右分栏） ── */
-.zn-ops {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-height: 0;
-  flex: 1;
-  box-sizing: border-box;
-}
-
-.zn-ops-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 12px 16px 0;
-}
-
-.zn-ops-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  padding: 12px 16px 16px;
-  gap: 0;
-}
-
-/* 左列：店铺列表 */
-.zn-ops-left {
-  width: 340px;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 12px;
-  box-sizing: border-box;
-}
-
-.zn-ops-left-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* 分隔条（可拖拽） */
-.zn-splitter {
-  width: 4px;
-  cursor: col-resize;
-  flex-shrink: 0;
-  border-radius: 2px;
-  background: transparent;
-}
-.zn-splitter:hover,
-.zn-splitter.active {
-  background: var(--border);
-}
-
-/* 右列：日志 + 表格 + 规则说明 */
-.zn-ops-right {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-left: 12px;
-  box-sizing: border-box;
-}
-
-.zn-card {
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.zn-card-head {
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 店铺列表行（左列卡片式） */
-.zn-shop {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--bg-card);
-}
-.zn-shop:hover {
-  border-color: var(--accent);
-}
-.zn-shop.active {
-  border-color: var(--accent);
-}
-.zn-shop-name {
-  font-weight: 600;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.zn-shop-meta {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  word-break: break-all;
-}
+/* 店铺操作行（测试页/明细表格共用） */
 .zn-shop-ops {
   display: flex;
   gap: 6px;
@@ -340,17 +211,4 @@
   min-height: 0;
   padding: 12px 0 12px 8px;
   box-sizing: border-box;
-}
-
-/* ── 规则说明 ── */
-.zn-guide {
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-.zn-guide code {
-  font-family: var(--font-mono);
-  background: var(--bg-badge);
-  border-radius: 4px;
-  padding: 1px 5px;
 }
