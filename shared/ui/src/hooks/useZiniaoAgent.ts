@@ -69,7 +69,10 @@ export function useZiniaoAgent(log: ZnLogFn) {
     setAgent(st);
     if (!st.running) return "紫鸟主程序未运行";
     if (!st.port) {
-      return "未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需安装补丁（登录后约 30s 自动开启）";
+      return (
+        st.note ||
+        "未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需安装补丁（登录后约 30s 自动开启）"
+      );
     }
     const [list, ids] = await Promise.all([
       ziniaoAgentBrowserList(st.port),
@@ -86,7 +89,10 @@ export function useZiniaoAgent(log: ZnLogFn) {
     const st = await ziniaoAgentStatus();
     setAgent(st);
     if (!st.port) {
-      throw new Error("未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需安装补丁 / 登录后自动开启");
+      throw new Error(
+        st.note ||
+          "未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需安装补丁 / 登录后自动开启",
+      );
     }
     return st.port;
   };

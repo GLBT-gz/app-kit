@@ -138,6 +138,8 @@ export interface ZiniaoAgentStatus {
   running: boolean;
   port: number | null;
   pid: number | null;
+  /** 未找到端口时的原因提示（后端填充；前端直接展示） */
+  note: string;
 }
 
 /** 自动打开紫鸟主程序（未运行则启动） */
