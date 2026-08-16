@@ -117,10 +117,10 @@ export function useZiniaoAgent(log: ZnLogFn) {
           setShop(shop.browserId, "已打开，自动进入店铺…");
           log(`已打开 ${shop.browserName}，自动进入店铺（检测「打开账号」页）…`, "info");
           // 自动进入：前端驱动轮询（每轮输出状态，替代 30s 无反馈黑盒）。
-          // 最多 8 轮，每轮约 3-5s + 间隔 2.5s，点击检测页后等待店铺页出现
+          // 最多 6 轮，每轮约 1-2s + 间隔 2.5s；找不到时后端 note 会列出内核 target 定位
           let enterNote = "";
           let entered = false;
-          for (let t = 0; t < 8; t++) {
+          for (let t = 0; t < 6; t++) {
             let poll;
             try {
               poll = await ziniaoEnterShopPoll(cdp, shop.browserName);
@@ -136,7 +136,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
               entered = true;
               break;
             }
-            log(`自动进入 ${shop.browserName} 第 ${t + 1} 次：${poll.note}`, "info");
+            log(`自动进入 ${shop.browserName} 第 ${t + 1} 次（CDP :${cdp}）：${poll.note}`, "info");
             await sleep(2500);
           }
           if (!entered) {
@@ -236,7 +236,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     log(`准备进入 ${shop.browserName}（检测「打开账号」页）…`, "step");
     const cdp = await ziniaoAgentCdpPort(shop.browserId);
     let msg = "";
-    for (let t = 0; t < 6; t++) {
+    for (let t = 0; t < 4; t++) {
       const poll = await ziniaoEnterShopPoll(cdp, shop.browserName);
       if (poll.entered) {
         msg = poll.note;
