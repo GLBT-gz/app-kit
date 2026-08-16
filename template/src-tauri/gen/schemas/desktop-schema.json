@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`",
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-get-data-directory`\n- `allow-get-install-directory`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`",
           "type": "string",
           "const": "appkit-core:default",
-          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`"
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-delete-data-files`\n- `allow-list-data-files`\n- `allow-read-all-local-files`\n- `allow-list-database-files`\n- `allow-open-directory`\n- `allow-check-path-exists`\n- `allow-get-data-directory`\n- `allow-get-install-directory`\n- `allow-save-file`\n- `allow-get-db-tables`\n- `allow-clear-db-table`"
         },
         {
           "description": "Enables the check_path_exists command without any pre-configured scope.",
@@ -201,10 +201,22 @@
           "markdownDescription": "Enables the delete_data_files command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_data_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:allow-get-data-directory",
+          "markdownDescription": "Enables the get_data_directory command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_db_tables command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:allow-get-db-tables",
           "markdownDescription": "Enables the get_db_tables command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_install_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:allow-get-install-directory",
+          "markdownDescription": "Enables the get_install_directory command without any pre-configured scope."
         },
         {
           "description": "Enables the list_data_files command without any pre-configured scope.",
@@ -255,10 +267,22 @@
           "markdownDescription": "Denies the delete_data_files command without any pre-configured scope."
         },
         {
+          "description": "Denies the get_data_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:deny-get-data-directory",
+          "markdownDescription": "Denies the get_data_directory command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_db_tables command without any pre-configured scope.",
           "type": "string",
           "const": "appkit-core:deny-get-db-tables",
           "markdownDescription": "Denies the get_db_tables command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_install_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "appkit-core:deny-get-install-directory",
+          "markdownDescription": "Denies the get_install_directory command without any pre-configured scope."
         },
         {
           "description": "Denies the list_data_files command without any pre-configured scope.",
