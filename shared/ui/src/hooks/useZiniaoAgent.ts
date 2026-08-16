@@ -69,7 +69,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     setAgent(st);
     if (!st.running) return "紫鸟主程序未运行";
     if (!st.port) {
-      return "未发现 agent 服务：patch 型需 v10.9 补丁（登录后约 30s 自动开启），6.24.2 新架构需以 --port 参数启动紫鸟";
+      return "未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需 v10.9 补丁（登录后约 30s 自动开启）";
     }
     const [list, ids] = await Promise.all([
       ziniaoAgentBrowserList(st.port),
@@ -86,7 +86,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
     const st = await ziniaoAgentStatus();
     setAgent(st);
     if (!st.port) {
-      throw new Error("未发现 agent 服务：请先执行「店铺列表」，或确认 patch 型已装 v10.9 补丁 / 6.24.2 新架构以 --port 参数启动紫鸟");
+      throw new Error("未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需 v10.9 补丁 / 登录后自动开启");
     }
     return st.port;
   };
@@ -239,7 +239,7 @@ export function useZiniaoAgent(log: ZnLogFn) {
       const st = await ziniaoAgentStatus();
       setAgent(st);
       if (!st.running || !st.port) {
-        log("② 获取店铺列表 → 未发现 agent 服务（patch 型需 v10.9 补丁 / 6.24.2 新架构需 --port 启动）", "error");
+        log("② 获取店铺列表 → 未发现 agent 服务：若紫鸟已在运行请完全退出后点击「打开紫鸟」重启（6.24.2 新架构自动带 --port 参数）；patch 型需 v10.9 补丁（登录后约 30s 自动开启）", "error");
         return;
       }
       log(`② 获取店铺列表 → agent_mode :${st.port}，拉取中…`);
