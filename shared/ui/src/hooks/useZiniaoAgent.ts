@@ -90,7 +90,8 @@ export function useZiniaoAgent(log: ZnLogFn) {
     return st.port;
   };
 
-  // ③ 打开店铺（browserId 必须传字符串，后端处理）
+  // ③ 打开店铺（browserId 必须传字符串，后端处理）；确认打开后自动进入店铺
+  // （处于紫鸟检测页时自动点击「打开账号」，页面加载中则重试，无需手动进入）
   const stepOpen = async (shop: ZiniaoAgentBrowser): Promise<string> => {
     const port = await ensurePort();
     setShop(shop.browserId, "直开中…");
@@ -102,8 +103,24 @@ export function useZiniaoAgent(log: ZnLogFn) {
         await sleep(1000);
         const ids = await refreshRunning(port);
         if (ids.includes(shop.browserId)) {
-          setShop(shop.browserId, "已打开");
-          return `已打开 ${shop.browserName} (browserId=${shop.browserId})，CDP :${cdp}（第 ${i + 1} 秒确认）`;
+          setShop(shop.browserId, "已打开，进入中…");
+          // 自动进入：内核刚起页面可能未加载完，最多重试 5 次（每次间隔 2s）
+          let enterNote = "";
+          for (let t = 0; t < 5; t++) {
+            try {
+              const msg = await ziniaoEnterShop(cdp);
+              setShop(shop.browserId, "已进入");
+              enterNote = `，已自动进入：${msg}`;
+              break;
+            } catch (e) {
+              if (t === 4) {
+                enterNote = `，自动进入未完成: ${e}`;
+              } else {
+                await sleep(2000);
+              }
+            }
+          }
+          return `已打开 ${shop.browserName} (browserId=${shop.browserId})，CDP :${cdp}（第 ${i + 1} 秒确认）${enterNote}`;
         }
       }
       return `已请求直开 ${shop.browserName}，60s 内未确认。冷启动含内核下载可能需 1-3 分钟`;
