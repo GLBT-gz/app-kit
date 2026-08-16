@@ -129,6 +129,47 @@ export async function clickTiktokShopLink(cdp: number, href: string): Promise<st
   return typeof v === "string" ? v : String(v);
 }
 
+/** 查询目标菜单项是否可见（展开动画完成后才可点击） */
+export async function isTiktokShopLinkVisible(cdp: number, href: string): Promise<boolean> {
+  const js = `(() => {
+    let target = null;
+    document.querySelectorAll("a.sidebar-item-link").forEach((a) => {
+      if (!target && (a.getAttribute("href") || "") === ${JSON.stringify(href)}) target = a;
+    });
+    if (!target) return false;
+    const st = getComputedStyle(target);
+    return st.visibility !== "hidden" && st.display !== "none";
+  })()`;
+  const v = await ziniaoEval(cdp, js);
+  return v === true;
+}
+
+/** 切换失败诊断：当前 URL / 选中菜单 / 目标项可见性与选中态（定位点击未生效或跳转被重定向） */
+async function getTiktokShopSwitchDiagnose(cdp: number, href: string): Promise<string> {
+  const js = `(() => {
+    const sel = document.querySelector(".p-menu-item-selected");
+    let target = null;
+    document.querySelectorAll("a.sidebar-item-link").forEach((a) => {
+      if (!target && (a.getAttribute("href") || "") === ${JSON.stringify(href)}) target = a;
+    });
+    const st = target ? getComputedStyle(target) : null;
+    return JSON.stringify({
+      url: location.href,
+      selected: sel && sel.querySelector ? (sel.querySelector(".p-menu-item-title-txt").textContent || "").trim() : "",
+      targetVisible: st ? st.visibility !== "hidden" && st.display !== "none" : false,
+      targetSelected: target ? !!target.querySelector(".p-menu-item-selected") : false,
+    });
+  })()`;
+  const v = await ziniaoEval(cdp, js);
+  if (typeof v !== "string") return "诊断失败: " + JSON.stringify(v);
+  try {
+    const d = JSON.parse(v) as { url: string; selected: string; targetVisible: boolean; targetSelected: boolean };
+    return `当前 ${d.url}，选中菜单「${d.selected}」，目标项可见=${d.targetVisible} 选中=${d.targetSelected}`;
+  } catch (e) {
+    return "诊断解析失败: " + e;
+  }
+}
+
 /** 当前页面 URL */
 export async function getTiktokShopLocation(cdp: number): Promise<string> {
   const v = await ziniaoEval(cdp, "location.href");
@@ -164,17 +205,19 @@ export async function navigateTiktokShopRoute(
 ): Promise<string> {
   const targetPath = pathOf(item.href, "https://seller-local.tiktok.com/");
 
-  // 1. 展开父分组（若未展开）
+  // 1. 展开父分组（若未展开），并以「目标项可见」作为展开完成的信号
   if (groupId) {
     const st = await expandTiktokShopGroup(cdp, groupId);
     if (st === "no_group") return `分组「${groupId}」不存在，菜单可能已改版`;
     if (st === "no_header") return `分组「${groupId}」缺少展开标题`;
-    if (st === "clicked") {
-      log?.("  展开分组中…", "step");
-      for (let i = 0; i < 15; i++) {
-        await sleep(300);
-        if (await isTiktokShopGroupExpanded(cdp, groupId)) break;
-      }
+    if (st === "clicked") log?.("  展开分组中…", "step");
+    // 轮询目标链接可见（覆盖展开动画），最多 3s
+    for (let i = 0; i < 10; i++) {
+      await sleep(300);
+      if (await isTiktokShopLinkVisible(cdp, item.href)) break;
+    }
+    if (!(await isTiktokShopLinkVisible(cdp, item.href))) {
+      return `展开超时：分组「${groupId}」3s 内菜单项「${item.name}」仍不可见（菜单可能已改版或页面被拦截）`;
     }
   }
 
@@ -182,8 +225,8 @@ export async function navigateTiktokShopRoute(
   const ck = await clickTiktokShopLink(cdp, item.href);
   if (ck === "no_target") return `未找到菜单项「${item.name}」（${item.href}）`;
 
-  // 3. 轮询验证：SPA 跳转后 pathname 应与目标一致
-  for (let i = 0; i < 20; i++) {
+  // 3. 轮询验证：SPA 跳转后 pathname 应与目标一致（最多 6s）
+  for (let i = 0; i < 12; i++) {
     await sleep(500);
     try {
       const url = await getTiktokShopLocation(cdp);
@@ -192,6 +235,8 @@ export async function navigateTiktokShopRoute(
       /* CDP 偶发连接错误时继续轮询 */
     }
   }
-  const cur = await getTiktokShopLocation(cdp).catch(() => "获取失败");
-  return `切换未生效：${item.name} → 当前 ${cur}（期望 ${targetPath}）`;
+
+  // 4. 失败诊断：区分「点击未生效」与「跳转后被重定向」
+  const diag = await getTiktokShopSwitchDiagnose(cdp, item.href);
+  return `切换未生效：${item.name} → ${diag}（期望 ${targetPath}）`;
 }
