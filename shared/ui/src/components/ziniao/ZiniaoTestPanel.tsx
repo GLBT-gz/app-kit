@@ -33,6 +33,11 @@ export interface ZiniaoPatchInfo {
   detail: string;
 }
 
+/** TK01 固定测试环境（省去每次解析店铺）：
+ * browserId=27520698532963，CDP 端口 = 9222 + browserId % 5000 = 12185 */
+const TK01_BROWSER_ID = 27520698532963;
+const TK01_CDP_PORT = 12185;
+
 /** TikTok Shop 侧边栏菜单项行（含「切换」按钮） */
 function TtsItemRow({
   item,
@@ -83,6 +88,9 @@ export function ZiniaoTestPanel() {
   const [ttsMenuShopId, setTtsMenuShopId] = useState<number | null>(null);
   const [js, setJs] = useState(`JSON.stringify({ title: document.title, url: location.href })`);
   const [navUrl, setNavUrl] = useState("");
+  // ── 测试 8：TK01 固定环境（端口 12185，省去每次解析店铺） ──
+  const [tkDetected, setTkDetected] = useState<string | null>(null);
+  const [tkMenu, setTkMenu] = useState<ZiniaoSidebarParse | null>(null);
 
   const logCtx = useLog({ eventName: null, storageKey: "ziniao:test-log" });
   const { log } = logCtx;
@@ -266,6 +274,83 @@ export function ZiniaoTestPanel() {
       else log(`全部路由切换测试 → ${summary}`, "success");
       return "";
     }, true);
+
+  // ── 测试 8：TK01 固定环境（端口 12185）实时检测 / 菜单切换 / 全路由巡航 ──
+  // 固定端口直连，不依赖「店铺列表」解析（省去每次解析店铺/解析失败）
+
+  // 实时检测：读取当前 URL/标题/是否卖家中心
+  const tkDetect = () =>
+    run("实时检测 TK01", async () => {
+      const v = (await ziniaoEval(
+        TK01_CDP_PORT,
+        `JSON.stringify({ url: location.href, title: document.title, onSeller: !!document.querySelector('.sidebar-root') })`,
+      )) as string;
+      const d = JSON.parse(v) as { url: string; title: string; onSeller: boolean };
+      setTkDetected(d.url);
+      return `TK01 :${TK01_CDP_PORT} → ${d.onSeller ? "卖家中心" : "非卖家页"} · ${d.title} · ${d.url}`;
+    }, true);
+
+  // 解析左侧菜单（固定端口）
+  const tkParseMenu = () =>
+    run("解析 TK01 左侧菜单", async () => {
+      const menu = await ziniaoParseSidebar(TK01_CDP_PORT);
+      setTkMenu(menu);
+      if (!menu.ok) throw new Error(menu.note);
+      return menu.note;
+    }, true);
+
+  // 切换菜单项：href 优先，not-found 时用 name 重试（div 模式页候选无 href）
+  const tkSwitchItem = (item: ZiniaoSidebarItem) =>
+    run(`TK01 切换 ${item.name}`, async () => {
+      let res = await ziniaoSwitchMenu(TK01_CDP_PORT, item.href || item.name);
+      if (!res.matched && item.href) {
+        const retry = await ziniaoSwitchMenu(TK01_CDP_PORT, item.name);
+        if (retry.matched) res = retry;
+      }
+      const msg = res.note + (res.matched_by ? `（匹配:${res.matched_by}）` : "");
+      const good = res.note.startsWith("切换成功") || res.note.startsWith("已在目标页");
+      log(`TK01 切换 ${item.name} → ${msg}`, good ? "success" : "error");
+      // 切换后刷新菜单，更新「当前」徽标
+      const menu = await ziniaoParseSidebar(TK01_CDP_PORT);
+      if (menu.ok) setTkMenu(menu);
+      return "";
+    }, true);
+
+  // 全部路由切换测试（巡航 34 项菜单）
+  const tkCruise = () =>
+    run("TK01 全部路由切换测试", async () => {
+      if (!tkMenu) throw new Error("请先解析 TK01 左侧菜单");
+      const targets: ZiniaoSidebarItem[] = [...tkMenu.links, ...tkMenu.groups.flatMap((g) => g.items)];
+      if (targets.length === 0) return "菜单为空，无可切换项";
+      let ok = 0;
+      const fails: string[] = [];
+      for (const item of targets) {
+        let res = await ziniaoSwitchMenu(TK01_CDP_PORT, item.href || item.name);
+        if (!res.matched && item.href) {
+          const retry = await ziniaoSwitchMenu(TK01_CDP_PORT, item.name);
+          if (retry.matched) res = retry;
+        }
+        const good = res.note.startsWith("切换成功") || res.note.startsWith("已在目标页");
+        if (good) {
+          ok++;
+          log(`  ✓ ${item.name} → ${res.note}`, "success");
+        } else {
+          fails.push(`${item.name}: ${res.note}`);
+          log(`  ✗ ${item.name} → ${res.note}`, "error");
+        }
+      }
+      const summary = `成功 ${ok}/${targets.length}${fails.length ? `，失败：${fails.join("；")}` : ""}`;
+      if (fails.length) log(`TK01 全部路由切换测试 → ${summary}`, "error");
+      else log(`TK01 全部路由切换测试 → ${summary}`, "success");
+      return "";
+    }, true);
+
+  // TK01 截图
+  const tkShot = async (): Promise<string> => {
+    const b64 = await ziniaoScreenshot(TK01_CDP_PORT);
+    setShots((prev) => ({ ...prev, [String(TK01_BROWSER_ID)]: b64 }));
+    return `TK01 截图 :${TK01_CDP_PORT} → ${Math.round((b64.length * 3) / 4)}B`;
+  };
 
   // 选中店铺对象
   const selectedShop = shops.find((s) => s.browserId === selectedShopId) ?? null;
@@ -555,6 +640,55 @@ export function ZiniaoTestPanel() {
                   </div>
                   {g.items.map((it) => (
                     <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </TestSection>
+
+        <TestSection title="8. TK01 实时检测（固定端口 12185，无需解析店铺）">
+          <div className="zn-shop-ops">
+            <span className="zn-badge ok">TK01</span>
+            <span className="zn-badge">browserId {TK01_BROWSER_ID}</span>
+            <span className={`zn-badge ${tkDetected ? "ok" : "warn"}`}>CDP :{TK01_CDP_PORT}</span>
+            <button className="zn-btn" disabled={busy} onClick={tkDetect}>
+              实时检测
+            </button>
+            <button className="zn-btn" disabled={busy} onClick={tkParseMenu}>
+              解析左侧菜单
+            </button>
+            <button className="zn-btn" disabled={busy || !tkMenu} onClick={tkCruise}>
+              全部路由切换测试
+            </button>
+            <button className="zn-btn" disabled={busy} onClick={() => run("TK01 截图", tkShot)}>
+              截图
+            </button>
+            {tkDetected && <span className="zn-sub mono">{tkDetected}</span>}
+          </div>
+          {tkMenu && (
+            <div className="zn-shop-ops">
+              <span className="zn-sub">
+                {tkMenu.groups.length} 组 /{" "}
+                {tkMenu.links.length + tkMenu.groups.reduce((n, g) => n + g.items.length, 0)} 项
+                {tkMenu.path ? ` · ${tkMenu.path}` : ""} · {tkMenu.note}
+              </span>
+            </div>
+          )}
+          {tkMenu && (
+            <div className="tts-menu">
+              {tkMenu.links.map((it) => (
+                <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
+              ))}
+              {tkMenu.groups.map((g) => (
+                <div className="tts-group" key={g.name}>
+                  <div className="tts-group-header">
+                    <span className="tts-group-name">{g.name}</span>
+                    {g.expanded && <span className="zn-badge ok">已展开</span>}
+                    <span className="tts-group-count">{g.items.length} 项</span>
+                  </div>
+                  {g.items.map((it) => (
+                    <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
                   ))}
                 </div>
               ))}
