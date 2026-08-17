@@ -141,19 +141,28 @@ export function useTableSelectionCopy(
   return { handleMouseDown, handleMouseMove, endDrag, isSelected, copyTip };
 }
 
-/** 虚拟滚动表格 - 只渲染可视区域内的行，适合大列表；支持文本框选复制、悬停提示、表头点击 */
-function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader }: {
+/** 虚拟滚动表格 - 只渲染可视区域内的行，适合大列表；支持文本框选复制、悬停提示、表头点击
+ *
+ * fixedLayout=true 时列宽固定（按表头文本估算，已指定 style.width 的列按指定值），
+ * 不随可见行内容变化，避免滚动时列宽跳动；默认 auto 布局（列宽随可见内容自适应）。
+ */
+function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowClassName?: (row: T) => string | undefined;
   emptyText?: string;
   listHeader?: React.ReactNode;
+  fixedLayout?: boolean;
 }): React.JSX.Element {
   // 所有表格统一在最左侧加「序号」列（从 1 开始递增）
   const allColumns: TableColumn<T>[] = [
     { header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } },
     ...columns,
   ];
+  // 固定列宽模式：未指定 style.width 的列按表头文本估算（12px 字号 + 内边距）
+  const colWidths = fixedLayout
+    ? allColumns.map((c) => c.style?.width ?? Math.min(400, Math.max(88, c.header.length * 14 + 28)))
+    : null;
   const ROW_HEIGHT = 28;
   const OVERSCAN = 15;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -227,11 +236,11 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     <div className="inventory-table-scroll" ref={containerRef} onScroll={handleScroll}
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
       {listHeader}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, ...(fixedLayout ? { tableLayout: "fixed" as const } : {}) }}>
         <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
           <tr style={{ height: ROW_HEIGHT }}>
-            {allColumns.map(col => (
-              <th key={col.header} style={{ border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)", ...col.style }}>
+            {allColumns.map((col, ci) => (
+              <th key={col.header} style={{ border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)", ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}), ...col.style }}>
                 {col.headerClick ? (
                   <button type="button" onClick={col.headerClick} title="点击切换：全部打开 / 全部关闭"
                     style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer", color: "inherit", fontSize: "inherit", fontFamily: "inherit", textDecoration: "underline dotted" }}>
