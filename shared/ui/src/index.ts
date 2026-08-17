@@ -57,10 +57,14 @@ export {
   ziniaoAgentClose,
   ziniaoParseSidebar,
   ziniaoSwitchMenu,
+  ziniaoSamplePrepare,
+  ziniaoSampleFetchTab,
+  ZINIAO_SAMPLE_TABS,
 } from "./ziniao-api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
 export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
 export type { ZiniaoSidebarItem, ZiniaoSidebarGroup, ZiniaoSidebarParse, ZiniaoSwitchMenuResult } from "./ziniao-api";
+export type { ZiniaoSampleRow, ZiniaoTabFetchResult, ZiniaoSamplePrepare } from "./ziniao-api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";

@@ -309,3 +309,67 @@ export async function ziniaoAgentClose(browserId: number): Promise<void> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_close");
   return tauriInvoke("ziniao_agent_close", { browserId });
 }
+
+// ── 达人寄样数据抓取（affiliate.tiktok.com 样品申请页） ──
+
+/** 达人寄样数据行（达人 × 产品） */
+export interface ZiniaoSampleRow {
+  /** 达人ID（去 @） */
+  creator_id: string;
+  /** 达人昵称 */
+  creator_name: string;
+  product_id: string;
+  product_title: string;
+  sku_desc: string;
+  /** 所属状态 tab id（0=全部 10=待审核 20=待发货 30=已发货 40=处理中 50=已完成 100=已取消） */
+  status: number;
+  /** 抓取时间（epoch 毫秒字符串） */
+  fetch_time: string;
+}
+
+/** 单个状态 tab 的抓取结果 */
+export interface ZiniaoTabFetchResult {
+  tab: number;
+  /** 该 tab 总申请数（接口 total_count 口径） */
+  total: number;
+  rows: ZiniaoSampleRow[];
+  /** 抓取到的页数 */
+  pages: number;
+  note: string;
+}
+
+/** 样品申请页准备状态（前端轮询，登录等待） */
+export interface ZiniaoSamplePrepare {
+  /** 页面已就绪（可开始抓取） */
+  ready: boolean;
+  /** 需要用户手动登录 */
+  need_login: boolean;
+  url: string;
+  note: string;
+}
+
+/** 达人寄样申请页 URL */
+export const ZINIAO_SAMPLE_URL = "https://affiliate.tiktok.com/affiliate/sample/sample-request";
+
+/** 状态 tab 定义（id + 显示名 + 是否默认勾选） */
+export const ZINIAO_SAMPLE_TABS: { id: number; name: string; default?: boolean }[] = [
+  { id: 0, name: "全部" },
+  { id: 10, name: "待审核", default: true },
+  { id: 20, name: "待发货", default: true },
+  { id: 30, name: "已发货" },
+  { id: 40, name: "处理中" },
+  { id: 50, name: "已完成" },
+  { id: 100, name: "已取消" },
+];
+
+/** 准备样品申请页（幂等，可轮询；need_login 时提示用户手动登录） */
+export async function ziniaoSamplePrepare(port: number): Promise<ZiniaoSamplePrepare> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_sample_prepare");
+  return tauriInvoke("ziniao_sample_prepare", { port });
+}
+
+/** 抓取单个状态 tab 的全部数据（分页自动翻完） */
+export async function ziniaoSampleFetchTab(port: number, tab: number): Promise<ZiniaoTabFetchResult> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_sample_fetch_tab");
+  return tauriInvoke("ziniao_sample_fetch_tab", { port, tab });
+}
