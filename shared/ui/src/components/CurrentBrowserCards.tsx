@@ -719,7 +719,10 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
     if (!menu) return;
     const onPointerDown = (e: MouseEvent | TouchEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest(".current-card-ctx-menu")) setMenu(null);
+      // 菜单容器 className 为 ctx-menu（见下方渲染）：class 不匹配会导致
+      // mousedown 点击菜单项时误判为「点击空白」而关闭菜单，使 click 事件丢失，
+      // 表现为「打开/调试打开」不生效且无提示
+      if (!t.closest(".ctx-menu")) setMenu(null);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMenu(null);
