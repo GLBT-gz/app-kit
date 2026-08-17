@@ -8,6 +8,8 @@ import { Button } from "./controls/Button";
 export interface ViewToggleItem {
   id: string;
   label: string;
+  /** 悬停提示（可选，如公司全名） */
+  title?: string;
 }
 
 export interface ViewToggleProps {
@@ -29,6 +31,7 @@ export function ViewToggle({ views, value, onChange, onWheel, disabledId }: View
           size="sm"
           className={value === v.id ? "active" : ""}
           disabled={v.id === disabledId}
+          title={v.title}
           onClick={() => onChange(v.id)}
         >
           {v.label}
