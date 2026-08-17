@@ -149,6 +149,8 @@ export interface ZiniaoSidebarItem {
   selected: boolean;
   x: number;
   y: number;
+  /** 顶层链接在 .p-menu-inner 中的子节点序号（分组内子项恒 0，仅顶层交错排序用） */
+  pos?: number;
 }
 
 /** 可展开分组（订单/商品/物流…） */
@@ -156,6 +158,8 @@ export interface ZiniaoSidebarGroup {
   name: string;
   expanded: boolean;
   items: ZiniaoSidebarItem[];
+  /** 分组在 .p-menu-inner 中的子节点序号（与顶层链接按此交错还原网页顺序） */
+  pos?: number;
 }
 
 /** 左侧导航解析结果 */

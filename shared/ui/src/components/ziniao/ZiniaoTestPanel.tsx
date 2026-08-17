@@ -38,6 +38,14 @@ export interface ZiniaoPatchInfo {
 const TK01_BROWSER_ID = 27520698532963;
 const TK01_CDP_PORT = 12185;
 
+/** 顶层链接与分组按 DOM 子节点序号（pos）交错，还原网页视觉顺序（链接可能夹在分组中间） */
+function menuEntries(menu: ZiniaoSidebarParse) {
+  return [
+    ...menu.links.map((item) => ({ kind: "link" as const, pos: item.pos ?? 0, item })),
+    ...menu.groups.map((group) => ({ kind: "group" as const, pos: group.pos ?? 0, group })),
+  ].sort((a, b) => a.pos - b.pos);
+}
+
 /** TikTok Shop 侧边栏菜单项行（含「切换」按钮） */
 function TtsItemRow({
   item,
@@ -252,10 +260,7 @@ export function ZiniaoTestPanel() {
     run("全部路由切换测试", async () => {
       if (!selectedShop || !ttsMenu) throw new Error("请先解析侧边栏菜单");
       const cdp = await ziniaoAgentCdpPort(selectedShop.browserId);
-      const targets: ZiniaoSidebarItem[] = [
-        ...ttsMenu.links,
-        ...ttsMenu.groups.flatMap((g) => g.items),
-      ];
+      const targets: ZiniaoSidebarItem[] = ttsMenu.items;
       if (targets.length === 0) return "菜单为空，无可切换项";
       let ok = 0;
       const fails: string[] = [];
@@ -320,7 +325,7 @@ export function ZiniaoTestPanel() {
   const tkCruise = () =>
     run("TK01 全部路由切换测试", async () => {
       if (!tkMenu) throw new Error("请先解析 TK01 左侧菜单");
-      const targets: ZiniaoSidebarItem[] = [...tkMenu.links, ...tkMenu.groups.flatMap((g) => g.items)];
+      const targets: ZiniaoSidebarItem[] = tkMenu.items;
       if (targets.length === 0) return "菜单为空，无可切换项";
       let ok = 0;
       const fails: string[] = [];
@@ -628,21 +633,22 @@ export function ZiniaoTestPanel() {
           </div>
           {ttsMenu && (
             <div className="tts-menu">
-              {ttsMenu.links.map((it) => (
-                <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
-              ))}
-              {ttsMenu.groups.map((g) => (
-                <div className="tts-group" key={g.name}>
-                  <div className="tts-group-header">
-                    <span className="tts-group-name">{g.name}</span>
-                    {g.expanded && <span className="zn-badge ok">已展开</span>}
-                    <span className="tts-group-count">{g.items.length} 项</span>
+              {menuEntries(ttsMenu).map((e) =>
+                e.kind === "link" ? (
+                  <TtsItemRow key={e.item.href} item={e.item} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
+                ) : (
+                  <div className="tts-group" key={e.group.name}>
+                    <div className="tts-group-header">
+                      <span className="tts-group-name">{e.group.name}</span>
+                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
+                      <span className="tts-group-count">{e.group.items.length} 项</span>
+                    </div>
+                    {e.group.items.map((it) => (
+                      <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
+                    ))}
                   </div>
-                  {g.items.map((it) => (
-                    <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
-                  ))}
-                </div>
-              ))}
+                ),
+              )}
             </div>
           )}
         </TestSection>
@@ -677,21 +683,22 @@ export function ZiniaoTestPanel() {
           )}
           {tkMenu && (
             <div className="tts-menu">
-              {tkMenu.links.map((it) => (
-                <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
-              ))}
-              {tkMenu.groups.map((g) => (
-                <div className="tts-group" key={g.name}>
-                  <div className="tts-group-header">
-                    <span className="tts-group-name">{g.name}</span>
-                    {g.expanded && <span className="zn-badge ok">已展开</span>}
-                    <span className="tts-group-count">{g.items.length} 项</span>
+              {menuEntries(tkMenu).map((e) =>
+                e.kind === "link" ? (
+                  <TtsItemRow key={e.item.href} item={e.item} disabled={busy} onSwitch={tkSwitchItem} />
+                ) : (
+                  <div className="tts-group" key={e.group.name}>
+                    <div className="tts-group-header">
+                      <span className="tts-group-name">{e.group.name}</span>
+                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
+                      <span className="tts-group-count">{e.group.items.length} 项</span>
+                    </div>
+                    {e.group.items.map((it) => (
+                      <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
+                    ))}
                   </div>
-                  {g.items.map((it) => (
-                    <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
-                  ))}
-                </div>
-              ))}
+                ),
+              )}
             </div>
           )}
         </TestSection>
