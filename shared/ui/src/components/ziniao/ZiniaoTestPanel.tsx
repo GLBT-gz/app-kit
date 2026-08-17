@@ -639,13 +639,16 @@ export function ZiniaoTestPanel() {
                 ) : (
                   <div className="tts-group" key={e.group.name}>
                     <div className="tts-group-header">
+                      <span className="tts-group-arrow">{e.group.expanded ? "▾" : "▸"}</span>
                       <span className="tts-group-name">{e.group.name}</span>
-                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
                       <span className="tts-group-count">{e.group.items.length} 项</span>
+                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
                     </div>
-                    {e.group.items.map((it) => (
-                      <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
-                    ))}
+                    <div className="tts-group-items">
+                      {e.group.items.map((it) => (
+                        <TtsItemRow key={it.href} item={it} disabled={busy || !selectedShop} onSwitch={switchTtsItem} />
+                      ))}
+                    </div>
                   </div>
                 ),
               )}
@@ -689,13 +692,16 @@ export function ZiniaoTestPanel() {
                 ) : (
                   <div className="tts-group" key={e.group.name}>
                     <div className="tts-group-header">
+                      <span className="tts-group-arrow">{e.group.expanded ? "▾" : "▸"}</span>
                       <span className="tts-group-name">{e.group.name}</span>
-                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
                       <span className="tts-group-count">{e.group.items.length} 项</span>
+                      {e.group.expanded && <span className="zn-badge ok">已展开</span>}
                     </div>
-                    {e.group.items.map((it) => (
-                      <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
-                    ))}
+                    <div className="tts-group-items">
+                      {e.group.items.map((it) => (
+                        <TtsItemRow key={it.href} item={it} disabled={busy} onSwitch={tkSwitchItem} />
+                      ))}
+                    </div>
                   </div>
                 ),
               )}
