@@ -34,7 +34,7 @@ export function CommandModal({
         <div className="modal-body">
           <div className="cmd-field"><label>完整命令</label><div className="cmd-box"><code>{info.command_line}</code><button className="cmd-copy" onClick={() => navigator.clipboard.writeText(info.command_line)}>复制</button></div></div>
           <div className="cmd-field"><label>可执行文件</label><code className="cmd-inline">{info.exe_path}</code></div>
-          <div className="cmd-field"><label>调试端口</label><code className="cmd-inline" style={{ color: "var(--text-secondary)", userSelect: "none" }}>--remote-debugging-port=&lt;端口号&gt;</code></div>
+          <div className="cmd-field"><label>调试端口</label><code className="cmd-inline" style={{ color: "var(--text-secondary)", userSelect: "none" }}>{info.debug_port > 0 ? `--remote-debugging-port=${info.debug_port}` : "未指定（正常启动，不带调试端口）"}</code></div>
           <div className="cmd-field"><label>参数</label><div className="cmd-args">{info.args.map((arg, i) => <code key={i} className="cmd-arg">{arg}</code>)}</div></div>
         </div>
         <div className="modal-footer">

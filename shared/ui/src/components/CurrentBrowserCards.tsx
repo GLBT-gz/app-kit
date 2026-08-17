@@ -148,7 +148,8 @@ const ProfileCard = memo(function ProfileCard({
       onContextMenu={(e) => {
         onCardContextMenu?.(e, browserType, profile);
       }}
-      disabled={isDefault || isLaunching}
+      // 默认路径卡片不禁用：需保持右键菜单可用（启动/全部终止）；点击选择由父组件拦截提示
+      disabled={isLaunching}
       title={
         isDefault
           ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
@@ -320,6 +321,12 @@ function CurrentBrowserCards({
   const selectedKeysRef = useRef(selectedKeys);
   selectedKeysRef.current = selectedKeys;
   const handleCardClick = useCallback((bt: string, p: BCPProfile) => {
+    // 浏览器默认用户路径不可用于自动化控制：点击仅提示，不进入选择逻辑
+    const b = browsers.find(x => x.browser_type === bt);
+    if (b && isDefaultUserDir(b, p)) {
+      showToast("浏览器默认用户路径不可用于自动化控制", "warning");
+      return;
+    }
     const key = mkKey(bt, p);
 
     // 多选模式
@@ -343,7 +350,7 @@ function CurrentBrowserCards({
         .catch(() => {})
         .finally(() => setLaunching(null));
     }
-  }, [onSelectionChange, onSelect, onLaunchProfile]);
+  }, [browsers, showToast, onSelectionChange, onSelect, onLaunchProfile]);
 
   // ── 右键菜单：打开 / 调试打开 ──
 
@@ -391,6 +398,13 @@ function CurrentBrowserCards({
           .find(pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id)
         : undefined;
       if (runningProfile) {
+        if (
+          !window.confirm(
+            `「${runningProfile.name}」正在运行（同一用户目录）。\n调试启动需要先关闭该进程以释放目录锁，未保存的内容可能丢失。\n确定关闭并继续？`,
+          )
+        ) {
+          return;
+        }
         showToast(`「${runningProfile.name}」正在运行（同用户目录），先关闭...`, "warning");
         await killBrowserProfileProcess(bt, runningProfile.id, runningProfile.user_data_dir);
         showToast("已关闭旧进程，等待释放目录锁", "info");
@@ -745,9 +759,11 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
   const { x, y, bt, p } = menu;
   const ctxBrowser = browsers.find(b => b.browser_type === bt);
   const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, p) : false;
+  // 菜单高度按项数估算（每项约 32px + 上下 padding 8px），与通用 ContextMenu 保持一致
+  const menuHeight = (ctxIsDefault ? 2 : 3) * 32 + 8;
   const menuStyle = {
-    left: Math.max(4, Math.min(x, window.innerWidth - 168)),
-    top: Math.max(4, Math.min(y, window.innerHeight - 132)),
+    left: Math.max(4, Math.min(x, window.innerWidth - 180)),
+    top: Math.max(4, Math.min(y, window.innerHeight - menuHeight)),
   };
   const run = (fn: (bt: string, p: BCPProfile) => void) => {
     setMenu(null);
@@ -767,7 +783,7 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
             启动
           </button>
           <button
-            className="ctx-item"
+            className="ctx-item danger"
             onClick={() => run(onKillAll)}
             title={`全部终止「${p.name}」所属浏览器（关闭全部窗口与进程，含独立目录实例）`}
           >

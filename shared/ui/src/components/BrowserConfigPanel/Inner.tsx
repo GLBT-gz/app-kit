@@ -353,8 +353,16 @@ export function BrowserConfigInner({
         const runningProfile = (browser.profiles || []).find(pr =>
           pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id
         );
+        const runningName = runningProfile?.name || running.profile_id;
+        if (
+          !window.confirm(
+            `「${runningName}」正在运行（同一用户目录）。\n调试启动需要先关闭该进程以释放目录锁，未保存的内容可能丢失。\n确定关闭并继续？`,
+          )
+        ) {
+          return;
+        }
         showToast(
-          `「${runningProfile?.name || running.profile_id}」正在运行（同用户目录），先关闭...`,
+          `「${runningName}」正在运行（同用户目录），先关闭...`,
           "warning"
         );
         await killBrowserProfileProcess(browser.browser_type, running.profile_id, running.user_data_dir);

@@ -1127,6 +1127,18 @@
   opacity: 0.7;
 }
 
+/* 危险菜单项（关闭/全部终止等）：红色文字 + 淡红 hover 底 */
+.ctx-item.danger {
+  color: var(--error);
+}
+.ctx-item.danger:hover {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+}
+.ctx-item.danger svg {
+  opacity: 0.9;
+}
+
 .current-card-ctx-item:hover svg {
   opacity: 1;
 }
