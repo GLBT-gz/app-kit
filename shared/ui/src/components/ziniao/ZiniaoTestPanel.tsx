@@ -9,8 +9,8 @@ import {
   ziniaoNavigate,
   ziniaoScreenshot,
 } from "../../ziniao-api";
-import { ziniaoParseSidebar, ziniaoSwitchMenu } from "../../ziniao-api";
-import type { ZiniaoSidebarItem, ZiniaoSidebarParse } from "../../ziniao-api";
+import { ziniaoParseSidebar, ziniaoSwitchMenu, ziniaoSidebarExpand } from "../../ziniao-api";
+import type { ZiniaoSidebarItem, ZiniaoSidebarParse, ZiniaoSidebarExpandResult } from "../../ziniao-api";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { isTauriRuntime } from "../../tauri-utils";
 import { useLog } from "../LogPanel";
@@ -99,6 +99,7 @@ export function ZiniaoTestPanel() {
   // ── 测试 8：TK01 固定环境（端口 12185，省去每次解析店铺） ──
   const [tkDetected, setTkDetected] = useState<string | null>(null);
   const [tkMenu, setTkMenu] = useState<ZiniaoSidebarParse | null>(null);
+  const [tkExpand, setTkExpand] = useState<ZiniaoSidebarExpandResult | null>(null);
 
   const logCtx = useLog({ eventName: null, storageKey: "ziniao:test-log" });
   const { log } = logCtx;
@@ -348,6 +349,22 @@ export function ZiniaoTestPanel() {
       if (fails.length) log(`TK01 全部路由切换测试 → ${summary}`, "error");
       else log(`TK01 全部路由切换测试 → ${summary}`, "success");
       return "";
+    }, true);
+
+  // 检测侧边栏：只读测量当前宽度/折叠状态，不做任何修改
+  const tkDetectSidebar = () =>
+    run("检测 TK01 侧边栏", async () => {
+      const r = await ziniaoSidebarExpand(TK01_CDP_PORT);
+      setTkExpand(r);
+      return `TK01 :${r.port} → ${r.on_seller ? `卖家中心 ${r.width_before}px${r.was_collapsed ? "（折叠）" : "（展开）"}` : "非卖家页"} · ${r.note}`;
+    }, true);
+
+  // 强制展开：路由级折叠（compass 等）视口宽度无效，后端移除折叠类 + 注入宽度 CSS
+  const tkForceExpand = () =>
+    run("强制展开 TK01 侧边栏", async () => {
+      const r = await ziniaoSidebarExpand(TK01_CDP_PORT);
+      setTkExpand(r);
+      return `TK01 :${r.port} → ${r.note}${r.width_before > 120 || r.width_after > 120 ? `（${r.width_before} → ${r.width_after}px）` : ""}`;
     }, true);
 
   // TK01 截图
@@ -667,6 +684,17 @@ export function ZiniaoTestPanel() {
             <button className="zn-btn" disabled={busy} onClick={tkParseMenu}>
               解析左侧菜单
             </button>
+            <button className="zn-btn" disabled={busy} onClick={tkDetectSidebar} title="只读测量当前侧边栏宽度/折叠状态">
+              检测侧边栏
+            </button>
+            <button
+              className="zn-btn"
+              disabled={busy}
+              onClick={tkForceExpand}
+              title="compass 等路由强制折叠为图标模式（视口宽度无关），点击展开为 220px 宽"
+            >
+              强制展开
+            </button>
             <button className="zn-btn" disabled={busy || !tkMenu} onClick={tkCruise}>
               全部路由切换测试
             </button>
@@ -675,6 +703,16 @@ export function ZiniaoTestPanel() {
             </button>
             {tkDetected && <span className="zn-sub mono">{tkDetected}</span>}
           </div>
+          {tkExpand && (
+            <div className="zn-shop-ops">
+              <span className={`zn-badge ${tkExpand.on_seller ? (tkExpand.was_collapsed ? "warn" : "ok") : "err"}`}>
+                {tkExpand.on_seller ? (tkExpand.was_collapsed ? "侧边栏折叠" : "侧边栏展开") : "非卖家页"}
+              </span>
+              <span className="zn-sub">
+                宽度 {tkExpand.width_before} → {tkExpand.width_after}px · {tkExpand.note}
+              </span>
+            </div>
+          )}
           {tkMenu && (
             <div className="zn-shop-ops">
               <span className="zn-sub">

@@ -205,6 +205,24 @@ export async function ziniaoSwitchMenu(port: number, query: string): Promise<Zin
   return tauriInvoke("ziniao_switch_menu", { port, query });
 }
 
+/** 侧边栏检测/展开结果（compass 等路由折叠为图标模式时用） */
+export interface ZiniaoSidebarExpandResult {
+  port: number;
+  /** 当前是否在 TikTok 卖家中心页（有 `.sidebar-root`） */
+  on_seller: boolean;
+  /** 展开前是否处于折叠态 */
+  was_collapsed: boolean;
+  width_before: number;
+  width_after: number;
+  note: string;
+}
+
+/** 检测并强制展开 TikTok 卖家中心左侧导航（返回展开前后宽度与折叠状态） */
+export async function ziniaoSidebarExpand(port: number): Promise<ZiniaoSidebarExpandResult> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_sidebar_expand");
+  return tauriInvoke("ziniao_sidebar_expand", { port });
+}
+
 // ── 紫鸟 agent_mode 直控（v10.9 patch，登录后自动开 HTTP 服务） ──
 
 /** agent_mode 店铺信息 */
