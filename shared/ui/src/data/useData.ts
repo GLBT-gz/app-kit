@@ -86,6 +86,14 @@ export function useData<T>(
     return () => window.removeEventListener("ls-changed", handler);
   }, [keyRef.key, forceUpdate]);
 
+  // 全局刷新通知：App 层切 Tab / 后台任务完成时广播，强制重读 localStorage。
+  // 兜底覆盖「后台运行时 ls-changed 事件丢失」导致的手动页与自动化数据不同步。
+  useEffect(() => {
+    const handler = () => forceUpdate();
+    window.addEventListener("ls-refresh-all", handler);
+    return () => window.removeEventListener("ls-refresh-all", handler);
+  }, [forceUpdate]);
+
   const setAndPersist = useCallback(
     (next: T | ((prev: T) => T)) => {
       setValue((prev) => {
