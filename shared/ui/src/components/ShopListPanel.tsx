@@ -46,6 +46,8 @@ export interface ShopListPanelProps {
   onBatchToggle?: (togglingTo: boolean) => void;
   /** 批量切换结束（mouseup/离开）回调（003 用于写日志） */
   onBatchEnd?: () => void;
+  /** 每行操作按钮区（渲染在信息区与开关之间，如「打开/激活」） */
+  renderAction?: (shop: ShopListShop) => ReactNode;
   emptyText?: string;
   /** 额外 CSS class（追加到根 .temu-shop-section） */
   className?: string;
@@ -77,6 +79,7 @@ export function ShopListPanel({
   showNoEntity = false,
   onBatchToggle,
   onBatchEnd,
+  renderAction,
   emptyText = "暂无店铺数据",
   className,
 }: ShopListPanelProps) {
@@ -250,6 +253,7 @@ export function ShopListPanel({
                   {shopSummaries?.[s.mall_name] && <span className="temu-shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
                 </div>
               </div>
+              {renderAction?.(s)}
               <Switch
                 checked={!!enabledMap[s.mall_name]}
                 onMouseDown={(e) => handleToggleMouseDown(e, s.mall_name)}
