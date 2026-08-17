@@ -60,11 +60,15 @@ export {
   ziniaoSamplePrepare,
   ziniaoSampleFetchTab,
   ZINIAO_SAMPLE_TABS,
+  crossBrowserStart,
+  crossBrowserLoginCheck,
+  crossBrowserClose,
 } from "./ziniao-api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
 export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
 export type { ZiniaoSidebarItem, ZiniaoSidebarGroup, ZiniaoSidebarParse, ZiniaoSwitchMenuResult } from "./ziniao-api";
 export type { ZiniaoSampleRow, ZiniaoTabFetchResult, ZiniaoSamplePrepare } from "./ziniao-api";
+export type { CrossStart, CrossLoginStatus } from "./ziniao-api";
 
 // Components
 export { AppLayout } from "./components/AppLayout";

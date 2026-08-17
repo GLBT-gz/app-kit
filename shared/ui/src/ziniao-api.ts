@@ -358,8 +358,9 @@ export const ZINIAO_SAMPLE_TABS: { id: number; name: string; default?: boolean }
   { id: 20, name: "待发货", default: true },
   { id: 30, name: "已发货" },
   { id: 40, name: "处理中" },
-  { id: 50, name: "已完成" },
-  { id: 100, name: "已取消" },
+  // 注意：已完成=100、已取消=50（实测页面 group/list 请求 postData.tab，与直觉相反，勿改回）
+  { id: 100, name: "已完成" },
+  { id: 50, name: "已取消" },
 ];
 
 /** 准备样品申请页（幂等，可轮询；need_login 时提示用户手动登录） */
@@ -372,4 +373,49 @@ export async function ziniaoSamplePrepare(port: number): Promise<ZiniaoSamplePre
 export async function ziniaoSampleFetchTab(port: number, tab: number): Promise<ZiniaoTabFetchResult> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_sample_fetch_tab");
   return tauriInvoke("ziniao_sample_fetch_tab", { port, tab });
+}
+
+// ── 跨境店（affiliate.tiktokshopglobalselling.com，普通浏览器 Edge/Chrome） ──
+
+/** 跨境店浏览器启动结果 */
+export interface CrossStart {
+  /** 该浏览器 CDP 调试端口（判登录轮询/抓取复用） */
+  port: number;
+  /** 配置名（profileId，即「以邮箱为单位」的账号名） */
+  profile_name: string;
+  /** 是否已登录（打开首页后即判定一次） */
+  logged_in: boolean;
+  url: string;
+  note: string;
+}
+
+/** 跨境店登录状态（前端轮询用，幂等） */
+export interface CrossLoginStatus {
+  /** 已进入应用页（非登录页） */
+  logged_in: boolean;
+  /** 停在登录页，需用户手动登录 */
+  need_login: boolean;
+  url: string;
+  note: string;
+}
+
+/** 跨境店首页 URL 前缀（shop_region 参数化，如 MY/VN/PH） */
+export const CROSS_HOME_URL = "https://affiliate.tiktokshopglobalselling.com/platform/homepage?shop_region=";
+
+/** 启动浏览器并打开跨境店首页（幂等：已有实例直连，不重复启动） */
+export async function crossBrowserStart(profileKey: string, region: string): Promise<CrossStart> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("cross_browser_start");
+  return tauriInvoke("cross_browser_start", { profileKey, region });
+}
+
+/** 检测登录状态（幂等，前端轮询直到 logged_in） */
+export async function crossBrowserLoginCheck(port: number): Promise<CrossLoginStatus> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("cross_browser_login_check");
+  return tauriInvoke("cross_browser_login_check", { port });
+}
+
+/** 关闭跨境店浏览器（Browser.close，等价窗口关闭） */
+export async function crossBrowserClose(port: number): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("cross_browser_close");
+  return tauriInvoke("cross_browser_close", { port });
 }
