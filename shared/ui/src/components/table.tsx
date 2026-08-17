@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** 表格列定义（收敛自 006/007 的 VirtualTable） */
 export interface TableColumn<T> {
@@ -143,8 +143,8 @@ export function useTableSelectionCopy(
 
 /** 虚拟滚动表格 - 只渲染可视区域内的行，适合大列表；支持文本框选复制、悬停提示、表头点击
  *
- * fixedLayout=true 时列宽固定（按表头文本估算，已指定 style.width 的列按指定值），
- * 不随可见行内容变化，避免滚动时列宽跳动；默认 auto 布局（列宽随可见内容自适应）。
+ * fixedLayout=true 时列宽固定且按「全量行内容」计算（内容完整展示、滚动时列宽不跳动，
+ * 已指定 style.width 的列按指定值）；默认 auto 布局（列宽随当前可见行内容自适应）。
  */
 function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout }: {
   rows: T[];
@@ -159,10 +159,23 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     { header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } },
     ...columns,
   ];
-  // 固定列宽模式：未指定 style.width 的列按表头文本估算（12px 字号 + 内边距）
-  const colWidths = fixedLayout
-    ? allColumns.map((c) => c.style?.width ?? Math.min(400, Math.max(88, c.header.length * 14 + 28)))
-    : null;
+  // 固定列宽模式：列宽按「全量行内容」计算（而非仅可见行），保证内容完整展示且滚动时不跳动。
+  // 已指定 style.width 的列按指定值；其余取表头与全部行该列渲染文本的最大估算宽度（中文 14px/字、ASCII 8px/字 + 内边距）。
+  const colWidths = useMemo(() => {
+    if (!fixedLayout) return null;
+    const textWidth = (s: string) => {
+      let w = 0;
+      for (const ch of s) w += ch.charCodeAt(0) > 255 ? 14 : 8;
+      return w;
+    };
+    return allColumns.map((col, ci) => {
+      if (col.style?.width !== undefined) return col.style.width as number;
+      let w = textWidth(col.header) + 24;
+      for (const r of rows) w = Math.max(w, textWidth(toText(col.render(r, ci))) + 24);
+      return Math.min(800, w);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixedLayout, columns, rows]);
   const ROW_HEIGHT = 28;
   const OVERSCAN = 15;
   const containerRef = useRef<HTMLDivElement>(null);
