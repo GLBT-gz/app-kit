@@ -120,7 +120,11 @@ export function useZiniaoAgent(log: ZnLogFn) {
           await sleep(2000);
           let cdp = 0;
           try {
-            cdp = await ziniaoAgentCdpPort(shop.browserId);
+            // 优先用 startBrowser 官方响应返回的 debuggPort（权威归属，杜绝探测错位到
+            // 其他运行中环境——曾发生抓错店铺数据的严重事故）；老版本响应不带该字段时
+            // 回退动态探测（find_cdp_port 已加归属校验）
+            const dbg = (openResp as any)?.data?.webDriverConfig?.debuggPort as number | undefined;
+            cdp = dbg || (await ziniaoAgentCdpPort(shop.browserId));
           } catch (e) {
             log(`获取 ${shop.browserName} CDP 端口失败（跳过自动进入）：${e}`, "warn");
             setShop(shop.browserId, "已打开");
