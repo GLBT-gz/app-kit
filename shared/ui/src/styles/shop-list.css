@@ -28,6 +28,9 @@
   font-size: 10px;
   color: var(--text-muted);
   margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .temu-left-panel .temu-card-hint {
   white-space: nowrap;
