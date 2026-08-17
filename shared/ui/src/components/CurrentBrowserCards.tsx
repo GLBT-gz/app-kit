@@ -810,8 +810,8 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
   const ctxBrowser = browsers.find(b => b.browser_type === bt);
   const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, p) : false;
   // 菜单高度按项数估算（每项约 32px + 上下 padding 8px），与通用 ContextMenu 保持一致
-  // 默认目录：启动/全部终止（2 项）；普通：打开/调试打开/关闭/命令/快捷方式（5 项）
-  const menuHeight = (ctxIsDefault ? 2 : 5) * 32 + 8;
+  // 默认目录：启动/全部终止/命令/快捷方式（4 项）；普通：打开/调试打开/关闭/命令/快捷方式（5 项）
+  const menuHeight = (ctxIsDefault ? 4 : 5) * 32 + 8;
   const menuStyle = {
     left: Math.max(4, Math.min(x, window.innerWidth - 180)),
     top: Math.max(4, Math.min(y, window.innerHeight - menuHeight)),
@@ -840,6 +840,22 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
             全部终止
+          </button>
+          <button
+            className="ctx-item"
+            onClick={() => run(onShowCommand)}
+            title="获取启动命令（复制 / 启动）"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5" /><path d="M21 3l-7 7M3 21l7-7" /></svg>
+            命令
+          </button>
+          <button
+            className="ctx-item"
+            onClick={() => run(onShortcut)}
+            title="创建桌面快捷方式"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            快捷方式
           </button>
         </>
       ) : (
