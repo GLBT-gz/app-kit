@@ -16,6 +16,8 @@ export interface ProfileCardProps {
   canLaunch: boolean;
   canCommand: boolean;
   canShortcut: boolean;
+  /** 该 profile 正在启动：禁用启动/调试按钮防连点 */
+  isLaunching?: boolean;
   onLaunch: (p: BCPProfile, portStr: string) => void;
   onDebugLaunch: (p: BCPProfile) => void;
   onShowCommand: (p: BCPProfile, portStr: string) => void;
@@ -24,7 +26,7 @@ export interface ProfileCardProps {
 
 export function ProfileCard({
   profile: p, isDefault, dirTag, showDirTag,
-  canLaunch, canCommand, canShortcut,
+  canLaunch, canCommand, canShortcut, isLaunching,
   onLaunch, onDebugLaunch, onShowCommand, onShortcut,
 }: ProfileCardProps) {
   return (
@@ -65,13 +67,13 @@ export function ProfileCard({
           <div className="pc-actions">
             <div className="pc-btn-row">
               {canLaunch && (
-                <Button variant="primary" size="sm" onClick={() => onLaunch(p, "")}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>启动
+                <Button variant="primary" size="sm" disabled={isLaunching} onClick={() => onLaunch(p, "")}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>{isLaunching ? "启动中..." : "启动"}
                 </Button>
               )}
               {canLaunch && (
-                <Button size="sm" className="ui-btn-debug" onClick={() => onDebugLaunch(p)} title="随机可用端口调试启动">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>调试启动
+                <Button size="sm" className="ui-btn-debug" disabled={isLaunching} onClick={() => onDebugLaunch(p)} title="随机可用端口调试启动">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>{isLaunching ? "启动中..." : "调试启动"}
                 </Button>
               )}
               {canCommand && (

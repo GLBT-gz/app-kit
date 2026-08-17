@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
-import { findAvailablePort, detectBrowserRunningProcesses, killBrowserProfileProcess, killAllBrowserProcesses } from "../../api";
+import { killAllBrowserProcesses } from "../../api";
+import { debugLaunchWithLockCheck } from "../browserLaunch";
 import { ziniaoPatchStatus, ziniaoPatchApply } from "../../ziniao-api";
 import { Button } from "../controls/Button";
 import type { BCPBrowser, BCPProfile } from "./types";
@@ -143,6 +144,8 @@ export function BrowserConfigInner({
   const [cmdModal, setCmdModal] = useState<{
     profile: BCPProfile; info: LaunchCommandInfo; portStr: string;
   } | null>(null);
+  /** 正在启动的 profile（user_data_dir|id），用于按钮禁用防连点 */
+  const [launching, setLaunching] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
   const [newUserModal, setNewUserModal] = useState(false);
 
@@ -317,6 +320,8 @@ export function BrowserConfigInner({
 
   const doLaunch = async (p: BCPProfile, portStr: string) => {
     if (!onLaunchProfile) return;
+    const key = `${p.user_data_dir}|${p.id}`;
+    setLaunching(key);
     showToast("启动中...", "info");
     try {
       const portNum = Number(portStr) || 0;
@@ -324,6 +329,7 @@ export function BrowserConfigInner({
       const pid = msg.replace("PID:", "");
       showToast(`${browser.browser_name}「${p.name}」已启动 (PID: ${pid})`, "success");
     } catch (e) { showToast(`启动失败: ${e}`, "error"); }
+    finally { setLaunching(null); }
   };
 
   const doShowCommand = async (p: BCPProfile, portStr: string) => {
@@ -335,54 +341,23 @@ export function BrowserConfigInner({
     } catch (e) { showToast(`获取命令失败: ${e}`, "error"); }
   };
 
-  /** 调试启动：先杀旧进程（同一 user_data_dir 下任何正在运行的 profile），再以随机可用端口调试启动 */
+  /** 调试启动：复用共享 util（锁检查 + 杀旧进程 + 找端口 + 启动），与当前配置行为一致 */
   const doDebugLaunch = async (p: BCPProfile) => {
     if (!onLaunchProfile) return;
-
-    // Chrome/Edge 的 singleton 锁是针对整个 user_data_dir 的，不是针对某个 profile。
-    // 同一目录下有任何 profile 在运行，新进程都无法使用该目录。
-    // 因此需要检查同一 user_data_dir 下所有 profile，找到正在运行的那个并杀掉。
+    const key = `${p.user_data_dir}|${p.id}`;
+    setLaunching(key);
     try {
-      const allProfilesUnderDir = (browser.profiles || [])
-        .filter(pr => pr.user_data_dir === p.user_data_dir)
-        .map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id }));
-
-      const states = await detectBrowserRunningProcesses(allProfilesUnderDir);
-      const running = states.find(s => s.is_running);
-      if (running) {
-        const runningProfile = (browser.profiles || []).find(pr =>
-          pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id
-        );
-        const runningName = runningProfile?.name || running.profile_id;
-        if (
-          !window.confirm(
-            `「${runningName}」正在运行（同一用户目录）。\n调试启动需要先关闭该进程以释放目录锁，未保存的内容可能丢失。\n确定关闭并继续？`,
-          )
-        ) {
-          return;
-        }
-        showToast(
-          `「${runningName}」正在运行（同用户目录），先关闭...`,
-          "warning"
-        );
-        await killBrowserProfileProcess(browser.browser_type, running.profile_id, running.user_data_dir);
-        showToast(`已关闭旧进程`, "success");
-        // 等待进程完全退出，释放 Singleton 锁
-        await new Promise(r => setTimeout(r, 1500));
-      }
-    } catch (e) {
-      showToast(`检测/关闭进程失败: ${e}`, "error");
-      return;
-    }
-
-    showToast("查找可用端口...", "info");
-    try {
-      const port = await findAvailablePort(40000, 60000);
-      showToast(`选中端口 ${port}，启动中...`, "info");
-      const msg = await onLaunchProfile(browser.browser_type, p.id, p.user_data_dir, port);
-      const pid = msg.replace("PID:", "");
-      showToast(`${browser.browser_name}「${p.name}」已启动 (PID: ${pid}) 调试端口: ${port}`, "success");
+      const result = await debugLaunchWithLockCheck({
+        browserType: browser.browser_type,
+        profiles: browser.profiles || [],
+        profile: p,
+        launch: onLaunchProfile,
+        log: (msg, level) => showToast(msg, level),
+      });
+      if (!result) return; // 用户取消关闭确认
+      showToast(`${browser.browser_name}「${p.name}」已启动 (PID: ${result.pid}) 调试端口: ${result.port}`, "success");
     } catch (e) { showToast(`调试启动失败: ${e}`, "error"); }
+    finally { setLaunching(null); }
   };
 
   const handleShortcut = async (p: BCPProfile) => {
@@ -425,6 +400,10 @@ export function BrowserConfigInner({
                   value={localExePath}
                   onChange={e => setLocalExePath(e.target.value)}
                   onBlur={() => onExePathChange(localExePath)}
+                  onKeyDown={(e) => {
+                    // 回车即提交（失焦触发 onBlur）
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
                   placeholder="例如: C:\Program Files...\msedge.exe"
                 />
                 {onCheckPath && pathStatus[exePathProp] === 'valid' && <span className="path-status-icon path-valid">✓</span>}
@@ -616,6 +595,7 @@ export function BrowserConfigInner({
                   canLaunch={!!onLaunchProfile}
                   canCommand={!!onGetLaunchCommand}
                   canShortcut={!!onCreateShortcut}
+                  isLaunching={launching === `${p.user_data_dir}|${p.id}`}
                   onLaunch={doLaunch}
                   onDebugLaunch={doDebugLaunch}
                   onShowCommand={doShowCommand}

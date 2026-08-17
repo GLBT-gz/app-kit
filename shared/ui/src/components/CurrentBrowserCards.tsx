@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { detectBrowserRunningProcesses, launchBrowserProfile, findAvailablePort, killBrowserProfileProcess, killAllBrowserProcesses } from "../api";
+import { detectBrowserRunningProcesses, launchBrowserProfile, killBrowserProfileProcess, killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
+import { debugLaunchWithLockCheck } from "./browserLaunch";
+import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
 
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
 
@@ -380,43 +382,21 @@ function CurrentBrowserCards({
     }
   }, [onLaunchProfile, showToast]);
 
-  /** 调试打开：先查同目录运行中的 profile 并关闭（释放 Singleton 锁），
-   *  再分配可用端口以 --remote-debugging-port 启动 */
+  /** 调试打开：复用共享 util（锁检查 + 杀旧进程 + 找端口 + 启动），与全局配置行为一致 */
   const doDebugOpen = useCallback(async (bt: string, p: BCPProfile) => {
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
-      // Chrome/Edge 的 Singleton 锁针对整个 user_data_dir：同目录下有任何 profile
-      // 在运行，新进程都无法使用该目录。先找同目录运行中的 profile 并关闭。
-      const runningProfiles = (browsers.find(b => b.browser_type === bt)?.profiles || [])
-        .filter(pr => pr.user_data_dir === p.user_data_dir)
-        .map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id }));
-      const states = await detectBrowserRunningProcesses(runningProfiles);
-      const running = states.find(s => s.is_running);
-      const runningProfile = running
-        ? (browsers.find(b => b.browser_type === bt)?.profiles || [])
-          .find(pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id)
-        : undefined;
-      if (runningProfile) {
-        if (
-          !window.confirm(
-            `「${runningProfile.name}」正在运行（同一用户目录）。\n调试启动需要先关闭该进程以释放目录锁，未保存的内容可能丢失。\n确定关闭并继续？`,
-          )
-        ) {
-          return;
-        }
-        showToast(`「${runningProfile.name}」正在运行（同用户目录），先关闭...`, "warning");
-        await killBrowserProfileProcess(bt, runningProfile.id, runningProfile.user_data_dir);
-        showToast("已关闭旧进程，等待释放目录锁", "info");
-        // 等待进程完全退出，释放 Singleton 锁
-        await new Promise(r => setTimeout(r, 1500));
-      }
-      showToast("查找可用调试端口...", "info");
-      const port = await findAvailablePort(40000, 60000);
-      const fn = onLaunchProfile || launchBrowserProfile;
-      const msg = await fn(bt, p.id, p.user_data_dir, port);
-      const pid = msg.replace("PID:", "");
-      showToast(`「${p.name}」调试启动成功 (PID: ${pid}, 端口: ${port})`, "success");
+      const profiles = browsers.find(b => b.browser_type === bt)?.profiles || [];
+      const result = await debugLaunchWithLockCheck({
+        browserType: bt,
+        profiles,
+        profile: p,
+        launch: (bt2, id, dir, port) => (onLaunchProfile || launchBrowserProfile)(bt2, id, dir, port),
+        log: (msg, level) => showToast(msg, level),
+      });
+      if (!result) return; // 用户取消关闭确认
+      showToast(`「${p.name}」调试启动成功 (PID: ${result.pid}, 端口: ${result.port})`, "success");
     } catch (e) {
       showToast(`调试打开失败: ${e}`, "error");
     } finally {
@@ -455,6 +435,30 @@ function CurrentBrowserCards({
     }
   }, [showToast]);
 
+  // ── 命令 / 快捷方式（右键菜单入口，与全局配置行为一致） ──
+  const [cmdModal, setCmdModal] = useState<{ browserType: string; profile: BCPProfile; info: LaunchCommandInfo; portStr: string } | null>(null);
+
+  const doShowCommand = useCallback(async (bt: string, p: BCPProfile) => {
+    try {
+      const info = await getLaunchCommand(bt, p.id, p.user_data_dir, 0);
+      setCmdModal({ browserType: bt, profile: p, info, portStr: "" });
+    } catch (e) {
+      showToast(`获取命令失败: ${e}`, "error");
+    }
+  }, [showToast]);
+
+  const doCreateShortcut = useCallback(async (bt: string, p: BCPProfile) => {
+    try {
+      const msg = await createDesktopShortcut(bt, p.id, p.user_data_dir, p.name, p.avatar_base64 ?? "", 0);
+      showToast(
+        msg.startsWith("overwrite:") ? `已覆盖桌面快捷方式: ${p.name}` : `已创建桌面快捷方式: ${msg}`,
+        msg.startsWith("overwrite:") ? "warning" : "success",
+      );
+    } catch (e) {
+      showToast(`创建快捷方式失败: ${e}`, "error");
+    }
+  }, [showToast]);
+
   const isSelectMode = !!onSelect;
   const isMultiSelectMode = !!onSelectionChange;
 
@@ -473,6 +477,9 @@ function CurrentBrowserCards({
   // 前一次状态快照（用于对比，避免无变化时触发重渲染）
   const prevStatusRef = useRef<{ launch: Record<string, LaunchStatus>; conn: Record<string, ConnectionStatus> }>({ launch: {}, conn: {} });
 
+  // detect 取消标记：组件卸载 / effect 重建时置位，放弃进行中的检测结果
+  const detectCancelledRef = useRef(false);
+
   useEffect(() => {
     // 收集所有 profile
     const items: { bt: string; dataDir: string; id: string }[] = [];
@@ -484,7 +491,7 @@ function CurrentBrowserCards({
     if (items.length === 0) return;
 
     const seq = ++cdpSeqRef.current;
-    let cancelled = false;
+    detectCancelledRef.current = false;
 
     const detect = async () => {
       // 容器被 display:none 隐藏 → 跳过本轮 IPC 检测，避免 5 秒一次的主线程阻塞
@@ -494,7 +501,7 @@ function CurrentBrowserCards({
         const states = await detectBrowserRunningProcesses(
           items.map(e => ({ user_data_dir: e.dataDir, profile_id: e.id }))
         );
-        if (cancelled || seq !== cdpSeqRef.current) return;
+        if (detectCancelledRef.current || seq !== cdpSeqRef.current) return;
 
         // 建立 user_data_dir|profile_id → state 的查找表
         const stateByLookup: Record<string, { is_running: boolean; debug_port: string | null; cdp_reachable: boolean }> = {};
@@ -522,7 +529,7 @@ function CurrentBrowserCards({
           connMap[key] = st.cdp_reachable ? "connectable" : "not_connectable";
         }
 
-        if (!cancelled && seq === cdpSeqRef.current) {
+        if (!detectCancelledRef.current && seq === cdpSeqRef.current) {
           // 与前一次对比，只有实际变化时才 setState，避免无意义重渲染
           const prev = prevStatusRef.current;
           const launchChanged = Object.keys(launchMap).some(k => prev.launch[k] !== launchMap[k])
@@ -565,10 +572,22 @@ function CurrentBrowserCards({
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
+    // IntersectionObserver：容器从 display:none 切回可见（tab 内切换）时立即检测一次，
+    // 无需等到下一次 5s 轮询 tick
+    let io: IntersectionObserver | null = null;
+    const el = containerRef.current;
+    if (el && typeof IntersectionObserver !== "undefined") {
+      io = new IntersectionObserver(entries => {
+        if (entries.some(en => en.isIntersecting)) detect();
+      });
+      io.observe(el);
+    }
+
     return () => {
-      cancelled = true;
+      detectCancelledRef.current = true;
       stopPoll();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      io?.disconnect();
     };
   }, [profilesByBrowser]);
 
@@ -680,7 +699,34 @@ function CurrentBrowserCards({
         onDebugOpen={doDebugOpen}
         onClose={doClose}
         onKillAll={doKillAll}
+        onShowCommand={doShowCommand}
+        onShortcut={doCreateShortcut}
       />
+
+      {/* 启动命令 Modal（与全局配置一致） */}
+      {cmdModal && (
+        <CommandModal
+          profile={cmdModal.profile}
+          info={cmdModal.info}
+          portStr={cmdModal.portStr}
+          canLaunch
+          onClose={() => setCmdModal(null)}
+          onLaunch={async (p, portStr) => {
+            const portNum = Number(portStr) || 0;
+            setLaunching(mkKey(cmdModal.browserType, p));
+            try {
+              const fn = onLaunchProfile || launchBrowserProfile;
+              const msg = await fn(cmdModal.browserType, p.id, p.user_data_dir, portNum);
+              const pid = msg.replace("PID:", "");
+              showToast(`「${p.name}」已启动${pid ? ` (PID: ${pid})` : ""}`, "success");
+            } catch (e) {
+              showToast(`打开失败: ${e}`, "error");
+            } finally {
+              setLaunching(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -705,6 +751,8 @@ interface ProfileContextMenuProps {
   onDebugOpen: (bt: string, p: BCPProfile) => void;
   onClose: (bt: string, p: BCPProfile) => void;
   onKillAll: (bt: string, p: BCPProfile) => void;
+  onShowCommand: (bt: string, p: BCPProfile) => void;
+  onShortcut: (bt: string, p: BCPProfile) => void;
 }
 
 /** 独立右键菜单：内部自管状态，通过自定义事件接收「打开」指令。
@@ -715,6 +763,8 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
   onDebugOpen,
   onClose,
   onKillAll,
+  onShowCommand,
+  onShortcut,
 }: ProfileContextMenuProps) {
   const [menu, setMenu] = useState<CtxMenuDetail | null>(null);
 
@@ -760,7 +810,8 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
   const ctxBrowser = browsers.find(b => b.browser_type === bt);
   const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, p) : false;
   // 菜单高度按项数估算（每项约 32px + 上下 padding 8px），与通用 ContextMenu 保持一致
-  const menuHeight = (ctxIsDefault ? 2 : 3) * 32 + 8;
+  // 默认目录：启动/全部终止（2 项）；普通：打开/调试打开/关闭/命令/快捷方式（5 项）
+  const menuHeight = (ctxIsDefault ? 2 : 5) * 32 + 8;
   const menuStyle = {
     left: Math.max(4, Math.min(x, window.innerWidth - 180)),
     top: Math.max(4, Math.min(y, window.innerHeight - menuHeight)),
@@ -816,6 +867,22 @@ const ProfileContextMenu = memo(function ProfileContextMenu({
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
             关闭
+          </button>
+          <button
+            className="ctx-item"
+            onClick={() => run(onShowCommand)}
+            title="获取启动命令（复制 / 启动）"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5" /><path d="M21 3l-7 7M3 21l7-7" /></svg>
+            命令
+          </button>
+          <button
+            className="ctx-item"
+            onClick={() => run(onShortcut)}
+            title="创建桌面快捷方式"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            快捷方式
           </button>
         </>
       )}
