@@ -64,6 +64,10 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border, #40454f);
 }
+/* 横竖滚动条交界的角落方块：透出容器背景（默认白色在深色主题下很刺眼） */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* Maple Mono 字体声明 */
 @font-face {
