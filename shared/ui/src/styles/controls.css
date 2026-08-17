@@ -121,3 +121,40 @@
 }
 .ui-switch input:checked + .ui-switch-track .ui-switch-thumb { transform: translateX(13px); }
 .ui-switch input:disabled + .ui-switch-track { opacity: 0.45; cursor: not-allowed; }
+
+/* ── 视图切换按钮组（ViewToggle：独立圆角按钮，全项目统一视觉） ── */
+.ui-view-toggle {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.ui-view-toggle .ui-btn {
+  padding: 2px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.ui-view-toggle .ui-btn:hover:not(:disabled) {
+  background: var(--bg-badge);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.ui-view-toggle .ui-btn.active {
+  background: var(--accent);
+  color: var(--btn-text);
+  border-color: var(--accent);
+}
+.ui-view-toggle .ui-btn.active:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--btn-text);
+  border-color: var(--accent);
+}
+/* 选中项被禁用时保持 accent 视觉（disabledId=当前项的项目） */
+.ui-view-toggle .ui-btn.active:disabled {
+  opacity: 1;
+  cursor: default;
+}
