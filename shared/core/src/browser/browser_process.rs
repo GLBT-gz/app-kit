@@ -2,7 +2,6 @@
 
 use crate::browser::ProfileInfo;
 use crate::config::PortEntry;
-use crate::encoding::decode_windows_stdout;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
@@ -13,53 +12,10 @@ use serde::Serialize;
 pub fn scan_running_browser_instances(exe_name: &str) -> HashMap<String, u16> {
     let mut port_map: HashMap<String, u16> = HashMap::new();
 
-    let ps_script = format!(
-        "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
-         | Select-Object ProcessId,CommandLine \
-         | ConvertTo-Json -Compress",
-        exe_name
-    );
-
-    let output = match {
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                .output()
-        }
-        #[cfg(not(windows))]
-        {
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .output()
-        }
-    } {
-        Ok(o) => o,
-        Err(_) => return port_map,
-    };
-
-    let stdout = decode_windows_stdout(&output.stdout);
-    // PowerShell 可能返回单个对象或数组
-    let processes: Vec<serde_json::Value> = if let Ok(arr) =
-        serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
-    {
-        arr
-    } else if let Ok(single) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-        vec![single]
-    } else {
-        return port_map;
-    };
-
-    for proc in &processes {
-        let cmd_line = proc
-            .get("CommandLine")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let user_data_dir = extract_cmd_arg(cmd_line, "--user-data-dir");
-        let profile = extract_cmd_arg(cmd_line, "--profile-directory");
-        let port_str = extract_cmd_arg(cmd_line, "--remote-debugging-port");
+    for (_exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+        let user_data_dir = extract_cmd_arg(&cmd_line, "--user-data-dir");
+        let profile = extract_cmd_arg(&cmd_line, "--profile-directory");
+        let port_str = extract_cmd_arg(&cmd_line, "--remote-debugging-port");
 
         if let (Some(ud), Some(pf), Some(ps)) = (user_data_dir, profile, port_str) {
             if let Ok(port) = ps.parse::<u16>() {
@@ -70,6 +26,182 @@ pub fn scan_running_browser_instances(exe_name: &str) -> HashMap<String, u16> {
     }
 
     port_map
+}
+
+/// Windows 原生进程枚举：一次性快照全系统进程，读取与目标 exe 名匹配的进程命令行。
+///
+/// 用 CreateToolhelp32Snapshot + NtQueryInformationProcess(ProcessCommandLineInformation)
+/// 替代 PowerShell Get-CimInstance / wmic 子进程——旧实现每次冷启动 PowerShell（约 1s+），
+/// 且在同步 Tauri 命令里阻塞主线程，导致「当前浏览器配置」tab 滚轮卡顿（详见踩坑记录）。
+/// 返回 (exe_name, command_line) 列表；读取失败（受保护进程等）的进程自动跳过。
+#[cfg(windows)]
+fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
+    use std::ffi::c_void;
+    use std::mem::size_of;
+
+    const TH32CS_SNAPPROCESS: u32 = 0x0000_0002;
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const PROCESS_VM_READ: u32 = 0x0010;
+    // NtQueryInformationProcess 的 ProcessCommandLineInformation 信息类
+    const PROCESS_COMMAND_LINE_INFORMATION: u32 = 60;
+    // 缓冲区不足时返回的 NTSTATUS（按 return_length 扩容重试）
+    const STATUS_BUFFER_OVERFLOW: i32 = 0x8000_0005u32 as i32;
+    const STATUS_INFO_LENGTH_MISMATCH: i32 = 0xC000_0004u32 as i32;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct ProcessEntry32W {
+        dw_size: u32,
+        cnt_usage: u32,
+        th32_process_id: u32,
+        th32_default_heap_id: usize,
+        th32_module_id: u32,
+        cnt_threads: u32,
+        th32_parent_process_id: u32,
+        pc_pri_class_base: i32,
+        dw_flags: u32,
+        sz_exe_file: [u16; 260],
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *mut u16,
+    }
+
+    unsafe extern "system" {
+        fn CreateToolhelp32Snapshot(dw_flags: u32, th32_process_id: u32) -> isize;
+        fn Process32FirstW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
+        fn Process32NextW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
+        fn CloseHandle(h_object: isize) -> i32;
+        fn OpenProcess(dw_desired_access: u32, b_inherit_handle: i32, dw_process_id: u32) -> isize;
+        fn ReadProcessMemory(
+            h_process: isize,
+            lp_base_address: *const c_void,
+            lp_buffer: *mut c_void,
+            n_size: usize,
+            lp_number_of_bytes_read: *mut usize,
+        ) -> i32;
+        fn NtQueryInformationProcess(
+            process_handle: isize,
+            process_information_class: u32,
+            process_information: *mut c_void,
+            process_information_length: u32,
+            return_length: *mut u32,
+        ) -> i32;
+    }
+
+    /// 读取进程命令行。NtQueryInformationProcess 返回的 UNICODE_STRING 的 Buffer
+    /// 可能指向输出缓冲区内的字符串数据，也可能指向目标进程内存，两者都处理。
+    fn read_command_line(handle: isize) -> Option<String> {
+        let mut needed: u32 = 0;
+        let mut buf: Vec<u8> = vec![0u8; 1024];
+        loop {
+            let status = unsafe {
+                NtQueryInformationProcess(
+                    handle,
+                    PROCESS_COMMAND_LINE_INFORMATION,
+                    buf.as_mut_ptr() as *mut c_void,
+                    buf.len() as u32,
+                    &mut needed,
+                )
+            };
+            if status == 0 {
+                break;
+            }
+            if status == STATUS_BUFFER_OVERFLOW || status == STATUS_INFO_LENGTH_MISMATCH {
+                let next = needed.max(buf.len() as u32 * 2) as usize;
+                if next <= buf.len() || next > 1 << 20 {
+                    return None;
+                }
+                buf.resize(next, 0);
+                continue;
+            }
+            return None;
+        }
+
+        if buf.len() < size_of::<UnicodeString>() {
+            return None;
+        }
+        let us = unsafe { &*(buf.as_ptr() as *const UnicodeString) };
+        let byte_len = us.length as usize;
+        if byte_len == 0 || byte_len > 128 * 1024 {
+            return None;
+        }
+
+        let to_string = |raw: &[u8]| -> String {
+            let units: Vec<u16> = raw
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            String::from_utf16_lossy(&units)
+        };
+
+        let base = buf.as_ptr() as usize;
+        let ptr = us.buffer as usize;
+        // 字符串数据随 UNICODE_STRING 头一起拷入输出缓冲区
+        if ptr >= base && ptr + byte_len <= base + buf.len() {
+            let start = ptr - base;
+            return Some(to_string(&buf[start..start + byte_len]));
+        }
+        // 否则 Buffer 指向目标进程内存，需 ReadProcessMemory
+        let mut raw = vec![0u8; byte_len];
+        let mut read = 0usize;
+        let ok = unsafe {
+            ReadProcessMemory(
+                handle,
+                ptr as *const c_void,
+                raw.as_mut_ptr() as *mut c_void,
+                byte_len,
+                &mut read,
+            )
+        };
+        if ok == 0 || read == 0 {
+            return None;
+        }
+        Some(to_string(&raw[..read]))
+    }
+
+    let mut result: Vec<(String, String)> = Vec::new();
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == -1 {
+        return result;
+    }
+
+    let mut entry: ProcessEntry32W = unsafe { std::mem::zeroed() };
+    entry.dw_size = size_of::<ProcessEntry32W>() as u32;
+
+    let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
+    while has_entry {
+        let exe = String::from_utf16_lossy(&entry.sz_exe_file);
+        let exe = exe.split('\0').next().unwrap_or("").to_string();
+        if exe_names.iter().any(|t| exe.eq_ignore_ascii_case(t)) {
+            let handle = unsafe {
+                OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                    0,
+                    entry.th32_process_id,
+                )
+            };
+            if handle != 0 {
+                if let Some(cmd) = read_command_line(handle) {
+                    result.push((exe, cmd));
+                }
+                unsafe { CloseHandle(handle) };
+            }
+        }
+        has_entry = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+    result
+}
+
+/// 非 Windows 环境回退：不启动子进程枚举，直接返回空（本工具面向 Windows 浏览器自动化）。
+#[cfg(not(windows))]
+fn scan_running_processes_native(_exe_names: &[&str]) -> Vec<(String, String)> {
+    Vec::new()
 }
 
 /// 使用 Windows CommandLineToArgvW API 正确分割命令行（处理所有引号/空格/转义规则）
@@ -230,135 +362,12 @@ fn check_cdp_reachable(port: u16) -> bool {
 
 /// 扫描正在运行的浏览器进程，返回 (key, Option<debug_port>)
 /// 与 scan_running_browser_instances 不同，此函数不要求必须有 --remote-debugging-port
-/// 先后尝试: 1) PowerShell Get-CimInstance, 2) wmic (回退)
 pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<u16>> {
     let mut result: HashMap<String, Option<u16>> = HashMap::new();
-
-    // ── 方法 1: PowerShell Get-CimInstance ──
-    let ps_script = format!(
-        "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
-         | Select-Object ProcessId,CommandLine \
-         | ConvertTo-Json -Compress",
-        exe_name
-    );
-
-    match {
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .creation_flags(0x08000000)
-                .output()
-        }
-        #[cfg(not(windows))]
-        {
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .output()
-        }
-    } {
-        Ok(o) => {
-            if !o.stdout.is_empty() {
-                let stdout = decode_windows_stdout(&o.stdout);
-                parse_process_json(&stdout, exe_name, &mut result);
-            }
-        }
-        Err(_) => {}
+    for (exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+        extract_instance_from_cmdline(&cmd_line, &exe, &mut result);
     }
-
-    // ── 方法 1 成功找到进程，直接返回 ──
-    if !result.is_empty() {
-        return result;
-    }
-
-    // ── 方法 2: wmic 回退（Get-CimInstance 可能因 PowerShell 策略/权限失败） ──
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let wmic_script = format!(
-            "wmic process where \"name='{}'\" get ProcessId,CommandLine /FORMAT:LIST",
-            exe_name
-        );
-        if let Ok(wmic_output) = std::process::Command::new("cmd")
-            .args(["/C", &wmic_script])
-            .creation_flags(0x08000000)
-            .output()
-        {
-            if !wmic_output.stdout.is_empty() {
-                let stdout = decode_windows_stdout(&wmic_output.stdout);
-                parse_wmic_list(&stdout, exe_name, &mut result);
-            }
-        }
-    }
-
     result
-}
-
-/// 解析 PowerShell Get-CimInstance 输出的 JSON，并入 result
-fn parse_process_json(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
-    let processes: Vec<serde_json::Value> = if let Ok(arr) =
-        serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
-    {
-        arr
-    } else if let Ok(single) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-        vec![single]
-    } else {
-        return;
-    };
-
-    for proc in &processes {
-        let cmd_line = proc
-            .get("CommandLine")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        extract_instance_from_cmdline(cmd_line, exe_name, result);
-    }
-}
-
-/// 解析 wmic /FORMAT:LIST 输出
-/// 格式:
-///   ProcessId=1234
-///   CommandLine="C:\...\chrome.exe" --args...
-///
-///   空行分隔记录
-fn parse_wmic_list(stdout: &str, exe_name: &str, result: &mut HashMap<String, Option<u16>>) {
-    // 按空行分割记录
-    let mut current_cmd_line: Option<String> = None;
-    let mut has_cmd_line = false;
-
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            // 空行 = 记录结束
-            if has_cmd_line {
-                if let Some(cmd) = current_cmd_line.take() {
-                    extract_instance_from_cmdline(&cmd, exe_name, result);
-                }
-                has_cmd_line = false;
-            }
-            continue;
-        }
-
-        if let Some(value) = trimmed.strip_prefix("CommandLine=") {
-            has_cmd_line = true;
-            // wmic 输出的 CommandLine 可能被引号包裹
-            let cmd = if value.starts_with('"') && value.ends_with('"') {
-                // 去掉外层引号 + 反转义内部双引号
-                let inner = &value[1..value.len() - 1];
-                inner.replace("\"\"", "\"")
-            } else {
-                value.to_string()
-            };
-            current_cmd_line = Some(cmd);
-        }
-    }
-    // 最后一条记录可能没有尾随空行
-    if has_cmd_line {
-        if let Some(cmd) = current_cmd_line.take() {
-            extract_instance_from_cmdline(&cmd, exe_name, result);
-        }
-    }
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
@@ -417,66 +426,19 @@ pub(crate) fn cmd_args(cmd_line: &str) -> Vec<String> {
 /// 返回 `true` 表示命令行中包含 `--headless`，`false` 表示未检测到或无 headless。
 pub fn is_running_instance_headless(exe_name: &str, _target_key: &str, port: u16) -> bool {
     let port_flag = format!("--remote-debugging-port={}", port);
-    // 使用 PowerShell 查询进程命令行
-    let ps_script = format!(
-        "Get-CimInstance Win32_Process -Filter \"name='{}'\" \
-         | Select-Object CommandLine \
-         | ConvertTo-Json -Compress",
-        exe_name
-    );
-
-    let output = {
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .creation_flags(0x08000000)
-                .output()
+    // 只检查主浏览器进程：同时包含 --remote-debugging-port=<port>
+    // 子进程（GPU、渲染器等）没有 --remote-debugging-port，不会被误匹配
+    for (_exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+        if !cmd_line.contains(port_flag.as_str()) {
+            continue;
         }
-        #[cfg(not(windows))]
-        {
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_script])
-                .output()
+        if cmd_line.contains("--headless") {
+            return true;
         }
-    };
-
-    match output {
-        Ok(o) if !o.stdout.is_empty() => {
-            let stdout = decode_windows_stdout(&o.stdout);
-            // 解析 JSON
-            let processes: Vec<serde_json::Value> = if let Ok(arr) =
-                serde_json::from_str::<Vec<serde_json::Value>>(stdout.trim())
-            {
-                arr
-            } else if let Ok(single) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-                vec![single]
-            } else {
-                return false;
-            };
-
-            // 只检查主浏览器进程：同时包含 target_key 和 --remote-debugging-port=<port>
-            // 子进程（GPU、渲染器等）没有 --remote-debugging-port，不会被误匹配
-            for proc in &processes {
-                let cmd_line = proc
-                    .get("CommandLine")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                // 只检查带有调试端口的主进程
-                if !cmd_line.contains(port_flag.as_str()) {
-                    continue;
-                }
-                if cmd_line.contains("--headless") {
-                    return true;
-                }
-                // 主进程已找到但没有 --headless
-                return false;
-            }
-            false
-        }
-        _ => false,
+        // 主进程已找到但没有 --headless
+        return false;
     }
+    false
 }
 
 
@@ -544,4 +506,23 @@ static PROFILE_CACHE: OnceLock<Mutex<HashMap<(String, bool), (Option<SystemTime>
 
 pub(crate) fn profile_cache() -> &'static Mutex<HashMap<(String, bool), (Option<SystemTime>, Vec<ProfileInfo>)>> {
     PROFILE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 原生枚举端到端校验：当前测试进程必然在运行，
+    /// 快照 + OpenProcess + NtQueryInformationProcess + ReadProcessMemory 全链路必须命中自己。
+    #[test]
+    #[cfg(windows)]
+    fn native_scan_reads_own_command_line() {
+        let exe = std::env::current_exe().unwrap();
+        let name = exe.file_name().unwrap().to_string_lossy().to_string();
+        let rows = scan_running_processes_native(&[&name]);
+        assert!(!rows.is_empty(), "native scan should find running test process: {name}");
+        let exe_lower = exe.to_string_lossy().to_lowercase();
+        let hit = rows.iter().any(|(_, cmd)| cmd.to_lowercase().contains(&exe_lower));
+        assert!(hit, "native scan should read own command line, got {} row(s)", rows.len());
+    }
 }
