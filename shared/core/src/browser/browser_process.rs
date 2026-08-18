@@ -357,7 +357,9 @@ fn check_cdp_reachable(port: u16) -> bool {
     use std::time::Duration;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-    TcpStream::connect_timeout(&addr, Duration::from_millis(1500)).is_ok()
+    // 本机回环：端口开/拒都是即时返回，超时仅是兜底。1500ms 过大会让
+    // 异常端口（如假死进程占用）在同步检测路径上阻塞过久 → 降到 300ms。
+    TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
 }
 
 /// 扫描正在运行的浏览器进程，返回 (key, Option<debug_port>)

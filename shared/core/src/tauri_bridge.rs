@@ -122,10 +122,15 @@ fn detect_debug_ports(profiles: Vec<(String, String)>) -> Vec<PortEntry> {
 }
 
 /// 检测浏览器进程运行状态（不分配端口，仅检测是否运行）
+/// async + spawn_blocking：进程枚举 / TCP 检测可能耗时（浏览器进程多时可达数十 ms），
+/// 同步命令跑在主线程会在 5s 轮询 / 滚轮切 tab 时阻塞 UI → 必须移出主线程
+/// （「当前浏览器配置」tab 卡顿的根因，见踩坑记录 2026-08-18）。
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
-fn detect_browser_running_processes(profiles: Vec<(String, String)>) -> Vec<management::BrowserProcessState> {
-    management::detect_browser_running_processes(&profiles)
+async fn detect_browser_running_processes(profiles: Vec<(String, String)>) -> Vec<management::BrowserProcessState> {
+    tauri::async_runtime::spawn_blocking(move || management::detect_browser_running_processes(&profiles))
+        .await
+        .unwrap_or_default()
 }
 
 /// 查找可用端口（用于调试启动）
