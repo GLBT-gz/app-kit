@@ -17,18 +17,36 @@
   align-items: stretch;
   gap: 2px;
   align-self: stretch;
+  /* 窄窗口：tab 区可收缩，超出横向滚动，绝不挤压右侧图标区 */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topbar-left::-webkit-scrollbar {
+  display: none;
 }
 
 /* 顶栏内的 TabBar 不需要底部边框（topbar 自带），滑块对齐顶栏底部 */
 .topbar .tb-bar {
   border-bottom: none;
   align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topbar .tb-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .topbar .tb-btn {
   padding: 0 14px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .topbar .tb-indicator {
@@ -46,6 +64,8 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  flex-shrink: 0;
+  padding-left: 8px;
 }
 
 .theme-toggle,
