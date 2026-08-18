@@ -46,6 +46,8 @@ export {
   ziniaoEnterShop,
   ziniaoEval,
   ziniaoEvalAll,
+  ziniaoInsertText,
+  ziniaoKeyTap,
   ziniaoMouseClick,
   ziniaoScreenshot,
   ziniaoAgentLaunch,

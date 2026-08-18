@@ -127,6 +127,18 @@ export async function ziniaoMouseClick(port: number, x: number, y: number): Prom
   return tauriInvoke("ziniao_mouse_click", { port, x, y });
 }
 
+/** 当前聚焦元素真实键入文本（isTrusted=true，等价用户手动输入，触发原生 input 事件） */
+export async function ziniaoInsertText(port: number, text: string): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_insert_text");
+  return tauriInvoke("ziniao_insert_text", { port, text });
+}
+
+/** 当前聚焦元素派发真实按键（isTrusted=true；如 Enter 需 key="Enter" code="Enter" vk=13） */
+export async function ziniaoKeyTap(port: number, key: string, code: string, vk: number): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_key_tap");
+  return tauriInvoke("ziniao_key_tap", { port, key, code, vk });
+}
+
 /** 所有运行中环境批量执行 JS */
 export async function ziniaoEvalAll(js: string): Promise<ZiniaoEvalResult[]> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_eval_all");
