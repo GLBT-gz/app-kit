@@ -45,6 +45,7 @@ export {
   ziniaoActivate,
   ziniaoEnterShop,
   ziniaoEval,
+  ziniaoEvalTab,
   ziniaoEvalAll,
   ziniaoInsertText,
   ziniaoKeyTap,
