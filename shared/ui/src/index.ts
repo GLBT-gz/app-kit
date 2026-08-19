@@ -47,6 +47,7 @@ export {
   ziniaoEval,
   ziniaoEvalTab,
   ziniaoEvalAll,
+  ziniaoActivateTarget,
   ziniaoInsertText,
   ziniaoKeyTap,
   ziniaoMouseClick,

@@ -121,6 +121,12 @@ export async function ziniaoEval(port: number, js: string): Promise<unknown> {
   return tauriInvoke("ziniao_eval", { port, js });
 }
 
+/** 激活指定标签页（切到前台）：多标签页并行时把目标 tab 置前，避免长期后台被节流 */
+export async function ziniaoActivateTarget(port: number, targetId: string): Promise<void> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_activate_target");
+  await tauriInvoke("ziniao_activate_target", { port, targetId });
+}
+
 /** 指定标签页（target_id，来自 ziniaoOpenTab / ziniaoListTabs）执行 JS。
  * 多标签页并行场景（主 tab 取数 + 评分 tab 读 DOM）必须按 target_id 执行。 */
 export async function ziniaoEvalTab(port: number, targetId: string, js: string): Promise<unknown> {
