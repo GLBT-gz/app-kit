@@ -53,6 +53,7 @@ export {
   ziniaoAgentLaunch,
   ziniaoAgentStatus,
   ziniaoAgentProcStatus,
+  ziniaoAgentStop,
   ziniaoAgentBrowserList,
   ziniaoAgentStartBrowser,
   ziniaoAgentCdpPort,
