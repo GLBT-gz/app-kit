@@ -68,6 +68,10 @@ export interface LogPanelProps {
   emptyText?: string;
   /** 额外操作按钮（显示在标题行右侧） */
   extraActions?: ReactNode;
+  /** 日志过滤函数（返回 false 的条目不展示；不传则展示全部） */
+  filter?: (entry: LogEntry) => boolean;
+  /** 悬浮在日志内容区右上角的过滤器内容（如按店铺筛选 chips），内容区需 position:relative */
+  filterOverlay?: ReactNode;
   /** 是否显示日志条数（默认 true） */
   showCount?: boolean;
   /** 是否隐藏标题栏（用于外部自行渲染一致的头部） */
@@ -278,13 +282,22 @@ export function LogPanel({
   collapsible = false,
   defaultCollapsed = false,
   hideHeader = false,
+  filter,
+  filterOverlay,
 }: LogPanelProps) {
   const { logs, clear, logEndRef, count } = log;
+
+  // 过滤后的可见日志（并行多店铺时按店铺过滤）
+  const visibleLogs = useMemo(
+    () => (filter ? logs.filter(filter) : logs),
+    [logs, filter],
+  );
+  const visibleCount = filter ? visibleLogs.length : count;
 
   // auto-scroll
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs, logEndRef]);
+  }, [visibleLogs, logEndRef]);
 
   // 折叠状态
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -323,7 +336,7 @@ export function LogPanel({
         </div>
         <div className="log-panel-header-right">
           {extraActions}
-          {showCount && <span className="log-panel-count">{count} 条</span>}
+          {showCount && <span className="log-panel-count">{visibleCount} 条</span>}
           {count > 0 && (
             <button className="log-panel-clear-btn" onClick={clear} title="清空日志">
               清除
@@ -335,12 +348,14 @@ export function LogPanel({
 
       {/* ── 日志列表 ── */}
       {!collapsed && (
-        <div className="log-panel-body" style={{ paddingBottom: bottomPadding }}>
-          {count === 0 ? (
+        <div className="log-panel-body" style={{ paddingBottom: bottomPadding, paddingTop: filterOverlay ? 34 : undefined, position: "relative" }}>
+          {/* 悬浮过滤器（如按店铺筛选），渲染在内容区右上角 */}
+          {filterOverlay && <div className="log-panel-filter-overlay">{filterOverlay}</div>}
+          {visibleCount === 0 ? (
             <div className="log-panel-empty">{emptyText}</div>
           ) : (
             <div className="log-panel-list">
-              {logs.map((entry) => (
+              {visibleLogs.map((entry) => (
                 <LogEntryItem key={entry.id} entry={entry} />
               ))}
               <div ref={logEndRef} />
