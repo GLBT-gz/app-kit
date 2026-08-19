@@ -412,6 +412,8 @@ export interface CrossStart {
   logged_in: boolean;
   url: string;
   note: string;
+  /** 当前地区首页 tab 的 targetId（多地区时按此 tab 取数，避免串地区） */
+  target_id: string;
 }
 
 /** 跨境店登录状态（前端轮询用，幂等） */
