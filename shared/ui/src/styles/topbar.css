@@ -93,6 +93,9 @@
 /* ── 设置齿轮动画：悬停转 90° 反馈可点，打开设置转 180° 保持；关闭转回 ── */
 .settings-btn svg {
   transition: transform 0.35s ease;
+  /* SVG 旋转默认相对 view-box（左上），需锚定元素中心，避免旋转时偏移 */
+  transform-box: fill-box;
+  transform-origin: center;
 }
 .settings-btn:hover svg {
   transform: rotate(90deg);
@@ -108,6 +111,9 @@
 .theme-toggle .tb-icon {
   position: absolute;
   transition: transform 0.35s ease, opacity 0.35s ease;
+  /* 绕自身中心旋转（同齿轮，避免 view-box 原点导致偏移） */
+  transform-box: fill-box;
+  transform-origin: center;
 }
 /* 浅色主题：显示太阳（点击切深色） */
 .theme-toggle .icon-sun {
