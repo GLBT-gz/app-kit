@@ -287,6 +287,9 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                   border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
                   ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}),
                   ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 3 } : stickyLeft > 0 ? { zIndex: 1 } : {}),
+                  // collapse 模式下 sticky 单元格边框/背景会错位约 0.5~1px，横向滚动露缝隙；
+                  // box-shadow 向左扩展 1px 背景色补偿，使冻结列密不透风
+                  ...(sticky && off !== undefined ? { boxShadow: "-1px 0 0 0 var(--bg-surface)" } : {}),
                   ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
                   ...col.style,
                 }}>
@@ -319,6 +322,8 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                       ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
                       // 冻结列：sticky 定位 + 不透明背景遮挡横向滚入内容（背景置于框选之前，选中态可覆盖）
                       ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, background: "var(--bg-surface)", zIndex: 2 } : {}),
+                      // 同表头：collapse 模式下 sticky 边框错位露缝隙，box-shadow 向左扩 1px 背景色补偿
+                      ...(sticky && off !== undefined ? { boxShadow: "-1px 0 0 0 var(--bg-surface)" } : {}),
                       ...(cellSel ? { background: "var(--bg-badge, #252736)" } : {}),
                       ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
                       ...col.style,
