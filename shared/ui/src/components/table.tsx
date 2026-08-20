@@ -145,14 +145,18 @@ export function useTableSelectionCopy(
  *
  * fixedLayout=true 时列宽固定且按「全量行内容」计算（内容完整展示、滚动时列宽不跳动，
  * 已指定 style.width 的列按指定值）；默认 auto 布局（列宽随当前可见行内容自适应）。
+ * stickyLeft=N 时冻结左侧前 N 列（横向滚动保持显示，末列右侧自动加 accent 分隔线）；
+ * 冻结列宽：fixedLayout 用计算列宽，auto 布局用表头实测宽度。
  */
-function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout }: {
+function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout, stickyLeft = 0 }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowClassName?: (row: T) => string | undefined;
   emptyText?: string;
   listHeader?: React.ReactNode;
   fixedLayout?: boolean;
+  /** 冻结左侧前 N 列（横向滚动时保持显示；默认 0 不冻结） */
+  stickyLeft?: number;
 }): React.JSX.Element {
   // 所有表格统一在最左侧加「序号」列（从 1 开始递增）
   const allColumns: TableColumn<T>[] = [
@@ -184,6 +188,22 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(600);
   const [theadHeight, setTheadHeight] = useState(0);
+  // 冻结列表头实测宽度（auto 布局下 sticky 偏移用；fixedLayout 直接用 colWidths）
+  const [thWidths, setThWidths] = useState<number[]>([]);
+
+  // 冻结列水平偏移（第 i 列 sticky left 值）：fixedLayout 用计算列宽，否则用表头实测宽度累计
+  const stickyOffsets = useMemo(() => {
+    const out: number[] = [];
+    if (stickyLeft <= 0) return out;
+    const widths = colWidths ?? (thWidths.length ? thWidths : null);
+    if (!widths || widths.length < stickyLeft) return out;
+    let acc = 0;
+    for (let i = 0; i < widths.length; i++) {
+      out.push(acc);
+      if (i < stickyLeft) acc += widths[i];
+    }
+    return out;
+  }, [stickyLeft, colWidths, thWidths]);
 
   // ── 单元格级框选（按下拖拽框选矩形区域，Ctrl+C 复制为表格结构） ──
   const rowsRef = useRef(rows);
@@ -197,11 +217,15 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     return toText(col.render(row, r));
   });
 
-  // 测量表头实际高度
+  // 测量表头实际高度（sticky 模式下顺带测量各列宽度，供冻结列偏移计算）
   useEffect(() => {
     if (theadRef.current) {
       const h = theadRef.current.offsetHeight;
       if (h > 0 && h !== theadHeight) setTheadHeight(h);
+      if (stickyLeft > 0) {
+        const widths = Array.from(theadRef.current.querySelectorAll<HTMLElement>("th")).map((el) => el.offsetWidth);
+        setThWidths((prev) => (widths.length && (widths.length !== prev.length || widths.some((w, i) => w !== prev[i])) ? widths : prev));
+      }
     }
   });
 
@@ -250,18 +274,29 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
       {listHeader}
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, ...(fixedLayout ? { tableLayout: "fixed" as const } : {}) }}>
-        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--bg-surface)" }}>
+        {/* stickyLeft>0 时 thead 不设 zIndex（避免整体 stacking context 挡住冻结 td），由各 th 自持 zIndex 分层 */}
+        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? "auto" : 1, background: "var(--bg-surface)" }}>
           <tr style={{ height: ROW_HEIGHT }}>
-            {allColumns.map((col, ci) => (
-              <th key={col.header} style={{ border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)", ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}), ...col.style }}>
-                {col.headerClick ? (
-                  <button type="button" onClick={col.headerClick} title="点击切换：全部打开 / 全部关闭"
-                    style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer", color: "inherit", fontSize: "inherit", fontFamily: "inherit", textDecoration: "underline dotted" }}>
-                    {col.header}
-                  </button>
-                ) : col.header}
-              </th>
-            ))}
+            {allColumns.map((col, ci) => {
+              const sticky = stickyLeft > 0 && ci < stickyLeft;
+              const off = sticky ? stickyOffsets[ci] : undefined;
+              return (
+                <th key={col.header} style={{
+                  border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
+                  ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}),
+                  ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 3 } : stickyLeft > 0 ? { zIndex: 1 } : {}),
+                  ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
+                  ...col.style,
+                }}>
+                  {col.headerClick ? (
+                    <button type="button" onClick={col.headerClick} title="点击切换：全部打开 / 全部关闭"
+                      style={{ background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer", color: "inherit", fontSize: "inherit", fontFamily: "inherit", textDecoration: "underline dotted" }}>
+                      {col.header}
+                    </button>
+                  ) : col.header}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -272,11 +307,16 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
               <tr key={rowIdx} style={{ height: ROW_HEIGHT }} className={rowClassName?.(r)}>
                 {allColumns.map((col, ci) => {
                   const cellSel = sel.isSelected(rowIdx, ci);
+                  const sticky = stickyLeft > 0 && ci < stickyLeft;
+                  const off = sticky ? stickyOffsets[ci] : undefined;
                   return (
                     <td key={col.header} data-r={rowIdx} data-c={ci} style={{
                       border: "1px solid var(--border)", padding: "3px 6px",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      // 冻结列：sticky 定位 + 不透明背景遮挡横向滚入内容（背景置于框选之前，选中态可覆盖）
+                      ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, background: "var(--bg-surface)", zIndex: 2 } : {}),
                       ...(cellSel ? { background: "var(--bg-badge, #252736)" } : {}),
+                      ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
                       ...col.style,
                     }}><CellContent>{col.render(r, rowIdx)}</CellContent></td>
                   );
