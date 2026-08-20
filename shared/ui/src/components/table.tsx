@@ -281,12 +281,13 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
       {listHeader}
       {/* 冻结表头正确做法：
           1) border-collapse: separate + border-spacing 0 —— sticky 单元格独立边框，无 collapse 共享边框错位（缝类问题根除）；
-             单元格只画 右侧+下侧 边框，左侧/上侧由 table 外框补齐，视觉仍是 1px 网格线。
+             单元格只画 右侧+下侧 边框（外框：上=表头 th 的 borderTop、左=首列 borderLeft），视觉仍是 1px 网格线。
           2) 层级只有两级：thead 整体 z-index 2（建 stacking context，整行表头永远在最上）
-             > tbody 冻结 td z-index 1 > 普通 td。不再逐单元格比较 zIndex。 */}
+             > tbody 冻结 td z-index 1 > 普通 td。不再逐单元格比较 zIndex。
+          3) 表格自身不设 borderTop/borderLeft（外框由单元格边框实现）——否则文档流中表头/冻结列起点
+             在边框内侧(1px)，sticky 吸到容器边缘(0px)，滚动瞬间产生 1px 跳变。 */}
       <table style={{
         width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12,
-        borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)",
         ...(fixedLayout ? { tableLayout: "fixed" as const } : {}),
       }}>
         <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? 2 : 1, background: "var(--bg-surface)" }}>
@@ -296,7 +297,8 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
               const off = sticky ? stickyOffsets[ci] : undefined;
               return (
                 <th key={col.header} style={{
-                  border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                  border: "none", borderTop: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                  ...(ci === 0 ? { borderLeft: "1px solid var(--border)" } : {}),
                   padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
                   ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}),
                   // 冻结表头：thead 已 sticky top，th 只需 sticky left（在 thead stacking context 内盖住滚动表头）
@@ -328,6 +330,7 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                   return (
                     <td key={col.header} data-r={rowIdx} data-c={ci} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, r) : undefined} style={{
                       border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                      ...(ci === 0 ? { borderLeft: "1px solid var(--border)" } : {}),
                       padding: "3px 6px",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       // 单元格右键列：整格显示 context-menu 光标（提示整格可右键）
@@ -376,13 +379,13 @@ export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHei
     <div style={{ maxHeight, overflow: "auto" }}>
       <table style={{
         width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12,
-        borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)",
       }}>
         <thead>
           <tr>
-            {allColumns.map(col => (
+            {allColumns.map((col, ci) => (
               <th key={col.header} style={{
-                border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                border: "none", borderTop: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                ...(ci === 0 ? { borderLeft: "1px solid var(--border)" } : {}),
                 padding: "4px 6px", textAlign: "left",
                 whiteSpace: "nowrap", background: "var(--bg-surface)", position: "sticky", top: 0, zIndex: 1,
                 ...col.style,
@@ -400,9 +403,10 @@ export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHei
         <tbody>
           {rows.map((row, i) => (
             <tr key={i}>
-              {allColumns.map(col => (
+              {allColumns.map((col, ci) => (
                 <td key={col.header} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, row) : undefined} style={{
                   border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                  ...(ci === 0 ? { borderLeft: "1px solid var(--border)" } : {}),
                   padding: "3px 6px",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
