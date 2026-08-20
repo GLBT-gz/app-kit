@@ -69,7 +69,7 @@ html[data-theme="light"] {
      hover/badge 更灰一档，边框偏中灰，保证表格线、hover、控件边缘清晰可见 */
   --bg-app: #ececf4;
   --bg-topbar: #ffffff;
-  --bg-nav: #e4e4ee;
+  --bg-nav: #ffffff; /* 设置面板侧边栏：浅色下纯白（用户偏好，原 #e4e4ee 紫灰不受欢迎） */
   --bg-content: #f2f2f8;
   --bg-card: #ffffff;
   --bg-card-hover: #e2e2ec;
@@ -103,7 +103,7 @@ html[data-theme="light"] {
 
   /* ── HSL 组件变量（支持动态主题） ── */
   --bg-app-h:       240; --bg-app-s: 26%; --bg-app-l: 94%;
-  --bg-nav-h:       240; --bg-nav-s: 22%; --bg-nav-l: 91%;
+  --bg-nav-h:       0;   --bg-nav-s: 0%;  --bg-nav-l: 100%;
   --bg-card-h:      0;   --bg-card-s: 0%;  --bg-card-l: 100%;
   --bg-card-hover-h: 240; --bg-card-hover-s: 20%; --bg-card-hover-l: 91%;
   --bg-badge-h:     240; --bg-badge-s: 20%; --bg-badge-l: 88%;
