@@ -190,14 +190,17 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(600);
   const [theadHeight, setTheadHeight] = useState(0);
-  // 冻结列表头实测宽度（auto 布局下 sticky 偏移用；fixedLayout 直接用 colWidths）
+  // 冻结列表头实测宽度（浏览器布局后真实列宽，fixed/auto 布局下 sticky 偏移均以实测为准）
   const [thWidths, setThWidths] = useState<number[]>([]);
 
-  // 冻结列水平偏移（第 i 列 sticky left 值）：fixedLayout 用计算列宽，否则用表头实测宽度累计
+  // 冻结列水平偏移（第 i 列 sticky left 值）：
+  // 优先用表头实测宽度（浏览器布局后的真实列宽——fixedLayout 下 width:100% 会把多余空间拉伸到各列，
+  // 估算列宽 colWidths 与实际渲染不一致，sticky 偏移错位会在冻结列之间漏出滚动内容）；
+  // 首帧尚未测量（thWidths 为空）时回退计算列宽 colWidths
   const stickyOffsets = useMemo(() => {
     const out: number[] = [];
     if (stickyLeft <= 0) return out;
-    const widths = colWidths ?? (thWidths.length ? thWidths : null);
+    const widths = thWidths.length ? thWidths : colWidths;
     if (!widths || widths.length < stickyLeft) return out;
     let acc = 0;
     for (let i = 0; i < widths.length; i++) {
