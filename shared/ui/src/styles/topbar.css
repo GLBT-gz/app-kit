@@ -122,8 +122,8 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
 
 /* ── 设置齿轮：直接旋转 SVG 自身（无 span 包裹），transform-box: view-box 保证
    旋转中心 = 齿轮几何圆心（viewBox 24x24 中心 12,12），不会绕按钮盒中心偏移。
-   渲染尺寸必须用 viewBox 原尺寸 24px（1:1）：16px 是 0.667 缩放，strokeWidth 2
-   会渲染成 1.33px 亚像素笔画，旋转时齿边抗锯齿抖动（此前反复失败的根因）。
+   16px 显示 = 0.667 缩放，必须配 strokeWidth 3（渲染 2px 整数像素）：
+   strokeWidth 2 会渲染成 1.33px 亚像素笔画，旋转时齿边抗锯齿抖动（此前反复失败的根因）。
    hover 转 90° 反馈；active（设置面板打开）转 180° 持续状态，写在 hover 之后以覆盖。 */
 .settings-btn .settings-gear {
   transform-box: view-box;
