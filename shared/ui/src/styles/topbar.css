@@ -120,6 +120,22 @@ html[data-theme="dark"] .theme-toggle .icon-moon {
   transform: rotate(0deg) scale(1);
 }
 
+/* ── 设置齿轮：直接旋转 SVG 自身（无 span 包裹），transform-box: view-box 保证
+   旋转中心 = 齿轮几何圆心（viewBox 24x24 中心 12,12），不会绕按钮盒中心偏移。
+   渲染尺寸 16px（偶数）避免奇数尺寸半像素中心的抗锯齿抖动。
+   hover 转 90° 反馈；active（设置面板打开）转 180° 持续状态，写在 hover 之后以覆盖。 */
+.settings-btn .settings-gear {
+  transform-box: view-box;
+  transform-origin: center;
+  transition: transform 0.35s ease;
+}
+.settings-btn:hover .settings-gear {
+  transform: rotate(90deg);
+}
+.settings-btn.active .settings-gear {
+  transform: rotate(180deg);
+}
+
 /* 置顶按钮 */
 .pin-btn {
   display: flex;
