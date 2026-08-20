@@ -287,8 +287,9 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                 <th key={col.header} style={{
                   border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
                   ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}),
-                  // 表头全部 zIndex 3（含普通列 th）：优先于冻结数据列 td(2)——纵向滚动时冻结 td 滚动经过表头下方，不能盖住表头
-                  ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 3 } : stickyLeft > 0 ? { zIndex: 3 } : {}),
+                  // 表头全部 zIndex 3（含普通列 th）：优先于冻结数据列 td(2)——纵向滚动时冻结 td 滚动经过表头下方，不能盖住表头。
+                  // 注意：zIndex 对非定位元素无效，普通列 th 必须带 position: relative 才生效
+                  ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 3 } : stickyLeft > 0 ? { position: "relative", zIndex: 3 } : {}),
                   // collapse 模式下 sticky 单元格边框/背景会错位约 0.5~1px，滚动时从边框缝漏出下层内容；
                   // box-shadow 向 左/上/下 各扩展 1px 背景色补偿（右留给 accent 分隔线），使冻结区密不透风
                   ...(sticky && off !== undefined ? { boxShadow: "-1px 0 0 0 var(--bg-surface), 0 1px 0 0 var(--bg-surface), 0 -1px 0 0 var(--bg-surface)" } : {}),
