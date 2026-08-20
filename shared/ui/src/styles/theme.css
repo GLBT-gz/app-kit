@@ -14,6 +14,7 @@
   --bg-modal: #15161c;
   --bg-badge: #252736;
   --bg-avatar-placeholder: #252736;
+  --bg-hover: #262833;
 
   --border: #252736;
   --border-input: #2e3044;
@@ -63,27 +64,31 @@
 
 html[data-theme="light"] {
   color-scheme: light;
-  --bg-app: #f5f5fa;
+  /* 浅色层次设计（相对旧版拉开对比，避免"只剩白+主题色"）：
+     内容区底 bg-app 最深，面板/表格 bg-surface 次之，卡片/输入框纯白；
+     hover/badge 更灰一档，边框偏中灰，保证表格线、hover、控件边缘清晰可见 */
+  --bg-app: #ececf4;
   --bg-topbar: #ffffff;
-  --bg-nav: #eeeeee;
-  --bg-content: #f5f5fa;
+  --bg-nav: #e4e4ee;
+  --bg-content: #f2f2f8;
   --bg-card: #ffffff;
-  --bg-card-hover: #f0f0f8;
-  --bg-surface: #f0f0f8;
+  --bg-card-hover: #e2e2ec;
+  --bg-surface: #e9e9f2;
   --bg-input: #ffffff;
   --bg-modal: #ffffff;
-  --bg-badge: #e8e8f0;
-  --bg-avatar-placeholder: #e0e0e8;
+  --bg-badge: #d9d9e6;
+  --bg-avatar-placeholder: #d0d0de;
+  --bg-hover: #dcdce8;
 
-  --border: #d0d0de;
-  --border-input: #c0c0d0;
+  --border: #c9c9da;
+  --border-input: #b8b8cc;
   --border-input-focus: var(--accent);
 
-  --text-primary: #1a1a2e;
-  --text-secondary: #6a6a88;
-  --text-muted: #9a9ab8;
-  --text-badge: #6a6a88;
-  --text-label: #8a8aa8;
+  --text-primary: #17172a;
+  --text-secondary: #5c5c7a;
+  --text-muted: #8a8aa8;
+  --text-badge: #5c5c7a;
+  --text-label: #7a7a98;
 
   --accent: hsl(210, 95%, 53%);
   --accent-hover: hsl(210, 80%, 45%);
@@ -97,16 +102,16 @@ html[data-theme="light"] {
   --btn-text: #ffffff;
 
   /* ── HSL 组件变量（支持动态主题） ── */
-  --bg-app-h:       240; --bg-app-s: 33%; --bg-app-l: 97%;
-  --bg-nav-h:       0;   --bg-nav-s: 0%;  --bg-nav-l: 93%;
+  --bg-app-h:       240; --bg-app-s: 26%; --bg-app-l: 94%;
+  --bg-nav-h:       240; --bg-nav-s: 22%; --bg-nav-l: 91%;
   --bg-card-h:      0;   --bg-card-s: 0%;  --bg-card-l: 100%;
-  --bg-card-hover-h: 240; --bg-card-hover-s: 36%; --bg-card-hover-l: 96%;
-  --bg-badge-h:     240; --bg-badge-s: 26%; --bg-badge-l: 93%;
-  --border-h:       240; --border-s: 18%; --border-l: 84%;
-  --border-input-h: 240; --border-input-s: 18%; --border-input-l: 78%;
-  --text-primary-h: 240; --text-primary-s: 27%; --text-primary-l: 14%;
-  --text-secondary-h: 240; --text-secondary-s: 12%; --text-secondary-l: 47%;
-  --text-muted-h:   240; --text-muted-s: 15%; --text-muted-l: 66%;
+  --bg-card-hover-h: 240; --bg-card-hover-s: 20%; --bg-card-hover-l: 91%;
+  --bg-badge-h:     240; --bg-badge-s: 20%; --bg-badge-l: 88%;
+  --border-h:       240; --border-s: 18%; --border-l: 82%;
+  --border-input-h: 240; --border-input-s: 16%; --border-input-l: 76%;
+  --text-primary-h: 240; --text-primary-s: 29%; --text-primary-l: 13%;
+  --text-secondary-h: 240; --text-secondary-s: 14%; --text-secondary-l: 42%;
+  --text-muted-h:   240; --text-muted-s: 14%; --text-muted-l: 60%;
   --success-h:      158; --success-s: 39%; --success-l: 49%;
   --error-h:        0;   --error-s: 69%;  --error-l: 61%;
 
