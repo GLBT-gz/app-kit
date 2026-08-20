@@ -276,8 +276,9 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
       {listHeader}
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, ...(fixedLayout ? { tableLayout: "fixed" as const } : {}) }}>
-        {/* stickyLeft>0 时 thead 不设 zIndex（避免整体 stacking context 挡住冻结 td），由各 th 自持 zIndex 分层 */}
-        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? "auto" : 1, background: "var(--bg-surface)" }}>
+        {/* stickyLeft>0 时 thead 不设 zIndex（避免整体 stacking context 挡住冻结 td），由各 th 自持 zIndex 分层；
+            纵向滚动时表头上边缘 collapse 边框错位露缝隙，box-shadow 向上扩 1px 背景色补偿 */}
+        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? "auto" : 1, background: "var(--bg-surface)", boxShadow: "0 -1px 0 0 var(--bg-surface)" }}>
           <tr style={{ height: ROW_HEIGHT }}>
             {allColumns.map((col, ci) => {
               const sticky = stickyLeft > 0 && ci < stickyLeft;
