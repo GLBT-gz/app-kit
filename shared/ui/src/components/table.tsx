@@ -148,7 +148,8 @@ export function useTableSelectionCopy(
  * fixedLayout=true 时列宽固定且按「全量行内容」计算（内容完整展示、滚动时列宽不跳动，
  * 已指定 style.width 的列按指定值）；默认 auto 布局（列宽随当前可见行内容自适应）。
  * stickyLeft=N 时冻结左侧前 N 列（横向滚动保持显示，末列右侧自动加 accent 分隔线）；
- * 冻结列宽：fixedLayout 用计算列宽，auto 布局用表头实测宽度。
+ * 实现要点：border-collapse: separate（sticky 独立边框无共享错位）+ thead 整体 zIndex 高于冻结 td
+ * （整行表头永远在最上）；sticky 偏移用表头实测宽度（浏览器布局后真实列宽）。
  */
 function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout, stickyLeft = 0 }: {
   rows: T[];
@@ -278,24 +279,28 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     <div className="inventory-table-scroll" ref={containerRef} onScroll={handleScroll}
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
       {listHeader}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, ...(fixedLayout ? { tableLayout: "fixed" as const } : {}) }}>
-        {/* stickyLeft>0 时 thead 不设 zIndex（避免整体 stacking context 挡住冻结 td），由各 th 自持 zIndex 分层；
-            纵向滚动时表头上边缘 collapse 边框错位露缝隙，box-shadow 向上扩 1px 背景色补偿 */}
-        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? "auto" : 1, background: "var(--bg-surface)", boxShadow: "0 -1px 0 0 var(--bg-surface)" }}>
+      {/* 冻结表头正确做法：
+          1) border-collapse: separate + border-spacing 0 —— sticky 单元格独立边框，无 collapse 共享边框错位（缝类问题根除）；
+             单元格只画 右侧+下侧 边框，左侧/上侧由 table 外框补齐，视觉仍是 1px 网格线。
+          2) 层级只有两级：thead 整体 z-index 2（建 stacking context，整行表头永远在最上）
+             > tbody 冻结 td z-index 1 > 普通 td。不再逐单元格比较 zIndex。 */}
+      <table style={{
+        width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12,
+        borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)",
+        ...(fixedLayout ? { tableLayout: "fixed" as const } : {}),
+      }}>
+        <thead ref={theadRef} style={{ position: "sticky", top: 0, zIndex: stickyLeft > 0 ? 2 : 1, background: "var(--bg-surface)" }}>
           <tr style={{ height: ROW_HEIGHT }}>
             {allColumns.map((col, ci) => {
               const sticky = stickyLeft > 0 && ci < stickyLeft;
               const off = sticky ? stickyOffsets[ci] : undefined;
               return (
                 <th key={col.header} style={{
-                  border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
+                  border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                  padding: "4px 6px", textAlign: "left", whiteSpace: "nowrap", background: "var(--bg-surface)",
                   ...(colWidths && colWidths[ci] !== undefined ? { width: colWidths[ci] } : {}),
-                  // 表头全部 zIndex 3（含普通列 th）：优先于冻结数据列 td(2)——纵向滚动时冻结 td 滚动经过表头下方，不能盖住表头。
-                  // 注意：zIndex 对非定位元素无效，普通列 th 必须带 position: relative 才生效
-                  ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 3 } : stickyLeft > 0 ? { position: "relative", zIndex: 3 } : {}),
-                  // collapse 模式下 sticky 单元格边框/背景会错位约 0.5~1px，滚动时从边框缝漏出下层内容；
-                  // box-shadow 向 左/上/下 各扩展 1px 背景色补偿（右留给 accent 分隔线），使冻结区密不透风
-                  ...(sticky && off !== undefined ? { boxShadow: "-1px 0 0 0 var(--bg-surface), 0 1px 0 0 var(--bg-surface), 0 -1px 0 0 var(--bg-surface)" } : {}),
+                  // 冻结表头：thead 已 sticky top，th 只需 sticky left（在 thead stacking context 内盖住滚动表头）
+                  ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, zIndex: 1 } : {}),
                   ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
                   ...col.style,
                 }}>
@@ -322,14 +327,13 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                   const off = sticky ? stickyOffsets[ci] : undefined;
                   return (
                     <td key={col.header} data-r={rowIdx} data-c={ci} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, r) : undefined} style={{
-                      border: "1px solid var(--border)", padding: "3px 6px",
+                      border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                      padding: "3px 6px",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       // 单元格右键列：整格显示 context-menu 光标（提示整格可右键）
                       ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
-                      // 冻结列：sticky 定位 + 不透明背景遮挡横向滚入内容（背景置于框选之前，选中态可覆盖）
-                      ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, background: "var(--bg-surface)", zIndex: 2 } : {}),
-                      // 同表头：collapse 模式下 sticky 边框错位露缝隙，box-shadow 左/上/下各扩 1px 背景色补偿
-                      ...(sticky && off !== undefined ? { boxShadow: "-1px 0 0 0 var(--bg-surface), 0 1px 0 0 var(--bg-surface), 0 -1px 0 0 var(--bg-surface)" } : {}),
+                      // 冻结数据列：sticky left + 不透明背景遮挡滚动内容；zIndex 1 低于表头 thead(2)，永远被表头覆盖
+                      ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, background: "var(--bg-surface)", zIndex: 1 } : {}),
                       ...(cellSel ? { background: "var(--bg-badge, #252736)" } : {}),
                       ...(sticky && ci === stickyLeft - 1 ? { borderRight: "2px solid var(--accent, #4f6bf6)" } : {}),
                       ...col.style,
@@ -370,12 +374,16 @@ export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHei
   }
   return (
     <div style={{ maxHeight, overflow: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <table style={{
+        width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12,
+        borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)",
+      }}>
         <thead>
           <tr>
             {allColumns.map(col => (
               <th key={col.header} style={{
-                border: "1px solid var(--border)", padding: "4px 6px", textAlign: "left",
+                border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                padding: "4px 6px", textAlign: "left",
                 whiteSpace: "nowrap", background: "var(--bg-surface)", position: "sticky", top: 0, zIndex: 1,
                 ...col.style,
               }}>
@@ -394,7 +402,8 @@ export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHei
             <tr key={i}>
               {allColumns.map(col => (
                 <td key={col.header} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, row) : undefined} style={{
-                  border: "1px solid var(--border)", padding: "3px 6px",
+                  border: "none", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+                  padding: "3px 6px",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
                   ...col.style,
