@@ -278,16 +278,22 @@ html[data-theme="light"] .tb-btn:hover {
   background: transparent;
 }
 
-/* 整根 bar 禁用时，所有 tab 统一降级 */
+/* 整根 bar 禁用时，所有 tab 统一降级（如打开设置时顶栏标签禁用）。
+   原 opacity 0.35 与 .tb-btn:disabled 的 0.55 叠加后过灰，提高至 0.75 保持可读 */
 .tb-bar.disabled .tb-btn {
-  opacity: 0.35;
+  opacity: 0.75;
   color: var(--text-muted);
   cursor: default;
   pointer-events: none;
 }
 
 .tb-btn.active {
-  color: var(--accent);
+  /* 深色主题：accent 加白 15% 提亮，选中更醒目 */
+  color: color-mix(in srgb, var(--accent) 85%, #fff);
+}
+/* 浅色主题：accent 掺黑 30% 加深，保证对比度 */
+html[data-theme="light"] .tb-btn.active {
+  color: color-mix(in srgb, var(--accent) 70%, #000);
 }
 
 .tb-btn span {
