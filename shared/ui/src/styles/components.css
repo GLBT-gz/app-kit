@@ -764,7 +764,7 @@
   padding: 0 14px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: #ffffff; /* 顶栏标签文本显眼化：深色下纯白（原 var(--text-muted) 过浅） */
   cursor: pointer;
   font-size: 12px;
   font-family: inherit;
@@ -774,13 +774,22 @@
 }
 
 .app-tab:hover {
-  color: var(--text-secondary);
+  color: #ffffff;
   background: var(--bg-badge);
 }
 
 .app-tab.active {
   color: var(--accent);
   background: transparent;
+}
+
+/* 浅色主题下顶栏标签文本纯黑，保持醒目 */
+html[data-theme="light"] .app-tab,
+html[data-theme="light"] .app-tab:hover {
+  color: #111111;
+}
+html[data-theme="light"] .app-tab.active {
+  color: var(--accent);
 }
 
 .app-tab svg {
