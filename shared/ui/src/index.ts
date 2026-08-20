@@ -69,6 +69,8 @@ export {
   crossBrowserStart,
   crossBrowserLoginCheck,
   crossBrowserClose,
+  crossSamplePrepare,
+  crossSampleFetchTab,
 } from "./ziniao-api";
 export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
 export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";

@@ -446,3 +446,19 @@ export async function crossBrowserClose(port: number): Promise<void> {
   if (!isTauriRuntime()) throw tauriRuntimeError("cross_browser_close");
   return tauriInvoke("cross_browser_close", { port });
 }
+
+/** 跨境店样品申请页准备（幂等，可轮询；url 为样品申请页地址，与本土同路径仅换域） */
+export async function crossSamplePrepare(port: number, url: string): Promise<ZiniaoSamplePrepare> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("cross_sample_prepare");
+  return tauriInvoke("cross_sample_prepare", { port, url });
+}
+
+/** 跨境店抓取单个状态 tab 的全部数据（分页自动翻完；页面结构按 core-tabs 处理，与本土同构） */
+export async function crossSampleFetchTab(
+  port: number,
+  url: string,
+  tab: number,
+): Promise<ZiniaoTabFetchResult> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("cross_sample_fetch_tab");
+  return tauriInvoke("cross_sample_fetch_tab", { port, url, tab });
+}
