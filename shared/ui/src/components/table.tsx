@@ -7,6 +7,8 @@ export interface TableColumn<T> {
   style?: React.CSSProperties;
   /** 表头点击事件（如「全选/全不选」开关列）；存在时表头文字变为可点击 */
   headerClick?: () => void;
+  /** 单元格右键事件（td 级，覆盖整个单元格而不限文字区域） */
+  onContextMenu?: (e: React.MouseEvent, row: T) => void;
 }
 
 /** 从渲染结果中递归提取纯文本（JSX / 函数组件 / 数组），用于 Ctrl+C 复制 */
@@ -310,9 +312,11 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
                   const sticky = stickyLeft > 0 && ci < stickyLeft;
                   const off = sticky ? stickyOffsets[ci] : undefined;
                   return (
-                    <td key={col.header} data-r={rowIdx} data-c={ci} style={{
+                    <td key={col.header} data-r={rowIdx} data-c={ci} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, r) : undefined} style={{
                       border: "1px solid var(--border)", padding: "3px 6px",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      // 单元格右键列：整格显示 context-menu 光标（提示整格可右键）
+                      ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
                       // 冻结列：sticky 定位 + 不透明背景遮挡横向滚入内容（背景置于框选之前，选中态可覆盖）
                       ...(sticky && off !== undefined ? { position: "sticky" as const, left: off, background: "var(--bg-surface)", zIndex: 2 } : {}),
                       ...(cellSel ? { background: "var(--bg-badge, #252736)" } : {}),
@@ -378,9 +382,11 @@ export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHei
           {rows.map((row, i) => (
             <tr key={i}>
               {allColumns.map(col => (
-                <td key={col.header} style={{
+                <td key={col.header} onContextMenu={col.onContextMenu ? (e) => col.onContextMenu?.(e, row) : undefined} style={{
                   border: "1px solid var(--border)", padding: "3px 6px",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...col.style,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  ...(col.onContextMenu ? { cursor: "context-menu" } : {}),
+                  ...col.style,
                 }}>{col.render(row, i)}</td>
               ))}
             </tr>
