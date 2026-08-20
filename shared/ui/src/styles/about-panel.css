@@ -248,7 +248,7 @@
   font-size: 12px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: #ffffff; /* 标签文本显眼化：深色下纯白（原 var(--text-muted) 灰，不够醒目） */
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
   white-space: nowrap;
@@ -256,9 +256,17 @@
   border-radius: 4px 4px 0 0;
 }
 
+/* 浅色主题下标签文本纯黑，保持醒目 */
+html[data-theme="light"] .tb-btn {
+  color: #111111;
+}
+
 .tb-btn:hover {
-  color: var(--text-primary);
+  color: #ffffff;
   background: var(--bg-card-hover);
+}
+html[data-theme="light"] .tb-btn:hover {
+  color: #111111;
 }
 
 .tb-btn:disabled {
