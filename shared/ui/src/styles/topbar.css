@@ -90,6 +90,33 @@
   color: var(--text-primary);
 }
 
+/* ── 主题图标：太阳/月亮双图标叠放，切换时旋转缩放淡入淡出（丝滑过渡） ── */
+.theme-toggle {
+  position: relative;
+}
+.theme-toggle .tb-icon {
+  position: absolute;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+/* 浅色主题：显示太阳（点击切深色） */
+.theme-toggle .icon-sun {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+.theme-toggle .icon-moon {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.3);
+}
+/* 深色主题：显示月亮，切换时太阳旋转缩小淡出、月亮旋转放大淡入 */
+html[data-theme="dark"] .theme-toggle .icon-sun {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.3);
+}
+html[data-theme="dark"] .theme-toggle .icon-moon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
 /* 置顶按钮 */
 .pin-btn {
   display: flex;

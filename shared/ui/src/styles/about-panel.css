@@ -250,7 +250,8 @@
   background: transparent;
   color: var(--text-primary); /* 主题主文字色：比纯白/纯黑暗一度，醒目但不刺眼 */
   cursor: pointer;
-  transition: color 0.12s, background 0.12s;
+  transition: color 0.12s, background 0.12s, opacity 0.28s ease;
+  transition-delay: 0s, 0s, 0s; /* 默认无延迟；禁用/恢复时由下方 stagger 规则错峰 */
   white-space: nowrap;
   z-index: 1;
   border-radius: 4px 4px 0 0;
@@ -278,6 +279,25 @@
   cursor: default;
   pointer-events: none;
 }
+
+/* ── 标签渐变禁用：打开设置时从右往左依次变灰（与设置面板滑入同步）；
+      退出时从左往右依次恢复。transition-delay 三值对应 color/background/opacity。 ── */
+.tb-bar.disabled .tb-btn:nth-last-child(1) { transition-delay: 0s, 0s, 0ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(2) { transition-delay: 0s, 0s, 30ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(3) { transition-delay: 0s, 0s, 60ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(4) { transition-delay: 0s, 0s, 90ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(5) { transition-delay: 0s, 0s, 120ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(6) { transition-delay: 0s, 0s, 150ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(7) { transition-delay: 0s, 0s, 180ms; }
+.tb-bar.disabled .tb-btn:nth-last-child(8) { transition-delay: 0s, 0s, 210ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(1) { transition-delay: 0s, 0s, 0ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(2) { transition-delay: 0s, 0s, 30ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(3) { transition-delay: 0s, 0s, 60ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(4) { transition-delay: 0s, 0s, 90ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(5) { transition-delay: 0s, 0s, 120ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(6) { transition-delay: 0s, 0s, 150ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(7) { transition-delay: 0s, 0s, 180ms; }
+.tb-bar:not(.disabled) .tb-btn:nth-child(8) { transition-delay: 0s, 0s, 210ms; }
 
 .tb-btn.active {
   /* 深色主题：accent 加白 15% 提亮，选中更醒目 */
