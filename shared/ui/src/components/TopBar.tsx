@@ -107,7 +107,7 @@ export function TopBar({
     <div className="topbar" ref={topbarRef}>
       {tabBar && <div className="topbar-left">{tabBar}</div>}
       <div className="topbar-right" data-tauri-drag-region>
-        {/* 设置按钮 */}
+        {/* 设置按钮（静态齿轮，无旋转动画） */}
         <button
           className={`settings-btn ${showSettings ? "active" : ""}`}
           onClick={onToggleSettings}

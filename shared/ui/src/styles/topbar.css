@@ -90,20 +90,6 @@
   color: var(--text-primary);
 }
 
-/* ── 设置齿轮动画：悬停转 90° 反馈可点，打开设置转 180° 保持；关闭转回 ── */
-.settings-btn svg {
-  transition: transform 0.35s ease;
-  /* SVG 旋转默认相对 view-box（左上），需锚定元素中心，避免旋转时偏移 */
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.settings-btn:hover svg {
-  transform: rotate(90deg);
-}
-.settings-btn.active svg {
-  transform: rotate(180deg);
-}
-
 /* ── 主题图标：太阳/月亮双图标叠放，切换时旋转缩放淡入淡出（丝滑过渡） ── */
 .theme-toggle {
   position: relative;
