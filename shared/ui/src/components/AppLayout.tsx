@@ -103,9 +103,8 @@ export function AppLayout({
   });
   const [settingsSidebarWidth, setSettingsSidebarWidth] = useState(() => {
     const v = safeGetJSON<number>(LS_KEYS.SIDEBAR_WIDTH);
-    if (typeof v !== "number" || Number.isNaN(v)) return initialSidebarWidth;
-    // 旧版存的是固定 px（如 175/340，恒 >100），一次性迁移为默认占比；0-100 视为占比直接使用
-    return v > 100 ? initialSidebarWidth : v;
+    // 防御：仅接受合理 px 范围。旧版比例残留值（6-40 等）或损坏数据会被判为非法并回退默认
+    return typeof v === "number" && v >= 60 && v <= 380 ? v : initialSidebarWidth;
   });
 
   // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 同步渲染 ──

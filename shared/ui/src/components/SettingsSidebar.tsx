@@ -1,9 +1,5 @@
 import { useCallback, useRef, useEffect } from "react";
 
-// 设置侧边栏宽度比例范围（%）：窗口全屏/缩小时按比例伸缩，不会在小窗口下占满屏幕
-const SIDEBAR_MIN_PCT = 6;
-const SIDEBAR_MAX_PCT = 40;
-
 export function SettingsSidebar({
   tabs,
   activeTab,
@@ -14,54 +10,30 @@ export function SettingsSidebar({
   tabs: Array<{ id: string; label: string; icon: React.ReactNode }>;
   activeTab: string;
   onTabChange: (tab: string) => void;
-  /** 侧边栏宽度占比（0-100，%；旧版固定 px 由 AppLayout 统一迁移） */
   sidebarWidth: number;
   onWidthChange: (w: number) => void;
 }) {
   const dragRef = useRef({ x: 0, w: 0 });
-  // 容器宽度（px）：拖拽时把位移换算为比例；取自父容器（settings-panel 整宽）
-  const containerWRef = useRef(0);
-  const divRef = useRef<HTMLDivElement>(null);
-
-  // 防御：旧版固定 px（如 175/340）会大于 100，clamp 到合理占比
-  const safePct = Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, sidebarWidth));
-
-  // 测量父容器宽度：首次渲染同步取一次，ResizeObserver 跟随窗口缩放
-  useEffect(() => {
-    const el = divRef.current;
-    if (!el) return;
-    const update = () => {
-      containerWRef.current = el.parentElement?.clientWidth ?? 0;
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    if (el.parentElement) ro.observe(el.parentElement);
-    return () => ro.disconnect();
-  }, []);
-
-  // 实际像素宽度 = 比例 × 容器宽；navMode 阈值仍按 px 判断（label 有最小显示空间）
-  const sidebarPx = (containerWRef.current * safePct) / 100;
-  const navMode = sidebarPx >= 200 ? "wide" : sidebarPx >= 130 ? "medium" : "compact";
 
   const startDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const onMove = (ev: MouseEvent) => {
-      const w = containerWRef.current;
-      if (w <= 0) return;
-      const newPct = dragRef.current.w + ((ev.clientX - dragRef.current.x) / w) * 100;
-      onWidthChange(Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, newPct)));
+      onWidthChange(Math.max(60, Math.min(380, dragRef.current.w + ev.clientX - dragRef.current.x)));
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-    dragRef.current = { x: e.clientX, w: safePct };
+    dragRef.current = { x: e.clientX, w: sidebarWidth };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [safePct, onWidthChange]);
+  }, [sidebarWidth, onWidthChange]);
+
+  const navMode = sidebarWidth >= 200 ? "wide" : sidebarWidth >= 130 ? "medium" : "compact";
 
   // ── 原生 wheel 事件监听（passive: true） ──
   // 用 ref 持有动态值，避免监听器在每次 props 变化时重建
+  const divRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const activeTabRef = useRef(activeTab);
@@ -88,7 +60,7 @@ export function SettingsSidebar({
   }, []); // 空依赖：只绑定一次，永不重建
 
   return (
-    <div className="settings-sidebar" ref={divRef} style={{ width: `${safePct}%` }} data-mode={navMode}>
+    <div className="settings-sidebar" ref={divRef} style={{ width: sidebarWidth }} data-mode={navMode}>
       {tabs.map(tab => (
         <button
           key={tab.id}

@@ -79,12 +79,12 @@ registerDataItems(
 
     // ── 浏览器面板（BrowserConfigPanel / useBrowserBaseData） ──
 
-    /** 浏览器配置面板侧边栏宽度（占窗口比例 %，旧版固定 px 由组件自动迁移） */
+    /** 浏览器配置面板侧边栏宽度 */
     "core-bcp-sidebar-width": {
       storage: "localStorage",
       category: "layout",
-      desc: "浏览器配置面板侧边栏宽度（占窗口比例 %，可拖拽调整）",
-      default: 14,
+      desc: "浏览器配置面板侧边栏宽度（可拖拽调整）",
+      default: 185,
     },
     /** 浏览器配置面板当前激活的浏览器标签 */
     "core-active-browser-tab": {

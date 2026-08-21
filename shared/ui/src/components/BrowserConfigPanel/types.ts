@@ -57,7 +57,7 @@ export interface BrowserConfigPanelProps {
   /** Profile 检测结果回调（用于父组件持久化 profiles） */
   onProfilesChange?: (browserType: string, profiles: BCPProfile[]) => void;
 
-  /** 可选的侧边栏初始宽度占比（0-100，%；旧版固定 px 值自动迁移为默认占比） */
+  /** 可选的侧边栏初始宽度 */
   sidebarWidth?: number;
 
   // ── 后端操作回调（可选，不提供则相关功能自动隐藏） ──
