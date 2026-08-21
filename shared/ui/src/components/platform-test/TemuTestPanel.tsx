@@ -401,7 +401,7 @@ function TemuNavigateSection(props: TemuSectionCtx) {
 // ── 测试面板主组件（分栏布局：左侧测试模块 / 右侧可拖拽日志栏） ──
 export function TemuTestPanel(props: TemuTestPanelProps) {
   const logCtx = useLog({ eventName: null, storageKey: "test:log:temu" });
-  const [logWidth, setLogWidth] = useState(360);
+  const [logWidth, setLogWidth] = useState(28);
   const [platform, setPlatform] = useState<TemuPlatform>("gz");
 
   const clearLog = useCallback(() => logCtx.clear(), [logCtx]);

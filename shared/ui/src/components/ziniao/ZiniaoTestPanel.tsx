@@ -112,7 +112,7 @@ export function ZiniaoTestPanel(props: {
   const [patch, setPatch] = useState<ZiniaoPatchInfo | null>(null);
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
-  const [logWidth, setLogWidth] = useState(360);
+  const [logWidth, setLogWidth] = useState(28);
   const [ttsMenu, setTtsMenu] = useState<ZiniaoSidebarParse | null>(null);
   const [ttsMenuShopId, setTtsMenuShopId] = useState<number | null>(null);
   const [js, setJs] = useState(`JSON.stringify({ title: document.title, url: location.href })`);
@@ -433,7 +433,6 @@ export function ZiniaoTestPanel(props: {
       log={logCtx}
       logWidth={logWidth}
       onLogWidthChange={setLogWidth}
-      minWidth={240}
       emptyText="选择模块后点击「运行」查看输出"
     >
       <div className="test-modules">

@@ -8,37 +8,53 @@ import { BrowserConfigItem } from "./Item";
 //  BrowserConfigPanel 组件
 // ════════════════════════════════════════════
 
+// 浏览器导航侧边栏宽度比例范围（%）：窗口全屏/缩小时按比例伸缩，不会在小窗口下占满屏幕
+const SIDEBAR_MIN_PCT = 6;
+const SIDEBAR_MAX_PCT = 40;
+
 export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
   const {
     browsers, activeBrowserType, onActiveBrowserTypeChange,
     exePaths, onExePathsChange, userDataDirs, onUserDataDirsChange,
-    sidebarWidth: initialSidebarWidth = 185,
+    sidebarWidth: initialSidebarWidth = 14,
     onCheckPath, onOpenDir, onBrowseFile, onBrowseDirectory,
     onDetectProfiles, refreshing, onRefreshAll, onLaunchProfile, onGetLaunchCommand, onCreateUserDataDir, onCreateShortcut,
     onProfilesChange,
   } = props;
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    return safeGetJSON<number>(LS_KEYS.BCP_SIDEBAR_WIDTH) ?? initialSidebarWidth;
+    const v = safeGetJSON<number>(LS_KEYS.BCP_SIDEBAR_WIDTH);
+    if (typeof v !== "number" || Number.isNaN(v)) return initialSidebarWidth;
+    // 旧版存的是固定 px（如 185/340，恒 >100），一次性迁移为默认占比；0-100 视为占比直接使用
+    return v > 100 ? initialSidebarWidth : v;
   });
+  // 容器宽度（px）：拖拽时把位移换算为比例；取自父容器（settings-panel-layout 整宽）
+  const containerWRef = useRef(0);
+  // 防御：旧版固定 px 会大于 100，clamp 到合理占比
+  const safePct = Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, sidebarWidth));
   const dragStartRef = useRef({ x: 0, w: 0 });
   const startDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const onMove = (ev: MouseEvent) => {
-      setSidebarWidth(Math.max(60, Math.min(380, dragStartRef.current.w + ev.clientX - dragStartRef.current.x)));
+      const w = containerWRef.current;
+      if (w <= 0) return;
+      const newPct = dragStartRef.current.w + ((ev.clientX - dragStartRef.current.x) / w) * 100;
+      setSidebarWidth(Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, newPct)));
     };
     const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
-    dragStartRef.current = { x: e.clientX, w: sidebarWidth };
+    dragStartRef.current = { x: e.clientX, w: safePct };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [sidebarWidth]);
+  }, [safePct]);
 
   // 侧边栏宽度持久化
   useEffect(() => {
     safeSetJSON(LS_KEYS.BCP_SIDEBAR_WIDTH, sidebarWidth);
   }, [sidebarWidth]);
 
-  const navMode = sidebarWidth >= 160 ? "wide" as const : sidebarWidth >= 90 ? "medium" as const : "compact" as const;
+  // 实际像素宽度 = 比例 × 容器宽；navMode 阈值仍按 px 判断（label 有最小显示空间）
+  const sidebarPx = (containerWRef.current * safePct) / 100;
+  const navMode = sidebarPx >= 160 ? "wide" as const : sidebarPx >= 90 ? "medium" as const : "compact" as const;
   const shortNameMap: Record<string, string> = {
     edge: "Edge", chrome: "Chrome", brave: "Brave", firefox: "Firefox",
     opera: "Opera", vivaldi: "Vivaldi", safari: "Safari",
@@ -106,7 +122,7 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
 
   return (
     <div className="settings-panel-layout" style={{ flex: 1, minHeight: 0 }}>
-      <div className="nav-sidebar" ref={sidebarRef} style={{ width: noBrowsers ? 185 : sidebarWidth }} data-mode={noBrowsers ? "wide" : navMode}>
+      <div className="nav-sidebar" ref={sidebarRef} style={{ width: noBrowsers ? "14%" : `${safePct}%` }} data-mode={noBrowsers ? "wide" : navMode}>
         {onRefreshAll && (
           <div
             className={`nav-refresh ${navMode === "compact" ? "icon-only" : ""}`}

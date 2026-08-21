@@ -67,7 +67,7 @@ export function AppLayout({
   children,
   settingsTabs = [],
   defaultSettingsTab,
-  settingsSidebarWidth: initialSidebarWidth = 185,
+  settingsSidebarWidth: initialSidebarWidth = 14,
   onSettingsChange,
   onSetWindowPin,
   registeredShortcuts,
@@ -102,7 +102,10 @@ export function AppLayout({
     return defaultSettingsTab ?? settingsTabs[0]?.id ?? "";
   });
   const [settingsSidebarWidth, setSettingsSidebarWidth] = useState(() => {
-    return safeGetJSON<number>(LS_KEYS.SIDEBAR_WIDTH) ?? initialSidebarWidth;
+    const v = safeGetJSON<number>(LS_KEYS.SIDEBAR_WIDTH);
+    if (typeof v !== "number" || Number.isNaN(v)) return initialSidebarWidth;
+    // 旧版存的是固定 px（如 175/340，恒 >100），一次性迁移为默认占比；0-100 视为占比直接使用
+    return v > 100 ? initialSidebarWidth : v;
   });
 
   // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 同步渲染 ──

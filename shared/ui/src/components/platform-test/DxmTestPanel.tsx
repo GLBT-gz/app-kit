@@ -359,7 +359,7 @@ function DxmMonitorSection(props: PlatformTestCtx) {
 // ── 测试面板主组件（分栏布局：左侧测试模块 / 右侧可拖拽日志栏） ──
 export function DxmTestPanel(props: DxmTestPanelProps) {
   const logCtx = useLog({ eventName: null, storageKey: "test:log:dxm" });
-  const [logWidth, setLogWidth] = useState(360);
+  const [logWidth, setLogWidth] = useState(28);
 
   // ── 实时进度事件监听（事件名与后端命令一一对应） ──
   useEffect(() => {

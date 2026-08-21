@@ -296,7 +296,7 @@ function KdocsRunScriptSection(props: KdocsSectionCtx & { url: string; defaults?
 // ── 测试面板主组件（分栏布局：左侧测试模块 / 右侧可拖拽日志栏） ──
 export function KdocsTestPanel(props: KdocsTestPanelProps) {
   const logCtx = useLog({ eventName: null, storageKey: "test:log:kdocs" });
-  const [logWidth, setLogWidth] = useState(360);
+  const [logWidth, setLogWidth] = useState(28);
   const [url, setUrl] = useState(props.defaultUrl ?? "");
   const modules = props.modules ?? ["open", "sidebar", "scripts", "run"];
 

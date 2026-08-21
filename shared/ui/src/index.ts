@@ -192,6 +192,7 @@ export { useZiniaoAgent } from "./hooks/useZiniaoAgent";
 export type { UseZiniaoAgentReturn, ZnLogFn, SetShopState } from "./hooks/useZiniaoAgent";
 export { resolvePlatformBrowser, usePlatformBrowserInfo } from "./hooks/usePlatformBrowserInfo";
 export type { CachedPlatformProfile, ProfilesCache } from "./hooks/usePlatformBrowserInfo";
+export { useLogWidthPct, LOG_WIDTH_DEFAULT_PCT } from "./hooks/useLogWidthPct";
 
 // 工具
 export {
