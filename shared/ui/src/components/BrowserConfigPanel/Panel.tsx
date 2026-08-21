@@ -20,8 +20,11 @@ export function BrowserConfigPanel(props: BrowserConfigPanelProps) {
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const v = safeGetJSON<number>(LS_KEYS.BCP_SIDEBAR_WIDTH);
-    // 防御：仅接受合理 px 范围。旧版比例残留值（6-40 等）或损坏数据会被判为非法并回退默认
-    return typeof v === "number" && v >= 60 && v <= 380 ? v : initialSidebarWidth;
+    // 防御：仅接受合理 px 范围。旧版比例残留值（6-40 等）或损坏数据会被判为非法并回退默认，
+    // 同时回写修复存储，避免数据管理里一直显示旧比例残留值
+    if (typeof v === "number" && v >= 60 && v <= 380) return v;
+    safeSetJSON(LS_KEYS.BCP_SIDEBAR_WIDTH, initialSidebarWidth);
+    return initialSidebarWidth;
   });
   const dragStartRef = useRef({ x: 0, w: 0 });
   const startDrag = useCallback((e: React.MouseEvent) => {
