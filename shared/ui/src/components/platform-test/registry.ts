@@ -104,15 +104,17 @@ export const PLATFORM_TEST_REGISTRY: PlatformTestRecord[] = [
   {
     key: "haiduoke",
     label: "海多客",
+    panelComponent: "HaiduokeTestPanel",
     commands: [
-      { name: "test_haiduoke_open_login", desc: "打开登录（006/007）" },
-      { name: "test_haiduoke_fetch_stock", desc: "获取库存（007）" },
-      { name: "test_haiduoke_latest_order", desc: "最近订单（006）" },
+      { name: "test_haiduoke_open_login", desc: "打开登录页（已保存账密自动登录，006/007）" },
+      { name: "test_haiduoke_latest_order", desc: "读取最新采购单号（006 私有）" },
+      { name: "test_haiduoke_fetch_stock", desc: "获取库存（007 私有）" },
     ],
     usedBy: {
-      "006-海外仓库存同步": "项目私有",
-      "007-库存周转": "项目私有",
+      "006-海外仓库存同步": "已接入公共面板（阶段5，2026-08-21）",
+      "007-库存周转": "已接入公共面板 + 私有业务注入（阶段5，2026-08-21）",
     },
+    note: "公共骨架仅「登录」（命令同名 test_haiduoke_open_login，参数 exePath/profileId/userDataDir + phone/password）；事件统一 haiduoke-test-progress（{message,level}，level \"ok\"→success）；浏览器解析双模式：007 多浏览器（platformSelections[\"haiduoke\"]），006 单浏览器（browserOverride 直读，006 测试页整体为单浏览器模式）；账密经 loadCredentials 回调由各项目从自己凭证存储读取；006 私有（最新采购单号）/007 私有（获取库存）经 extraSections 注入。",
   },
   {
     key: "ziniao",

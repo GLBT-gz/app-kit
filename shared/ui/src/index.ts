@@ -119,6 +119,10 @@ export {
 } from "./temu-api";
 export type { TemuBrowserOpts, TemuPlatform, TemuCachedShop } from "./temu-api";
 
+// ── 海多客平台 API（独立模块，保持 api.ts 中性） ──
+export { testHaiduokeOpenLogin } from "./haiduoke-api";
+export type { HaiduokeBrowserOpts } from "./haiduoke-api";
+
 // Components
 export { AppLayout } from "./components/AppLayout";
 export type { AppLayoutProps, SettingsTab } from "./components/AppLayout";
@@ -264,5 +268,7 @@ export { KdocsTestPanel } from "./components/platform-test/KdocsTestPanel";
 export type { KdocsTestPanelProps, KdocsPanelModule } from "./components/platform-test/KdocsTestPanel";
 export { TemuTestPanel } from "./components/platform-test/TemuTestPanel";
 export type { TemuTestPanelProps } from "./components/platform-test/TemuTestPanel";
+export { HaiduokeTestPanel } from "./components/platform-test/HaiduokeTestPanel";
+export type { HaiduokeTestPanelProps } from "./components/platform-test/HaiduokeTestPanel";
 export { PLATFORM_TEST_REGISTRY } from "./components/platform-test/registry";
 export type { PlatformTestRecord, PlatformTestCommand } from "./components/platform-test/registry";
