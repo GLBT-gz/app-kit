@@ -67,7 +67,7 @@ export function AppLayout({
   children,
   settingsTabs = [],
   defaultSettingsTab,
-  settingsSidebarWidth: initialSidebarWidth = 14,
+  settingsSidebarWidth: initialSidebarWidth = 185,
   onSettingsChange,
   onSetWindowPin,
   registeredShortcuts,
@@ -103,8 +103,11 @@ export function AppLayout({
   });
   const [settingsSidebarWidth, setSettingsSidebarWidth] = useState(() => {
     const v = safeGetJSON<number>(LS_KEYS.SIDEBAR_WIDTH);
-    // 防御：仅接受合理 px 范围。旧版比例残留值（6-40 等）或损坏数据会被判为非法并回退默认
-    return typeof v === "number" && v >= 60 && v <= 380 ? v : initialSidebarWidth;
+    // 防御：仅接受合理 px 范围。旧版比例残留值（6-40 等）或损坏数据会被判为非法并回退默认，
+    // 同时回写修复存储，避免数据管理里一直显示旧比例残留值
+    if (typeof v === "number" && v >= 60 && v <= 380) return v;
+    safeSetJSON(LS_KEYS.SIDEBAR_WIDTH, initialSidebarWidth);
+    return initialSidebarWidth;
   });
 
   // ── 双状态：sidebarHighlightTab 即时更新，settingsTab 同步渲染 ──
