@@ -53,13 +53,13 @@ export const PLATFORM_TEST_REGISTRY: PlatformTestRecord[] = [
       { name: "dxm_tab_rename", desc: "重命名标签页" },
     ],
     usedBy: {
-      "010-产品上架": "已接入公共面板",
+      "010-产品上架": "已接入公共面板+命令已下沉平台层",
       "001-店小秘-采购": "命令待统一",
       "003-返单备货量自动化": "命令待统一",
       "004-店小秘-SKU成本计算": "命令待统一",
       "006-海外仓库存同步": "命令待统一",
     },
-    note: "001/003/004/006 的店小秘命令名各不相同（automation_*/dxm_batch_*/dxm_cost_*/test_dianxiaomi_*），接入公共面板需先统一 Rust 命令注册。",
+    note: "dxm_* 命令逻辑已下沉到 platforms/dianxiaomi（browser/verify/flow/monitor），010 为标准薄壳实现；001/003/004/006 注册同名命令即可接入公共 DxmTestPanel（注意事件名需统一为 dxm:progress / dxm:verify-code）。",
   },
   {
     key: "temu",
