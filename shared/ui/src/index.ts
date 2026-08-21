@@ -78,6 +78,26 @@ export type { ZiniaoSidebarItem, ZiniaoSidebarGroup, ZiniaoSidebarParse, ZiniaoS
 export type { ZiniaoSampleRow, ZiniaoTabFetchResult, ZiniaoSamplePrepare } from "./ziniao-api";
 export type { CrossStart, CrossLoginStatus } from "./ziniao-api";
 
+// ── 店小秘平台 API（独立模块，保持 api.ts 中性） ──
+export {
+  saveDxmCredentials,
+  loadDxmCredentials,
+  ensureBrowserDianxiaomi,
+  dxmLogin,
+  dxmOpenPage,
+  dxmSubmitVerifyCode,
+  cancelDxmAutomation,
+  dxmMonitorStart,
+  dxmMonitorStatus,
+  dxmMonitorReconnect,
+  dxmListTabs,
+  dxmTabActivate,
+  dxmTabClose,
+  dxmTabOpen,
+  dxmTabRename,
+} from "./dxm-api";
+export type { DxmCredentials, DxmBrowserOpts, DxmTabInfo } from "./dxm-api";
+
 // Components
 export { AppLayout } from "./components/AppLayout";
 export type { AppLayoutProps, SettingsTab } from "./components/AppLayout";
@@ -145,6 +165,8 @@ export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";
 export { useWheelTabSwitch } from "./hooks/useWheelTabSwitch";
 export { useZiniaoAgent } from "./hooks/useZiniaoAgent";
 export type { UseZiniaoAgentReturn, ZnLogFn, SetShopState } from "./hooks/useZiniaoAgent";
+export { resolvePlatformBrowser, usePlatformBrowserInfo } from "./hooks/usePlatformBrowserInfo";
+export type { CachedPlatformProfile, ProfilesCache } from "./hooks/usePlatformBrowserInfo";
 
 // 工具
 export {
@@ -213,3 +235,9 @@ export { ZiniaoStoreList } from "./components/ziniao/ZiniaoStoreList";
 export type { ZiniaoStoreListProps } from "./components/ziniao/ZiniaoStoreList";
 export { ZiniaoTestPanel } from "./components/ziniao/ZiniaoTestPanel";
 export type { ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
+
+// ── 平台测试面板（按平台收拢，多项目共享） ──
+export { DxmTestPanel } from "./components/platform-test/DxmTestPanel";
+export type { DxmTestPanelProps, PlatformTestCtx } from "./components/platform-test/DxmTestPanel";
+export { PLATFORM_TEST_REGISTRY } from "./components/platform-test/registry";
+export type { PlatformTestRecord, PlatformTestCommand } from "./components/platform-test/registry";
