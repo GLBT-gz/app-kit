@@ -121,9 +121,9 @@ export const PLATFORM_TEST_REGISTRY: PlatformTestRecord[] = [
       { name: "ziniao_agent_cdp_port", desc: "获取 CDP 端口" },
     ],
     usedBy: {
-      "008-紫鸟运营工具": "项目私有（公共 ZiniaoTestPanel 未接线）",
+      "008-紫鸟运营工具": "已接入公共面板 + 私有业务注入（阶段3，2026-08-21）",
       "009-TK店铺自动化": "未使用测试页",
     },
-    note: "公共 ZiniaoTestPanel 已存在但 008 使用自有 test-common.tsx（内容重叠），待二选一。",
+    note: "公共 ZiniaoTestPanel 提供补丁/打开/店铺列表/开关/进入/CDP/侧边栏/TK01 通用模块；008 私有业务（树形路由选择/刷新全部店铺域名）经 extraSections 注入（共享 ZiniaoPanelCtx），本地 test-common.tsx 已删除。",
   },
 ];

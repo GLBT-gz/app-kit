@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ziniaoPatchStatus,
   ziniaoPatchApply,
@@ -10,7 +10,7 @@ import {
   ziniaoScreenshot,
 } from "../../ziniao-api";
 import { ziniaoParseSidebar, ziniaoSwitchMenu, ziniaoSidebarExpand } from "../../ziniao-api";
-import type { ZiniaoSidebarItem, ZiniaoSidebarParse, ZiniaoSidebarExpandResult } from "../../ziniao-api";
+import type { ZiniaoAgentBrowser, ZiniaoSidebarItem, ZiniaoSidebarParse, ZiniaoSidebarExpandResult } from "../../ziniao-api";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { isTauriRuntime } from "../../tauri-utils";
 import { useLog } from "../LogPanel";
@@ -31,6 +31,24 @@ export interface ZiniaoPatchInfo {
   arch: string;
   main_index_len: number;
   detail: string;
+}
+
+/**
+ * 公共面板注入分节的上下文（项目私有业务测试经 extraSections 注入时使用）。
+ * 只暴露必要的运行态与操作，日志/店铺选择等由面板统一管理。
+ */
+export interface ZiniaoPanelCtx {
+  log: (msg: string, level?: "info" | "success" | "error" | "warn" | "step" | "debug") => void;
+  busy: boolean;
+  shops: ZiniaoAgentBrowser[];
+  running: Set<number>;
+  selectedShopId: number | null;
+  setSelectedShopId: (id: number | null) => void;
+  stepOpen: (s: ZiniaoAgentBrowser) => Promise<string>;
+  stepClose: (s: ZiniaoAgentBrowser) => Promise<string>;
+  stepCdp: (s: ZiniaoAgentBrowser) => Promise<string>;
+  /** 执行动作（busy 联动 + 日志前缀），如 run("刷新域名", fn, true) */
+  run: (label: string, fn: () => Promise<string>, block?: boolean) => void;
 }
 
 /** TK01 固定测试环境（省去每次解析店铺）：
@@ -87,7 +105,10 @@ function patchStatusText(st: ZiniaoPatchInfo): string {
  * 覆盖：补丁检查/安装、自动打开紫鸟、店铺解析、打开/关闭店铺、CDP 控制。
  * 核心步骤逻辑由公共 hook useZiniaoAgent 提供，本组件只负责布局与补丁模块。
  */
-export function ZiniaoTestPanel() {
+export function ZiniaoTestPanel(props: {
+  extraSections?: { title: string; content: (ctx: ZiniaoPanelCtx) => ReactNode }[];
+}) {
+  const { extraSections = [] } = props;
   const [patch, setPatch] = useState<ZiniaoPatchInfo | null>(null);
   const [patchNote, setPatchNote] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
@@ -376,6 +397,20 @@ export function ZiniaoTestPanel() {
 
   // 选中店铺对象
   const selectedShop = shops.find((s) => s.browserId === selectedShopId) ?? null;
+
+  // 注入分节上下文（共享面板内日志/店铺选择/运行态）
+  const panelCtx: ZiniaoPanelCtx = {
+    log,
+    busy,
+    shops,
+    running,
+    selectedShopId,
+    setSelectedShopId,
+    stepOpen,
+    stepClose,
+    stepCdp,
+    run,
+  };
 
   const shopSelect = (
     <select
@@ -750,6 +785,11 @@ export function ZiniaoTestPanel() {
         {!isTauriRuntime() && (
           <div className="zn-error">当前处于浏览器预览模式（无 Tauri 运行时），无法调用紫鸟命令。请通过桌面应用运行。</div>
         )}
+        {extraSections.map((s) => (
+          <TestSection key={s.title} title={s.title}>
+            {s.content(panelCtx)}
+          </TestSection>
+        ))}
       </div>
     </TestPageLayout>
   );

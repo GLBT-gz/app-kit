@@ -244,7 +244,7 @@ export type { ContextMenuItem } from "./components/ContextMenu";
 export { ZiniaoStoreList } from "./components/ziniao/ZiniaoStoreList";
 export type { ZiniaoStoreListProps } from "./components/ziniao/ZiniaoStoreList";
 export { ZiniaoTestPanel } from "./components/ziniao/ZiniaoTestPanel";
-export type { ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
+export type { ZiniaoPanelCtx, ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
 
 // ── 平台测试面板（按平台收拢，多项目共享） ──
 export { DxmTestPanel } from "./components/platform-test/DxmTestPanel";
