@@ -108,6 +108,17 @@ export {
 } from "./kdocs-api";
 export type { KdocsBrowserOpts } from "./kdocs-api";
 
+// ── Temu 平台 API（独立模块，保持 api.ts 中性） ──
+export {
+  loadTemuCachedShops,
+  testTemuAutoLogin,
+  testTemuClosePopups,
+  testTemuGetShops,
+  testTemuSwitchShop,
+  testTemuNavigateMenu,
+} from "./temu-api";
+export type { TemuBrowserOpts, TemuPlatform, TemuCachedShop } from "./temu-api";
+
 // Components
 export { AppLayout } from "./components/AppLayout";
 export type { AppLayoutProps, SettingsTab } from "./components/AppLayout";
@@ -251,5 +262,7 @@ export { DxmTestPanel } from "./components/platform-test/DxmTestPanel";
 export type { DxmTestPanelProps, PlatformTestCtx } from "./components/platform-test/DxmTestPanel";
 export { KdocsTestPanel } from "./components/platform-test/KdocsTestPanel";
 export type { KdocsTestPanelProps, KdocsPanelModule } from "./components/platform-test/KdocsTestPanel";
+export { TemuTestPanel } from "./components/platform-test/TemuTestPanel";
+export type { TemuTestPanelProps } from "./components/platform-test/TemuTestPanel";
 export { PLATFORM_TEST_REGISTRY } from "./components/platform-test/registry";
 export type { PlatformTestRecord, PlatformTestCommand } from "./components/platform-test/registry";
