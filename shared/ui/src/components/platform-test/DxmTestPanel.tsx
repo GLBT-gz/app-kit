@@ -8,7 +8,7 @@
 // 底层命令见 ../dxm-api（裸名 dxm_*，由项目 Rust 侧注册）。
 // ============================================================
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useLog } from "../LogPanel";
 import { TestSection, TestPageLayout } from "../TestLayout";
@@ -47,6 +47,11 @@ export interface DxmTestPanelProps {
   cachedProfiles: ProfilesCache;
   configExePaths: Record<string, string>;
   platformSelections: Record<string, string | null>;
+  /**
+   * 项目私有业务测试分节（渲染在通用骨架之后，共享面板内日志）。
+   * 通用骨架只覆盖「登录/前往页面/浏览器监控」，业务抓取类测试由项目注入。
+   */
+  extraSections?: { title: string; content: (ctx: PlatformTestCtx) => ReactNode }[];
 }
 
 // ── 店小秘页面列表 ──
@@ -433,6 +438,9 @@ export function DxmTestPanel(props: DxmTestPanelProps) {
         <TestSection title="1. 登录店小秘"><DxmLoginSection {...cancelProps} /></TestSection>
         <TestSection title="2. 前往各页面（未登录自动登录）"><DxmOpenPageSection {...cancelProps} /></TestSection>
         <TestSection title="3. 浏览器实时监控（标签页）"><DxmMonitorSection {...sectionProps} /></TestSection>
+        {props.extraSections?.map(s => (
+          <TestSection key={s.title} title={s.title}>{s.content(sectionProps)}</TestSection>
+        ))}
       </div>
 
       {/* 验证码弹窗 */}
