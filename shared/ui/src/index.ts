@@ -98,6 +98,16 @@ export {
 } from "./dxm-api";
 export type { DxmCredentials, DxmBrowserOpts, DxmTabInfo } from "./dxm-api";
 
+// ── 多维表格平台 API（独立模块，保持 api.ts 中性） ──
+export {
+  testKdocsOpen,
+  testKdocsSidebar,
+  testKdocsParseScripts,
+  testKdocsRunScript,
+  cancelKdocs,
+} from "./kdocs-api";
+export type { KdocsBrowserOpts } from "./kdocs-api";
+
 // Components
 export { AppLayout } from "./components/AppLayout";
 export type { AppLayoutProps, SettingsTab } from "./components/AppLayout";
@@ -239,5 +249,7 @@ export type { ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
 // ── 平台测试面板（按平台收拢，多项目共享） ──
 export { DxmTestPanel } from "./components/platform-test/DxmTestPanel";
 export type { DxmTestPanelProps, PlatformTestCtx } from "./components/platform-test/DxmTestPanel";
+export { KdocsTestPanel } from "./components/platform-test/KdocsTestPanel";
+export type { KdocsTestPanelProps, KdocsPanelModule } from "./components/platform-test/KdocsTestPanel";
 export { PLATFORM_TEST_REGISTRY } from "./components/platform-test/registry";
 export type { PlatformTestRecord, PlatformTestCommand } from "./components/platform-test/registry";

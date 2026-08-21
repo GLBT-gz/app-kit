@@ -79,17 +79,20 @@ export const PLATFORM_TEST_REGISTRY: PlatformTestRecord[] = [
   {
     key: "kdocs",
     label: "多维表格",
+    panelComponent: "KdocsTestPanel",
     commands: [
-      { name: "test_kdocs_open", desc: "打开多维表格（003/006/007）" },
-      { name: "test_kdocs_parse_scripts", desc: "解析脚本（006/007）" },
-      { name: "test_kdocs_run_script", desc: "执行脚本（006/007）" },
+      { name: "test_kdocs_open", desc: "打开多维表格（URL 参数化）" },
+      { name: "test_kdocs_sidebar", desc: "解析侧边栏树（只读）" },
+      { name: "test_kdocs_parse_scripts", desc: "解析脚本列表（只读）" },
+      { name: "test_kdocs_run_script", desc: "运行脚本并读取日志" },
+      { name: "cancel_kdocs", desc: "终止当前多维表格自动化" },
     ],
     usedBy: {
-      "003-返单备货量自动化": "项目私有",
-      "006-海外仓库存同步": "项目私有",
-      "007-库存周转": "项目私有",
+      "006-海外仓库存同步": "已接入公共面板（阶段2，2026-08-21）",
+      "007-库存周转": "已接入公共面板 + 私有业务注入（阶段2，2026-08-21）",
+      "003-返单备货量自动化": "已接入公共面板（仅打开模块 + 私有业务注入，阶段2，2026-08-21）",
     },
-    note: "kdocs 被 3 个项目使用，测试命令以 test_kdocs_* 为主，具备收拢条件（无平台 crate 独立命令）。",
+    note: "公共契约对齐 007 实现（浏览器参数直接传，命令内部保证就绪）；事件统一 kdocs-test-progress（{message,level}）；006 原 cdpPort 前置签名已对齐；007 私有模块（路由导航/写脚本/菜单探测/dbapp 直读等）经 extraSections 注入；003 原 feishu 命名命令保留为私有业务。",
   },
   {
     key: "haiduoke",
