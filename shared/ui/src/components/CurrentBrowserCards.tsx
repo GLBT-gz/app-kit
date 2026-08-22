@@ -139,8 +139,10 @@ const ProfileCard = memo(function ProfileCard({
   isLaunching,
   launchStatus,
   connStatus,
+  dataKey,
   onCardClick,
   onCardContextMenu,
+  onCardMouseDown,
 }: ProfileCardProps) {
   let cls = "current-card";
   if (isSelected) cls += " current-card--selected";
@@ -150,7 +152,9 @@ const ProfileCard = memo(function ProfileCard({
   return (
     <button
       className={cls}
+      data-key={dataKey}
       onClick={() => onCardClick(browserType, profile)}
+      onMouseDown={(e) => onCardMouseDown?.(e, browserType, profile)}
       onContextMenu={(e) => {
         onCardContextMenu?.(e, browserType, profile);
       }}
