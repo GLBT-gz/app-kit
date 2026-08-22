@@ -35,7 +35,7 @@
   background: var(--bg-nav);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   overflow-y: auto;
   position: relative;
 }
@@ -96,7 +96,8 @@
 }
 
 /* 设置侧边栏分组分隔横线（tab.dividerBefore 为 true 时画在该 tab 上方间隙处）。
-   用伪元素绝对定位，不占用 flex 布局空间 → 有/无横线的栏目间距完全一致 */
+   伪元素绝对定位不占 flex 空间 → 有/无横线的栏目间距一致（统一 gap）。
+   top: -3px 使横线居中于 6px 间隙，上下各留 ~2px，不贴任何按钮 */
 .settings-tab-item.with-divider {
   position: relative;
 }
