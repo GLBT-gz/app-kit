@@ -43,13 +43,41 @@ pub async fn page_navigate(conn: &CdpConnection, url: &str) -> Result<String> {
     Ok(frame_id)
 }
 
-/// 等待页面加载完成
+/// 等待页面加载完成（默认 20 秒超时）
+///
+/// 轮询 `document.readyState` 直到 `complete`。相比订阅 `Page.loadEventFired`
+/// 事件（事件可能在订阅前已触发而错过），轮询无时序竞争，快页面立即返回，
+/// 慢页面最多等满超时后报错，避免调用方被无限挂起。
 pub async fn page_load_event(conn: &CdpConnection) -> Result<()> {
+    page_load_event_with_timeout(conn, std::time::Duration::from_secs(20)).await
+}
+
+/// 等待页面加载完成（自定义超时）
+///
+/// 每次探测也设 5 秒超时：若 CDP 连接异常，单次 `Runtime.evaluate` 默认等
+/// 全局 90 秒超时会让调用方长时间占锁，这里用更短超时及时失败。
+pub async fn page_load_event_with_timeout(conn: &CdpConnection, timeout: std::time::Duration) -> Result<()> {
     conn.send_command("Page.enable", Value::Null).await?;
-    // Page.loadEventFired 会在页面加载完成后触发
-    conn.send_command("Page.loadEventFired", Value::Null).await?;
-    info!("页面加载完成");
-    Ok(())
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if std::time::Instant::now() >= deadline {
+            anyhow::bail!("等待页面加载超时 ({} 秒)", timeout.as_secs());
+        }
+        let state = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            runtime_evaluate(conn, "document.readyState"),
+        )
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .and_then(|v| v.get("value").and_then(|s| s.as_str()).map(|s| s.to_string()))
+        .unwrap_or_default();
+        if state == "complete" {
+            info!("页面加载完成 (readyState=complete)");
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    }
 }
 
 // ==================== DOM 操作 ====================
