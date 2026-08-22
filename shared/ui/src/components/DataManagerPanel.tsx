@@ -556,7 +556,7 @@ function BrowserStorage() {
     .flatMap(g => g.items.filter(i => i.storage === "localStorage")).length + unregisteredEntries.length;
 
   return (
-    <>
+    <div className="dm-root">
       <span
         ref={keyMeasureRef}
         style={{ position: "absolute", visibility: "hidden", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}
@@ -835,6 +835,6 @@ function BrowserStorage() {
           {toast.text}
         </div>
       )}
-    </>
+    </div>
   );
 }

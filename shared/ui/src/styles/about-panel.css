@@ -2,7 +2,7 @@
    About Panel
    ======================================== */
 .about-panel {
-  padding: 28px 32px;
+  padding: 24px 28px;
 }
 
 .about-title {
@@ -212,6 +212,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ── 数据管理根容器（统一设置页边距 + flex 撑满以便列表滚动） ── */
+
+.dm-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 24px 28px;
 }
 
 /* ── 工具条（条目统计 + 操作按钮） ── */
