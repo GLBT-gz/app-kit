@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect } from "react";
 
 export function SettingsSidebar({
   tabs,
@@ -62,17 +62,15 @@ export function SettingsSidebar({
   return (
     <div className="settings-sidebar" ref={divRef} style={{ width: sidebarWidth }} data-mode={navMode}>
       {tabs.map(tab => (
-        <Fragment key={tab.id}>
-          {tab.dividerBefore && <div className="settings-tab-divider" />}
-          <button
-            className={`settings-tab-item ${activeTab === tab.id ? "active" : ""} ${navMode === "compact" ? "icon-only" : ""}`}
-            onClick={() => onTabChange(tab.id)}
-            title={navMode === "compact" ? tab.label : undefined}
-          >
-            <span className="sti-icon">{tab.icon}</span>
-            {navMode !== "compact" && <span className="sti-label">{tab.label}</span>}
-          </button>
-        </Fragment>
+        <button
+          key={tab.id}
+          className={`settings-tab-item ${activeTab === tab.id ? "active" : ""} ${navMode === "compact" ? "icon-only" : ""} ${tab.dividerBefore ? "with-divider" : ""}`}
+          onClick={() => onTabChange(tab.id)}
+          title={navMode === "compact" ? tab.label : undefined}
+        >
+          <span className="sti-icon">{tab.icon}</span>
+          {navMode !== "compact" && <span className="sti-label">{tab.label}</span>}
+        </button>
       ))}
       <div className="sidebar-resize-handle" onMouseDown={startDrag} />
     </div>
