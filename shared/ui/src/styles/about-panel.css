@@ -191,7 +191,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 28px 32px;
+  padding: 24px 28px;
 }
 
 .dm-header {
@@ -214,14 +214,18 @@
   gap: 6px;
 }
 
-/* ── 数据管理根容器（统一设置页边距 + flex 撑满以便列表滚动） ── */
+/* ── 数据管理根容器（flex 撑满以便列表滚动；边距由 .dm-panel 统一提供，避免双层 padding） ── */
 
 .dm-root {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 24px 28px;
+}
+
+/* ── 数据管理页：首个 tab 与上方标题左对齐（去掉按钮自带 16px 缩进） ── */
+.dm-tabbar .tb-btn:first-child {
+  padding-left: 0;
 }
 
 /* ── 工具条（条目统计 + 操作按钮） ── */

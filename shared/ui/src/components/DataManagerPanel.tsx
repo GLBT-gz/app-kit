@@ -76,7 +76,7 @@ export function DataManagerPanel({ appName = "当前应用", onClose }: DataMana
         </div>
       </div>
       <div onWheel={handleTabWheel}>
-        <TabBar tabs={DATA_TABS} activeTab={tab} onTabChange={setTab} />
+        <TabBar tabs={DATA_TABS} activeTab={tab} onTabChange={setTab} className="dm-tabbar" />
       </div>
       <div style={{ display: tab === "storage" ? undefined : "none" }}>
         <BrowserStorage />

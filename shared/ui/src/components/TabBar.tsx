@@ -10,6 +10,8 @@ interface TabBarProps {
   activeTab: string;
   onTabChange: (id: string) => void;
   disabled?: boolean;
+  /** 附加到 tb-bar 的类名（用于局部定制，如数据管理页首个 tab 对齐标题） */
+  className?: string;
 }
 
 /**
@@ -18,7 +20,7 @@ interface TabBarProps {
  *
  * 滚轮切换由父组件通过 onWheel 决定范围（详见 DataManagerPanel / AppLayout）。
  */
-export function TabBar({ tabs, activeTab, onTabChange, disabled }: TabBarProps) {
+export function TabBar({ tabs, activeTab, onTabChange, disabled, className }: TabBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   // 初始为 null：首次不渲染滑块，等布局稳定测量到正确位置后再渲染，
   // 避免从 (0,0) 滑动到正确位置的闪烁，也消除 getBoundingClientRect 在布局未稳定时的误差。
@@ -67,7 +69,7 @@ export function TabBar({ tabs, activeTab, onTabChange, disabled }: TabBarProps) 
   }, [activeTab, tabs]);
 
   return (
-    <div className={`tb-bar${disabled ? " disabled" : ""}`} ref={barRef}>
+    <div className={`tb-bar${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`} ref={barRef}>
       {tabs.map(tab => (
         <button
           key={tab.id}
