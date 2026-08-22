@@ -828,6 +828,11 @@
   transform: none;
 }
 
+/* 多选拖拽批量勾选：按下拖动时用十字光标提示「涂抹」模式 */
+.current-cards-dragging .current-card {
+  cursor: crosshair;
+}
+
 /* Selected state */
 .current-card--selected {
   border-color: var(--accent) !important;

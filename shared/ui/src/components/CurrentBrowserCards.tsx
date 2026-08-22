@@ -120,9 +120,13 @@ interface ProfileCardProps {
   isLaunching: boolean;
   launchStatus?: LaunchStatus;
   connStatus?: ConnectionStatus;
+  /** 卡片唯一 key（bt|user_data_dir|id），供拖拽批量勾选按点定位 */
+  dataKey: string;
   onCardClick: (bt: string, profile: BCPProfile) => void;
   /** 右键回调：弹出上下文菜单（打开 / 调试打开） */
   onCardContextMenu?: (e: React.MouseEvent, bt: string, profile: BCPProfile) => void;
+  /** 按下回调：多选模式下启动「按住拖拽批量勾选/取消」会话 */
+  onCardMouseDown?: (e: React.MouseEvent, bt: string, profile: BCPProfile) => void;
 }
 
 const ProfileCard = memo(function ProfileCard({
@@ -192,7 +196,7 @@ const ProfileCard = memo(function ProfileCard({
       {/* 头像 */}
       <div className={"current-card-avatar" + (isDefault ? " current-card-avatar--dimmed" : "")}>
         {profile.avatar_base64 ? (
-          <img src={profile.avatar_base64} alt={profile.name} className="current-card-avatar-img" />
+          <img src={profile.avatar_base64} alt={profile.name} className="current-card-avatar-img" draggable={false} />
         ) : (
           <div className="current-card-avatar-placeholder">
             {profile.name.charAt(0).toUpperCase()}
@@ -248,6 +252,15 @@ function CurrentBrowserCards({
     return safeGetJSON<boolean>("core-hide-uncontrollable") ?? false;
   });
 
+  // ── 多选拖拽批量勾选：按下卡片后拖动，移动经过的卡片统一勾选/取消 ──
+  // 模式由起始卡片当前状态决定：未选中 → 拖拽统一「勾选」；已选中 → 拖拽统一「取消」
+  const [dragSelecting, setDragSelecting] = useState(false);
+  const dragRef = useRef<{ active: boolean; mode: "select" | "deselect"; lastKey: string | null; startX: number; startY: number } | null>(null);
+  /** 拖拽会话启动后抑制随后的 click，避免与按下时的那次切换叠加（重复切换） */
+  const suppressClickRef = useRef(false);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
   // ── 轻量 toast（复用组件库 .toast 样式） ──
   const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
   const showToast = useCallback((text: string, type: "success" | "error" | "info" | "warning" = "info") => {
@@ -283,6 +296,20 @@ function CurrentBrowserCards({
     }
     return m;
   }, [browsers]);
+
+  // key → {bt, profile} 查找表：拖拽时按卡片 key 反查浏览器类型与 profile
+  const keyInfoMap = useMemo(() => {
+    const m = new Map<string, { bt: string; p: BCPProfile }>();
+    for (const b of browsers) {
+      for (const p of b.profiles || []) {
+        const pp = toBCPProfile(p);
+        m.set(mkKey(b.browser_type, pp), { bt: b.browser_type, p: pp });
+      }
+    }
+    return m;
+  }, [browsers]);
+  const keyInfoMapRef = useRef(keyInfoMap);
+  keyInfoMapRef.current = keyInfoMap;
 
   // 每个 user_data_dir 下的用户数（同目录多用户 → 单实例锁 → 部分受限）
   const dirProfileCounts = useMemo(() => {
@@ -323,6 +350,11 @@ function CurrentBrowserCards({
   const selectedKeysRef = useRef(selectedKeys);
   selectedKeysRef.current = selectedKeys;
   const handleCardClick = useCallback((bt: string, p: BCPProfile) => {
+    // 拖拽会话的按下动作已切换过该卡片：吞掉随之而来的 click，避免重复切换
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     // 浏览器默认用户路径不可用于自动化控制：点击仅提示，不进入选择逻辑
     const b = browsers.find(x => x.browser_type === bt);
     if (b && isDefaultUserDir(b, p)) {
@@ -353,6 +385,82 @@ function CurrentBrowserCards({
         .finally(() => setLaunching(null));
     }
   }, [browsers, showToast, onSelectionChange, onSelect, onLaunchProfile]);
+
+  // ── 多选拖拽批量勾选/取消 ──
+  /** 按下卡片：仅多选模式下启动拖拽会话。模式 = 起始卡片当前状态的反向
+   *  （未选中 → 拖拽统一「勾选」；已选中 → 拖拽统一「取消」），并立即切换起始卡片 */
+  const handleCardMouseDown = useCallback((e: React.MouseEvent, bt: string, p: BCPProfile) => {
+    if (!onSelectionChange || e.button !== 0) return;
+    const b = browsers.find(x => x.browser_type === bt);
+    if (b && isDefaultUserDir(b, p)) return; // 锁定卡片不可勾选：退回普通点击（toast 提示）
+    const key = mkKey(bt, p);
+    const isSelected = (selectedKeysRef.current || []).includes(key);
+    dragRef.current = {
+      active: true,
+      mode: isSelected ? "deselect" : "select",
+      lastKey: null,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+    suppressClickRef.current = true;
+    setDragSelecting(true);
+    // 起始卡片立即切换（即使拖拽途中已快速离开该卡片也不漏）
+    const info = keyInfoMapRef.current.get(key);
+    if (info) {
+      const current = selectedKeysRef.current || [];
+      const next = isSelected
+        ? current.filter(k => k !== key)
+        : [...current, key];
+      onSelectionChangeRef.current?.(next, info.bt, info.p, !isSelected);
+    }
+  }, [browsers, onSelectionChange]);
+
+  // 拖拽会话的全局监听（一次绑定，动态值全部走 ref）
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag?.active) return;
+      // 在窗口外松开（收不到 mouseup）：检测到无按键即终止会话，避免残留拖拽状态
+      if (e.buttons === 0) {
+        dragRef.current = null;
+        suppressClickRef.current = false;
+        setDragSelecting(false);
+        return;
+      }
+      // 移动未超过阈值（手抖）仍视为点击，不触发批量勾选
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (dx * dx + dy * dy < 25) return;
+      const card = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".current-card") as HTMLElement | null;
+      const key = card?.dataset.key;
+      if (!key || key === drag.lastKey) return;
+      drag.lastKey = key;
+      // 锁定卡片（默认路径）跳过
+      if (card.classList.contains("current-card--default")) return;
+      const info = keyInfoMapRef.current.get(key);
+      if (!info) return;
+      const current = selectedKeysRef.current || [];
+      const has = current.includes(key);
+      if (drag.mode === "select" && has) return;
+      if (drag.mode === "deselect" && !has) return;
+      const next = drag.mode === "select" ? [...current, key] : current.filter(k => k !== key);
+      onSelectionChangeRef.current?.(next, info.bt, info.p, drag.mode === "select");
+    };
+    const onUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      setDragSelecting(false);
+      // click 在 mouseup 后同步派发：若落在卡片上会被 handleCardClick 消费；
+      // 用宏任务兜底清除，避免未消费的抑制标记误吞下一次点击
+      setTimeout(() => { suppressClickRef.current = false; }, 0);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   // ── 右键菜单：打开 / 调试打开 ──
 
@@ -604,12 +712,12 @@ function CurrentBrowserCards({
   }
 
   return (
-    <div className="current-cards" ref={containerRef}>
+    <div className={"current-cards" + (dragSelecting ? " current-cards-dragging" : "")} ref={containerRef}>
       <div className="current-cards-toolbar">
         <span className="current-cards-count">
           共 {visibleProfileCount} 个用户配置
         </span>
-        {isMultiSelectMode && <span className="current-cards-hint">勾选要控制的浏览器配置（支持多选）</span>}
+        {isMultiSelectMode && <span className="current-cards-hint">勾选要控制的浏览器配置（按住卡片拖动可批量勾选/取消）</span>}
         {isSelectMode && !isMultiSelectMode && <span className="current-cards-hint">点击卡片选择要控制的浏览器配置</span>}
         <span className="current-cards-toolbar-right">
           <label className="current-cards-filter-label" title="启用后不再展示浏览器默认用户路径下的配置">
@@ -663,6 +771,7 @@ function CurrentBrowserCards({
                   return (
                     <ProfileCard
                       key={key}
+                      dataKey={key}
                       profile={p}
                       browserType={bt}
                       isSelected={isSelected}
@@ -674,6 +783,7 @@ function CurrentBrowserCards({
                       connStatus={internalConnectionStatuses[key]}
                       onCardClick={handleCardClick}
                       onCardContextMenu={handleCardContextMenu}
+                      onCardMouseDown={handleCardMouseDown}
                     />
                   );
                 })}
