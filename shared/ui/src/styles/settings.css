@@ -95,6 +95,13 @@
   text-overflow: ellipsis;
 }
 
+/* 设置侧边栏分组分隔横线（tab.dividerBefore 为 true 时在该 tab 上方渲染，样式仿 .nav-divider） */
+.settings-tab-divider {
+  height: 1px;
+  margin: 6px 6px 4px;
+  background: var(--border);
+}
+
 /* ========================================
    设置内容区
    ======================================== */

@@ -10,6 +10,8 @@ export interface SettingsTab {
   label: string;
   icon: React.ReactNode;
   content: React.ReactNode;
+  /** 在侧边栏该 tab 上方渲染分隔横线（用于分组视觉分隔；缺省 false） */
+  dividerBefore?: boolean;
 }
 
 export interface AppLayoutProps {
@@ -283,7 +285,7 @@ export function AppLayout({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [showSettings, closeSettings, onSetWindowPin, registeredShortcuts]);
 
-  const resolvedTabs = settingsTabs.length > 0
+  const resolvedTabs: SettingsTab[] = settingsTabs.length > 0
     ? settingsTabs
     : [{ id: "about", label: "关于", icon: <DefaultAboutIcon />, content: <DefaultAboutContent /> }];
 
@@ -323,7 +325,7 @@ export function AppLayout({
           </div>
           <div className={`settings-panel ${settingsClosing ? "closing" : ""}`} style={{ display: showSettings ? undefined : 'none' }}>
             <SettingsSidebar
-              tabs={resolvedTabs.map(t => ({ id: t.id, label: t.label, icon: t.icon }))}
+              tabs={resolvedTabs.map(t => ({ id: t.id, label: t.label, icon: t.icon, dividerBefore: t.dividerBefore }))}
               activeTab={sidebarHighlightTab}
               onTabChange={handleTabChange}
               sidebarWidth={settingsSidebarWidth}
