@@ -135,7 +135,6 @@ export { SettingsSidebar } from "./components/SettingsSidebar";
 export { AboutPanel } from "./components/AboutPanel";
 export { ShortcutsPanel, getEffectiveShortcuts } from "./components/ShortcutsPanel";
 export { CurrentBrowserCards } from "./components/CurrentBrowserCards";
-export type { LaunchStatus, ConnectionStatus } from "./components/CurrentBrowserCards";
 export { LAUNCH_LABELS, CONNECTION_LABELS } from "./components/CurrentBrowserCards";
 export { TabBar } from "./components/TabBar";
 export type { TabItem } from "./components/TabBar";
@@ -187,6 +186,16 @@ export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
 export { useBrowserSettingsTabs } from "./hooks/useBrowserSettingsTabs";
 export type { BrowserSettingsTabsOptions, SelectedProfile } from "./hooks/useBrowserSettingsTabs";
 export { refreshBrowserData } from "./data/browserStore";
+export {
+  useProfileStatusSnapshot,
+  useRegisterProfileStatusInterest,
+} from "./data/profileStatusStore";
+export type {
+  LaunchStatus,
+  ConnectionStatus,
+  ProfileStatusMaps,
+  ProfileStatusItem,
+} from "./data/profileStatusStore";
 export { usePlatformOptions } from "./hooks/usePlatformOptions";
 export { usePlatformSelections } from "./hooks/usePlatformSelections";
 export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";

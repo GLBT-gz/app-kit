@@ -2,18 +2,22 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { detectBrowserRunningProcesses, launchBrowserProfile, killBrowserProfileProcess, killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
+import { launchBrowserProfile, killBrowserProfileProcess, killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
+import {
+  useProfileStatusSnapshot,
+  useRegisterProfileStatusInterest,
+  type ProfileStatusItem,
+} from "../data/profileStatusStore";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 import { mkKey, isDefaultUserDir, isMultiUserDir, getSortGroup, getDirDisplayName } from "../utils/profile-rules";
 import { debugLaunchWithLockCheck } from "./browserLaunch";
 import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
 
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
+// 类型与轮询调度器见 data/profileStatusStore.ts（全局单例，多实例共享）
 
-/** 浏览器进程是否已启动 */
-export type LaunchStatus = "not_launched" | "launched";
-/** CDP 是否可连接 */
-export type ConnectionStatus = "not_connectable" | "connectable";
+export type { LaunchStatus, ConnectionStatus } from "../data/profileStatusStore";
+import type { LaunchStatus, ConnectionStatus } from "../data/profileStatusStore";
 
 export const LAUNCH_LABELS: Record<LaunchStatus, string> = {
   not_launched: "未启动",
@@ -240,15 +244,8 @@ function CurrentBrowserCards({
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
 
-  // 浏览器状态（内部自动检测）
-  const [internalLaunchStatuses, setInternalLaunchStatuses] = useState<Record<string, LaunchStatus>>({});
-  const [internalConnectionStatuses, setInternalConnectionStatuses] = useState<Record<string, ConnectionStatus>>({});
-
   // ── 容器可见性控制 ──
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // 序列号：后发 detectAll 运行时，让过时的运行自动放弃更新
-  const cdpSeqRef = useRef(0);
 
   const toggleHideDefault = useCallback(() => {
     setHideDefaultProfiles(prev => {
@@ -313,6 +310,17 @@ function CurrentBrowserCards({
       return { browser: b, sortedProfiles };
     });
   }, [browsers, profilesByBrowser, dirProfileCounts]);
+
+  // ── 浏览器运行状态：共享轮询 store（全局单调度器，多实例不重复轮询） ──
+  const profileStatus = useProfileStatusSnapshot();
+  const statusItems = useMemo(() => {
+    const items: ProfileStatusItem[] = [];
+    for (const [bt, ps] of Object.entries(profilesByBrowser)) {
+      for (const p of ps) items.push({ bt, dir: p.user_data_dir, id: p.id });
+    }
+    return items;
+  }, [profilesByBrowser]);
+  useRegisterProfileStatusInterest(statusItems, containerRef);
 
   // 选中集合 Set（避免点击时 O(n) includes / 全量拷贝）
   const selectedKeySet = useMemo(() => new Set(selectedKeys || []), [selectedKeys]);
@@ -549,127 +557,6 @@ function CurrentBrowserCards({
     }, 0);
   }, [profilesByBrowser, browsers, hideDefaultProfiles]);
 
-  // ── 浏览器状态检测（两个独立维度：是否启动 + 是否可连） ──
-  // 轮询间隔（毫秒）：后端是 TCP 直连检测，开销极小
-  const POLL_INTERVAL_MS = 5000;
-
-  // 前一次状态快照（用于对比，避免无变化时触发重渲染）
-  const prevStatusRef = useRef<{ launch: Record<string, LaunchStatus>; conn: Record<string, ConnectionStatus> }>({ launch: {}, conn: {} });
-
-  // detect 取消标记：组件卸载 / effect 重建时置位，放弃进行中的检测结果
-  const detectCancelledRef = useRef(false);
-
-  useEffect(() => {
-    // 收集所有 profile
-    const items: { bt: string; dataDir: string; id: string }[] = [];
-    for (const [bt, ps] of Object.entries(profilesByBrowser)) {
-      for (const p of ps) {
-        items.push({ bt, dataDir: p.user_data_dir, id: p.id });
-      }
-    }
-    if (items.length === 0) return;
-
-    const seq = ++cdpSeqRef.current;
-    detectCancelledRef.current = false;
-
-    const detect = async () => {
-      // 容器被 display:none 隐藏 → 跳过本轮 IPC 检测，避免 5 秒一次的主线程阻塞
-      if (!containerRef.current || containerRef.current.offsetParent === null) return;
-
-      try {
-        const states = await detectBrowserRunningProcesses(
-          items.map(e => ({ user_data_dir: e.dataDir, profile_id: e.id }))
-        );
-        if (detectCancelledRef.current || seq !== cdpSeqRef.current) return;
-
-        // 建立 user_data_dir|profile_id → state 的查找表
-        const stateByLookup: Record<string, { is_running: boolean; debug_port: string | null; cdp_reachable: boolean }> = {};
-        for (const s of states) {
-          stateByLookup[`${s.user_data_dir}|${s.profile_id}`] = s;
-        }
-
-        const launchMap: Record<string, LaunchStatus> = {};
-        const connMap: Record<string, ConnectionStatus> = {};
-        for (const e of items) {
-          const key = `${e.bt}|${e.dataDir}|${e.id}`;
-          const lookup = `${e.dataDir}|${e.id}`;
-          const st = stateByLookup[lookup];
-
-          // 维度一：是否启动
-          if (!st || !st.is_running) {
-            launchMap[key] = "not_launched";
-            connMap[key] = "not_connectable";
-            continue;
-          }
-
-          launchMap[key] = "launched";
-
-          // 维度二：是否可连（后端已通过 TCP 直连检测 CDP 端口，无 CORS 问题）
-          connMap[key] = st.cdp_reachable ? "connectable" : "not_connectable";
-        }
-
-        if (!detectCancelledRef.current && seq === cdpSeqRef.current) {
-          // 与前一次对比，只有实际变化时才 setState，避免无意义重渲染
-          const prev = prevStatusRef.current;
-          const launchChanged = Object.keys(launchMap).some(k => prev.launch[k] !== launchMap[k])
-            || Object.keys(prev.launch).some(k => !(k in launchMap));
-          const connChanged = Object.keys(connMap).some(k => prev.conn[k] !== connMap[k])
-            || Object.keys(prev.conn).some(k => !(k in connMap));
-
-          if (launchChanged) setInternalLaunchStatuses(launchMap);
-          if (connChanged) setInternalConnectionStatuses(connMap);
-          prevStatusRef.current = { launch: launchMap, conn: connMap };
-        }
-      } catch {
-        // 检测失败时不更新
-      }
-    };
-    // 首次立即检测
-    detect();
-
-    // 定时轮询（仅在页面可见时运行，切换标签页后暂停）
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-    const startPoll = () => {
-      if (pollTimer !== null) clearInterval(pollTimer);
-      pollTimer = setInterval(detect, POLL_INTERVAL_MS);
-    };
-    const stopPoll = () => {
-      if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
-    };
-
-    // 初始状态：可见才启动轮询
-    if (!document.hidden) startPoll();
-
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        stopPoll();
-      } else {
-        // 切回可见时立即检测一次，再启动轮询
-        detect();
-        startPoll();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    // IntersectionObserver：容器从 display:none 切回可见（tab 内切换）时立即检测一次，
-    // 无需等到下一次 5s 轮询 tick
-    let io: IntersectionObserver | null = null;
-    const el = containerRef.current;
-    if (el && typeof IntersectionObserver !== "undefined") {
-      io = new IntersectionObserver(entries => {
-        if (entries.some(en => en.isIntersecting)) detect();
-      });
-      io.observe(el);
-    }
-
-    return () => {
-      detectCancelledRef.current = true;
-      stopPoll();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      io?.disconnect();
-    };
-  }, [profilesByBrowser]);
-
   // 没有浏览器 > 显示占位（保持高度，防止抽搐）
   if (browsers.length === 0) {
     return (
@@ -750,8 +637,8 @@ function CurrentBrowserCards({
                       isSibling={isSibling}
                       siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
-                      launchStatus={internalLaunchStatuses[key]}
-                      connStatus={internalConnectionStatuses[key]}
+                  launchStatus={profileStatus.launch[key]}
+                  connStatus={profileStatus.conn[key]}
                       onCardClick={handleCardClick}
                       onCardContextMenu={handleCardContextMenu}
                       onCardMouseDown={handleCardMouseDown}
