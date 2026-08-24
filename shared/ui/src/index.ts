@@ -184,6 +184,8 @@ export type { ProgressPayload } from "./log";
 // Hooks（浏览器配置）
 export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
 export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
+export { useBrowserSettingsTabs } from "./hooks/useBrowserSettingsTabs";
+export type { BrowserSettingsTabsOptions, SelectedProfile } from "./hooks/useBrowserSettingsTabs";
 export { refreshBrowserData } from "./data/browserStore";
 export { usePlatformOptions } from "./hooks/usePlatformOptions";
 export { usePlatformSelections } from "./hooks/usePlatformSelections";
