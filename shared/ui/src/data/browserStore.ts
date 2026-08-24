@@ -19,6 +19,7 @@ import { detectBrowsers, detectBrowserTypes, detectCustomProfiles } from "../api
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { populateBrowserIcons, stripBrowserCache } from "../utils/browser-icons";
+import { toBCPBrowser } from "../utils/browser-mapping";
 
 const LS_BROWSERS = "core-browsers-cache";
 const LS_EXE_PATHS = "core-cfg-exe-paths";
@@ -43,15 +44,13 @@ function makeFallbackBrowser(bt: string, exe: string | null, dirs: string[]): BC
     browser_type: bt,
     browser_name: KNOWN_BROWSER_NAMES[bt] || bt,
     browser_icon_base64: "",
-    installed: !!exe,
     exe_paths: exe ? [exe] : [],
     user_data_dirs: dirs,
     default_user_data_dir: dirs[0] || undefined,
-    default_debug_port: 9222,
-    browser_version: "",
+    version: "",
     suggested_user_data_dirs: [],
     profiles: [],
-  } as unknown as BCPBrowser;
+  };
 }
 
 export interface BrowserStoreState {
@@ -147,15 +146,17 @@ export function refreshBrowserData(force = false): Promise<void> {
       //    并取当前支持的（已注册）类型列表，用于过滤历史缓存中的
       //    「本项目不支持」的浏览器类型（如 000 项目历史残留的易得客）
       const [list, registeredTypes] = await Promise.all([
-        detectBrowsers() as unknown as Promise<BCPBrowser[]>,
+        detectBrowsers(),
         detectBrowserTypes(),
       ]);
+      // 后端结构 → 组件层结构归一化（version 字段统一，见 utils/browser-mapping.ts）
+      const normalized = list.map(toBCPBrowser);
       const supportedTypes = new Set(registeredTypes);
 
       // 2) 用「用户配置的目录列表」（含自定义目录）补全 profiles
       const dirsByType = loadUserDataDirsCache();
       const exesByType = loadExePathsCache();
-      const enriched = await Promise.all(list.map(async b => {
+      const enriched = await Promise.all(normalized.map(async b => {
         const bt = b.browser_type;
         const dirs = (dirsByType[bt] && dirsByType[bt].length > 0)
           ? dirsByType[bt]
@@ -195,7 +196,7 @@ export function refreshBrowserData(force = false): Promise<void> {
         if (dirs.length === 0) continue;
         try {
           const r = await detectCustomProfiles(bt, exesByType[bt] || null, dirs);
-          merged.push({ ...r, profiles: r.profiles || [] });
+          merged.push({ ...toBCPBrowser(r), profiles: r.profiles || [] });
         } catch {
           merged.push(makeFallbackBrowser(bt, exesByType[bt] || null, dirs));
         }

@@ -9,7 +9,7 @@ export interface BCPBrowser {
   browser_name: string;
   browser_icon_base64?: string | null;
   exe_paths: string[];
-  /** 000 用 browser_version, 001 用 version */
+  /** 浏览器版本（由 utils/browser-mapping 的 toBCPBrowser 从后端 browser_version 归一化） */
   version?: string;
   user_data_dirs: string[];
   profiles?: BCPProfile[];

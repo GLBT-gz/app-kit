@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo, memo, startTransition } from "react";
+import { useState, useEffect, useCallback, memo, startTransition } from "react";
 import { BrowserConfigPanel, type BCPBrowser } from "./BrowserConfigPanel";
 import { detectCustomProfiles, getLaunchCommand, launchBrowserProfile, openDir, checkPathExists, createNewUserDataDir, createDesktopShortcut } from "../api";
 import { open } from "@tauri-apps/plugin-dialog";
 import { safeGetJSON } from "../localStorageKeys";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
+import { toBCPBrowser } from "../utils/browser-mapping";
 
 export interface BrowserConfigSectionProps {
   /** 浏览器列表（来自 useBrowserBaseData，已是最终检测结果） */
@@ -63,11 +64,6 @@ function BrowserConfigSection({
     }
   }, [browsers, activeBrowser]);
 
-  const mappedBrowsers: BCPBrowser[] = useMemo(() => browsers.map(b => ({
-    ...b,
-    version: (b as any).browser_version,
-  })), [browsers]);
-
   const handleBrowseFile = useCallback(async () => {
     const result = await open({
       title: "选择浏览器可执行文件",
@@ -93,7 +89,7 @@ function BrowserConfigSection({
     userDirs: string[],
   ): Promise<BCPBrowser> => {
     const result = await detectCustomProfiles(browserType, exePath, userDirs);
-    return { ...result, version: result.browser_version } as unknown as BCPBrowser;
+    return toBCPBrowser(result);
   }, []);
 
   /**
@@ -114,7 +110,7 @@ function BrowserConfigSection({
 
   return (
     <BrowserConfigPanel
-      browsers={mappedBrowsers}
+      browsers={browsers}
       activeBrowserType={activeBrowser}
       onActiveBrowserTypeChange={handleActiveBrowserTypeChange}
       exePaths={exePaths}

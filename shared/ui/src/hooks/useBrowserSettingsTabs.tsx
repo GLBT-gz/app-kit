@@ -2,9 +2,10 @@ import { useCallback, useMemo } from "react";
 import type { SettingsTab } from "../components/AppLayout";
 import { BrowserConfigSection } from "../components/BrowserConfigSection";
 import { CurrentBrowserCards } from "../components/CurrentBrowserCards";
-import type { BCPBrowser, BCPProfile } from "../components/BrowserConfigPanel";
+import type { BCPProfile } from "../components/BrowserConfigPanel";
 import { detectCustomProfiles } from "../api";
 import { useBrowserBaseData } from "./useBrowserBaseData";
+import { toBCPBrowser } from "../utils/browser-mapping";
 
 /** profiles 模式下的选中项（999-Agent 等需要完整 profile 信息的场景） */
 export interface SelectedProfile {
@@ -76,10 +77,10 @@ export function useBrowserSettingsTabs(options: BrowserSettingsTabsOptions = {})
 
   const { browsers, exePaths, userDataDirs, loading, updateExePaths, updateUserDataDirs } = useBrowserBaseData();
 
-  // 后端返回 browser_version，组件统一消费 version 字段
+  // 后端结构归一化（browser_version → version），见 utils/browser-mapping.ts
   const handleDetectProfiles = useCallback(
     (bt: string, exePath: string | null, userDirs: string[]) =>
-      detectCustomProfiles(bt, exePath, userDirs).then(r => ({ ...r, version: r.browser_version })) as unknown as Promise<BCPBrowser>,
+      detectCustomProfiles(bt, exePath, userDirs).then(toBCPBrowser),
     [],
   );
 
