@@ -648,6 +648,10 @@
 /* ========================================
    HomePage — 通用首页模板
    ======================================== */
+/* ⚠ .main-content 自带 24px padding，仅供「普通页」（首页/表单页等需要默认边距的页面）使用。
+   全屏页（自动化页/测试页/层叠标签页等）【禁止】挂此类，否则需在项目 CSS 里用脆弱的
+   :has() 反覆盖 padding（历史教训见 踩坑记录.md 2026-08-24 条目）。
+   普通页也可改用 base.css 的 .page-padded（12px 20px），语义更新。 */
 .main-content {
   padding: 24px;
   max-width: 100%;
@@ -838,6 +842,11 @@
 /* ========================================
    Credentials (凭证配置区域)
    ======================================== */
+.creds-padded {
+  /* 裸用 CredentialsForm 作为设置 tab 内容时的自带边距（对齐 dm-panel / settings-section） */
+  padding: 24px 28px;
+}
+
 .creds-section {
   margin-top: 16px;
   padding: 14px 16px;

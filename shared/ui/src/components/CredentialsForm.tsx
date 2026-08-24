@@ -25,14 +25,20 @@ export interface CredentialGroup {
 export interface CredentialsFormProps {
   /** 各平台凭证组 */
   groups: CredentialGroup[];
-  /** 加载已保存的凭证，返回所有字段的值 */
+  /** 加载已保存凭证，返回各字段的值 */
   loadCredentials: () => Promise<Record<string, string>>;
   /** 保存凭证 */
   saveCredentials: (values: Record<string, string>) => Promise<void>;
   /** 标题 */
   title?: string;
-  /** 说明文字 */
+  /** 说明文案 */
   note?: string;
+  /**
+   * 自带边距（padding: 24px 28px，与其他设置页组件 dm-panel/settings-section 一致）。
+   * 默认 false 保持历史行为：嵌入 AutomationSettings 等已提供边距的容器时不加；
+   * 直接作为设置面板 tab 内容（.settings-content 无 padding）裸用时必须传 true。
+   */
+  padded?: boolean;
 }
 
 type FieldStatus = "idle" | "saving" | "saved";
@@ -85,7 +91,7 @@ const DEFAULT_NOTE = "账号密码将通过 AES-256-GCM 加密后存储在本地
  * 通过 loadCredentials / saveCredentials 注入项目特定的读写逻辑。
  * 样式沿用本地类名 creds-*（共享 components.css 已含权威样式）。
  */
-export function CredentialsForm({ groups, loadCredentials, saveCredentials, title, note }: CredentialsFormProps) {
+export function CredentialsForm({ groups, loadCredentials, saveCredentials, title, note, padded = false }: CredentialsFormProps) {
   const [loaded, setLoaded] = useState(false);
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>({});
   const [values, setValues] = useState<Record<string, string>>({});
@@ -140,7 +146,7 @@ export function CredentialsForm({ groups, loadCredentials, saveCredentials, titl
     debounceRef.current = setTimeout(doSave, 500);
   };
 
-  return (
+  const body = (
     <>
       <div className="creds-section">
         {title && <div className="creds-section-title">{title}</div>}
@@ -160,4 +166,7 @@ export function CredentialsForm({ groups, loadCredentials, saveCredentials, titl
       </div>
     </>
   );
+
+  if (!padded) return body;
+  return <div className="creds-padded">{body}</div>;
 }
