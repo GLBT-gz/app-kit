@@ -2,7 +2,7 @@
 
 use crate::browser::ProfileInfo;
 use crate::config::PortEntry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 use super::browser_paths::get_user_data_dir;
@@ -278,15 +278,33 @@ fn scan_running_browser_ports_and_used(
 }
 
 /// 检测浏览器进程运行状态（不分配端口，仅做检测）
-/// 返回每个 profile 是否正在运行，以及是否有调试端口
+/// 返回每个 profile 是否正在运行，以及是否有调试端口。
+///
+/// 运行归属（running_kind）两档：
+/// - own    ：命令行精确命中，该 profile 拥有独立主进程，可按 profile 精确关闭/调试
+/// - shared ：与同目录其它 profile 共享同一主进程（单实例锁），无独立进程可杀；
+///            用 RestartManager 探测该 profile 目录是否正被浏览器进程持有打开句柄
+///            （已加载的 profile 会持续持有 History/Cookies 等 SQLite 句柄，未打开的不会）
 pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<BrowserProcessState> {
     // 收集所有运行中的浏览器进程（不论有无 --remote-debugging-port）
     let mut running_by_key: HashMap<String, Option<u16>> = HashMap::new();
+    // 正在运行主进程的 user-data-dir 集合（小写），用于同目录多 profile 的兜底探测
+    let mut running_dirs: HashSet<String> = HashSet::new();
 
     for exe_name in &["msedge.exe", "chrome.exe"] {
-        let instances = scan_running_browser_processes(exe_name);
+        let (instances, dirs) = scan_running_browser_instances_with_dirs(exe_name);
         for (key, port_opt) in instances {
             running_by_key.entry(key).or_insert(port_opt);
+        }
+        running_dirs.extend(dirs.into_iter().map(|d| d.to_lowercase()));
+        // 默认目录实例（无 --user-data-dir 的主进程）存在时，视为默认目录「有浏览器进程在跑」。
+        // 注意：这不等同于默认目录的 profile 已启动——是否启动仍由 RestartManager 逐 profile 探测，
+        // 避免 Edge 后台进程（--no-startup-window）把默认目录所有 profile 误标为运行。
+        if running_by_key.contains_key(&format!("{}#default-instance", exe_name)) {
+            let bt = if *exe_name == "msedge.exe" { "edge" } else { "chrome" };
+            if let Some(def) = get_user_data_dir(bt) {
+                running_dirs.insert(def.to_lowercase());
+            }
         }
     }
 
@@ -304,28 +322,43 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 is_running: true,
                 debug_port: port_opt.map(|p| p.to_string()),
                 cdp_reachable,
+                running_kind: "own".to_string(),
+                owner_profile_id: None,
             });
-        } else if let Some(exe_name) = default_instance_exe(user_data_dir) {
-            // 默认目录兜底（目录级识别）：用户手动启动的浏览器进程命令行无 --user-data-dir，
-            // 无法精确匹配到 profile；检测到该浏览器存在「无 user-data-dir 的主进程」即视为默认目录在运行
-            let default_key = format!("{}#default-instance", exe_name);
-            if running_by_key.contains_key(&default_key) {
+        } else if running_dirs.contains(&user_data_dir.to_lowercase()) {
+            // 该目录已有浏览器主进程在运行，但该 profile 未精确命中命令行：
+            // 可能是同目录多 profile 共享主进程（单实例锁），也可能是默认目录实例。
+            // 用 RestartManager 逐 profile 精确探测其目录是否正被浏览器进程持有打开句柄，
+            // 只有真的打开了（持有 SQLite 句柄）才标记为运行，避免目录级误报。
+            let profile_path = std::path::Path::new(user_data_dir).join(profile_id);
+            let in_use = profile_dir_in_use_by_browser(
+                &profile_path.to_string_lossy(),
+                &["msedge.exe", "chrome.exe"],
+            );
+            if in_use {
+                // 该 profile 已加载：共享主进程的 owner profile 与调试端口
+                let (owner, port) = find_dir_owner_and_port(&running_by_key, user_data_dir);
+                let cdp_reachable = port.map_or(false, |p| check_cdp_reachable(p));
                 result.push(BrowserProcessState {
                     user_data_dir: user_data_dir.clone(),
                     profile_id: profile_id.clone(),
                     is_running: true,
+                    debug_port: port.map(|p| p.to_string()),
+                    cdp_reachable,
+                    running_kind: "shared".to_string(),
+                    owner_profile_id: owner,
+                });
+            } else {
+                result.push(BrowserProcessState {
+                    user_data_dir: user_data_dir.clone(),
+                    profile_id: profile_id.clone(),
+                    is_running: false,
                     debug_port: None,
                     cdp_reachable: false,
+                    running_kind: "own".to_string(),
+                    owner_profile_id: None,
                 });
-                continue;
             }
-            result.push(BrowserProcessState {
-                user_data_dir: user_data_dir.clone(),
-                profile_id: profile_id.clone(),
-                is_running: false,
-                debug_port: None,
-                cdp_reachable: false,
-            });
         } else {
             result.push(BrowserProcessState {
                 user_data_dir: user_data_dir.clone(),
@@ -333,10 +366,205 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 is_running: false,
                 debug_port: None,
                 cdp_reachable: false,
+                running_kind: "own".to_string(),
+                owner_profile_id: None,
             });
         }
     }
     result
+}
+
+/// 从运行中的进程映射中找到 user_data_dir 对应的主进程 profile（owner）及其调试端口。
+/// owner = 运行主进程命令行中的 --profile-directory（running_by_key 中以 `{dir}\` 开头的
+/// key 的 profile 部分）；端口同理取该目录主进程的 --remote-debugging-port。
+fn find_dir_owner_and_port(
+    running_by_key: &HashMap<String, Option<u16>>,
+    user_data_dir: &str,
+) -> (Option<String>, Option<u16>) {
+    let prefix = format!("{}\\", user_data_dir).to_lowercase();
+    let mut owner: Option<String> = None;
+    let mut port: Option<u16> = None;
+    for (k, p) in running_by_key.iter() {
+        if !k.to_lowercase().starts_with(&prefix) {
+            continue;
+        }
+        if owner.is_none() {
+            owner = k.rsplit('\\').next().map(|s| s.to_string());
+        }
+        if port.is_none() {
+            port = *p;
+        }
+        if owner.is_some() && port.is_some() {
+            break;
+        }
+    }
+    (owner, port)
+}
+
+/// 通过 Windows RestartManager 探测 profile 目录是否正被浏览器进程持有打开句柄。
+/// 已加载的 profile 会持续持有其 SQLite 数据库（History/Cookies/Login Data 等）的句柄，
+/// 未打开过的 profile 不会有任何句柄被持有 —— 因此可作为同目录多 profile 场景下
+/// 「该 profile 的窗口/会话是否真的在跑」的精确信号。
+/// 返回 true = 该 profile 已加载（正在运行）。
+#[cfg(windows)]
+fn profile_dir_in_use_by_browser(profile_dir: &str, exe_names: &[&str]) -> bool {
+    use std::ptr;
+
+    const CCH_RM_SESSION_KEY: usize = 256;
+    const ERROR_SUCCESS: i32 = 0;
+    const ERROR_MORE_DATA: i32 = 234;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct FileTime {
+        dw_low_date_time: u32,
+        dw_high_date_time: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct RmUniqueProcess {
+        dw_process_id: u32,
+        process_start_time: FileTime,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct RmProcessInfo {
+        process: RmUniqueProcess,
+        str_app_name: [u16; 256],
+        str_service_short_name: [u16; 64],
+        application_type: u32,
+        app_status: u32,
+        ts_session_id: u32,
+        b_restartable: i32,
+    }
+
+    unsafe extern "system" {
+        fn RmStartSession(
+            p_session_handle: *mut u32,
+            dw_reserved: i32,
+            str_session_key: *mut u16,
+        ) -> i32;
+        fn RmEndSession(dw_session_handle: u32) -> i32;
+        fn RmRegisterResources(
+            dw_session_handle: u32,
+            n_files: u32,
+            rgs_filenames: *const *mut u16,
+            n_applications: u32,
+            rg_applications: *const RmUniqueProcess,
+            n_services: u32,
+            rgs_service_names: *const *mut u16,
+        ) -> i32;
+        fn RmGetList(
+            dw_session_handle: u32,
+            pn_proc_info_needed: *mut u32,
+            pn_proc_info: *mut u32,
+            rg_affected_apps: *mut RmProcessInfo,
+            lpdw_reboot_reasons: *mut u32,
+        ) -> i32;
+    }
+
+    // profile 加载期间浏览器持续持有的关键数据库文件（只注册存在的）
+    let candidates = [
+        "History",
+        "Login Data",
+        "Web Data",
+        "Preferences",
+        "Network\\Cookies",
+    ];
+    let mut files: Vec<String> = Vec::new();
+    for name in candidates {
+        let p = std::path::Path::new(profile_dir).join(name);
+        if p.exists() {
+            files.push(p.to_string_lossy().to_string());
+        }
+    }
+    if files.is_empty() {
+        return false;
+    }
+
+    // session key 缓冲区需为 CCH_RM_SESSION_KEY+1 个字符，由 RestartManager 回填生成
+    let mut session_key = vec![0u16; CCH_RM_SESSION_KEY + 1];
+    let mut session_handle = 0u32;
+    let start_status = unsafe { RmStartSession(&mut session_handle, 0, session_key.as_mut_ptr()) };
+    if start_status != ERROR_SUCCESS {
+        return false;
+    }
+
+    let mut wide_files: Vec<Vec<u16>> = files
+        .iter()
+        .map(|f| {
+            let mut w: Vec<u16> = f.encode_utf16().collect();
+            w.push(0);
+            w
+        })
+        .collect();
+    let file_ptrs: Vec<*mut u16> = wide_files.iter_mut().map(|w| w.as_mut_ptr()).collect();
+
+    let _ = unsafe {
+        RmRegisterResources(
+            session_handle,
+            file_ptrs.len() as u32,
+            file_ptrs.as_ptr(),
+            0,
+            ptr::null(),
+            0,
+            ptr::null(),
+        )
+    };
+
+    let mut needed = 0u32;
+    let mut count = 0u32;
+    let mut reboot_reasons = 0u32;
+    let mut in_use = false;
+
+    let status = unsafe {
+        RmGetList(session_handle, &mut needed, &mut count, ptr::null_mut(), &mut reboot_reasons)
+    };
+    if status == ERROR_MORE_DATA || (status == ERROR_SUCCESS && needed > 0) {
+        // 只注册了少量文件，占用进程数有限；仍设上限防御异常返回
+        count = needed.min(64);
+        let mut infos: Vec<RmProcessInfo> = (0..count as usize)
+            .map(|_| unsafe { std::mem::zeroed::<RmProcessInfo>() })
+            .collect();
+        let status2 = unsafe {
+            RmGetList(
+                session_handle,
+                &mut needed,
+                &mut count,
+                infos.as_mut_ptr(),
+                &mut reboot_reasons,
+            )
+        };
+        if status2 == ERROR_SUCCESS {
+            for info in &infos {
+                if info.process.dw_process_id == 0 {
+                    continue;
+                }
+                let name = &info.str_app_name;
+                let end = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+                let app_name = String::from_utf16_lossy(&name[..end]).to_lowercase();
+                // RM 的 strAppName 返回的是显示名（如 "microsoft edge"/"google chrome"），
+                // 也可能是 exe 路径；按浏览器特征匹配，排除索引器等非浏览器进程
+                let is_browser = app_name.contains("microsoft edge")
+                    || app_name.contains("google chrome")
+                    || exe_names.iter().any(|e| app_name.contains(&e.to_lowercase()));
+                if is_browser {
+                    in_use = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    unsafe { RmEndSession(session_handle) };
+    in_use
+}
+
+#[cfg(not(windows))]
+fn profile_dir_in_use_by_browser(_profile_dir: &str, _exe_names: &[&str]) -> bool {
+    false
 }
 
 /// 判断 user_data_dir 是否为内置浏览器的默认用户数据目录，返回对应 exe 名
@@ -370,6 +598,34 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
         extract_instance_from_cmdline(&cmd_line, &exe, &mut result);
     }
     result
+}
+
+/// 扫描运行中的浏览器进程，返回 (profile key → port) 与「运行中主进程的 user-data-dir 列表」。
+/// 与 scan_running_browser_processes 的区别：额外收集主进程（非 --type= 子进程）使用的
+/// user-data-dir，供同目录多 profile 场景做目录级兜底探测。主进程可能不带
+/// --profile-directory（此时 extract_instance_from_cmdline 会丢弃），但目录本身在运行。
+///
+/// 注意：`--no-startup-window` 后台进程（如 Edge 开机自启 / 关闭所有窗口后的驻留进程）
+/// 没有可见窗口，不属于「浏览器已启动」，直接跳过，避免把其预加载的 profile 误判为运行。
+fn scan_running_browser_instances_with_dirs(
+    exe_name: &str,
+) -> (HashMap<String, Option<u16>>, Vec<String>) {
+    let mut instances: HashMap<String, Option<u16>> = HashMap::new();
+    let mut dirs: Vec<String> = Vec::new();
+    for (exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+        let args = cmd_args(&cmd_line);
+        let is_child = args.iter().any(|a| a.starts_with("--type="));
+        if !is_child && args.iter().any(|a| a.starts_with("--no-startup-window")) {
+            continue;
+        }
+        extract_instance_from_cmdline(&cmd_line, &exe, &mut instances);
+        if !is_child {
+            if let Some(ud) = extract_cmd_arg(&cmd_line, "--user-data-dir") {
+                dirs.push(ud);
+            }
+        }
+    }
+    (instances, dirs)
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
@@ -453,6 +709,11 @@ pub struct BrowserProcessState {
     pub debug_port: Option<String>,
     /// CDP 是否可达（后端 TCP 直连检测，绕过浏览器 CORS 限制）
     pub cdp_reachable: bool,
+    /// 运行归属：own = 该 profile 拥有独立主进程（可按 profile 精确关闭/调试）；
+    /// shared = 与同目录其它 profile 共享同一主进程（单实例锁），无独立进程可杀
+    pub running_kind: String,
+    /// shared 时共享主进程对应的 profile id（用于按主进程执行关闭/调试启动），own 时为 None
+    pub owner_profile_id: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════

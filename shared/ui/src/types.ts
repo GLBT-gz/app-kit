@@ -118,6 +118,13 @@ export interface BrowserProcessState {
   debug_port: string | null;
   /** CDP 是否可达（后端 TCP 直连检测，绕过浏览器 CORS 限制） */
   cdp_reachable: boolean;
+  /**
+   * 运行归属：own = 该配置拥有独立主进程（可按 profile 精确关闭/调试）；
+   * shared = 与同目录其它配置共享同一主进程（单实例锁），无独立进程可杀
+   */
+  running_kind: "own" | "shared";
+  /** shared 时共享主进程对应的 profile id（own 时为 null） */
+  owner_profile_id: string | null;
 }
 
 /** 浏览器自动化测试参数（000 模板项目专用） */

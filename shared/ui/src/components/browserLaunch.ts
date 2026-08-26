@@ -23,11 +23,18 @@ export async function debugLaunchWithLockCheck(opts: {
   const states = await detectBrowserRunningProcesses(
     sameDir.map(pr => ({ user_data_dir: pr.user_data_dir, profile_id: pr.id })),
   );
-  const running = states.find(s => s.is_running);
+  // 优先选拥有独立主进程的 profile（可按 profile 精确关闭）；否则退回共享实例的 owner
+  const running =
+    states.find(s => s.is_running && s.running_kind === "own") || states.find(s => s.is_running);
   if (running) {
-    const runningProfile = sameDir.find(
-      pr => pr.user_data_dir === running.user_data_dir && pr.id === running.profile_id,
-    );
+    // 共享实例（running_kind==="shared"）本身无独立进程，须关闭其共享主进程释放目录锁
+    const killId =
+      running.running_kind === "shared" && running.owner_profile_id
+        ? running.owner_profile_id
+        : running.profile_id;
+    const runningProfile =
+      sameDir.find(pr => pr.id === killId) ||
+      sameDir.find(pr => pr.id === running.profile_id);
     const runningName = runningProfile?.name || running.profile_id;
     if (
       !window.confirm(
@@ -37,7 +44,7 @@ export async function debugLaunchWithLockCheck(opts: {
       return null;
     }
     log(`「${runningName}」正在运行（同用户目录），先关闭...`, "warning");
-    await killBrowserProfileProcess(browserType, running.profile_id, running.user_data_dir);
+    await killBrowserProfileProcess(browserType, killId, running.user_data_dir);
     log("已关闭旧进程，等待释放目录锁", "success");
     // 等待进程完全退出，释放 Singleton 锁
     await new Promise(r => setTimeout(r, 1500));

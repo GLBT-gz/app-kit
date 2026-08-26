@@ -15,9 +15,10 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { detectBrowserRunningProcesses } from "../api";
+import type { BrowserProcessState } from "../types";
 
 /** 浏览器进程是否已启动 */
-export type LaunchStatus = "not_launched" | "launched";
+export type LaunchStatus = "not_launched" | "launched" | "shared";
 /** CDP 是否可连接 */
 export type ConnectionStatus = "not_connectable" | "connectable";
 
@@ -25,6 +26,11 @@ export interface ProfileStatusMaps {
   /** key = bt|user_data_dir|profile_id */
   launch: Record<string, LaunchStatus>;
   conn: Record<string, ConnectionStatus>;
+  /**
+   * key = bt|user_data_dir|profile_id → running_kind："own" | "shared"
+   * shared = 与同目录其它配置共享同一实例，无独立进程可杀
+   */
+  kind: Record<string, "own" | "shared">;
 }
 
 export interface ProfileStatusItem {
@@ -38,7 +44,7 @@ const POLL_INTERVAL_MS = 5000;
 
 // ── 共享状态 ──
 
-let state: ProfileStatusMaps = { launch: {}, conn: {} };
+let state: ProfileStatusMaps = { launch: {}, conn: {}, kind: {} };
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let ticking = false;
@@ -124,23 +130,26 @@ async function tick(immediate = false): Promise<void> {
       items.map(e => ({ user_data_dir: e.dir, profile_id: e.id })),
     );
 
-    const byLookup: Record<string, { is_running: boolean; debug_port: string | null; cdp_reachable: boolean }> = {};
+    const byLookup: Record<string, BrowserProcessState> = {};
     for (const s of states) {
       byLookup[`${s.user_data_dir}|${s.profile_id}`] = s;
     }
 
     const launch: Record<string, LaunchStatus> = {};
     const conn: Record<string, ConnectionStatus> = {};
+    const kind: Record<string, "own" | "shared"> = {};
     for (const it of items) {
       const key = `${it.bt}|${it.dir}|${it.id}`;
       const st = byLookup[`${it.dir}|${it.id}`];
       if (!st || !st.is_running) {
         launch[key] = "not_launched";
         conn[key] = "not_connectable";
+        kind[key] = "own";
         continue;
       }
-      launch[key] = "launched";
+      launch[key] = st.running_kind === "shared" ? "shared" : "launched";
       conn[key] = st.cdp_reachable ? "connectable" : "not_connectable";
+      kind[key] = st.running_kind === "shared" ? "shared" : "own";
     }
 
     // 与前一次对比，只有实际变化时才更新，避免无意义重渲染
@@ -152,13 +161,18 @@ async function tick(immediate = false): Promise<void> {
       for (const [k, v] of Object.entries(conn)) {
         if (state.conn[k] !== v) { changed = true; break; }
       }
-      if (!changed) {
-        for (const k of Object.keys(state.launch)) {
-          if (!(k in launch)) { changed = true; break; }
-        }
+    }
+    if (!changed) {
+      for (const [k, v] of Object.entries(kind)) {
+        if (state.kind[k] !== v) { changed = true; break; }
       }
     }
-    if (changed) setState({ launch, conn });
+    if (!changed) {
+      for (const k of Object.keys(state.launch)) {
+        if (!(k in launch)) { changed = true; break; }
+      }
+    }
+    if (changed) setState({ launch, conn, kind });
   } catch {
     // 检测失败时保持上次状态
   } finally {

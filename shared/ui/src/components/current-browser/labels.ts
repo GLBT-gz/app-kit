@@ -7,6 +7,7 @@ import type { LaunchStatus, ConnectionStatus } from "../../data/profileStatusSto
 export const LAUNCH_LABELS: Record<LaunchStatus, string> = {
   not_launched: "未启动",
   launched: "已启动",
+  shared: "实例运行中",
 };
 
 export const CONNECTION_LABELS: Record<ConnectionStatus, string> = {

@@ -92,7 +92,7 @@ export const ProfileCard = memo(function ProfileCard({
           {LAUNCH_LABELS[launchStatus]}
         </span>
       )}
-      {connStatus && launchStatus === "launched" && (
+      {connStatus && (launchStatus === "launched" || launchStatus === "shared") && (
         <span className={"current-card-conn current-card-conn--" + connStatus}>
           {CONNECTION_LABELS[connStatus]}
         </span>

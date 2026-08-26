@@ -360,6 +360,12 @@ function CurrentBrowserCards({
    *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置 */
   const doClose = useCallback(async (bt: string, p: BCPProfile) => {
     try {
+      const key = mkKey(bt, p);
+      // 共享实例：该配置无独立进程，无法单独关闭（同目录其它配置共享同一主进程）
+      if (profileStatus.kind[key] === "shared") {
+        showToast("该配置与同目录其它配置共享同一浏览器实例，无法单独关闭", "warning");
+        return;
+      }
       const msg = await killBrowserProfileProcess(bt, p.id, p.user_data_dir);
       showToast(`「${p.name}」已关闭${msg ? ` (${msg})` : ""}`, "success");
     } catch (e) {
@@ -367,7 +373,7 @@ function CurrentBrowserCards({
       // 后端在未匹配到进程时返回“未找到匹配的浏览器进程”
       showToast(err.includes("未找到匹配") ? `「${p.name}」未在运行` : `关闭失败: ${e}`, "warning");
     }
-  }, [showToast]);
+  }, [showToast, profileStatus]);
 
   /** 全部终止：默认目录（完全受限，单实例）配置专用——杀死该浏览器的全部进程，
    *  含所有独立目录实例。影响大，需用户确认 */
