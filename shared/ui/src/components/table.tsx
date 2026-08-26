@@ -151,7 +151,7 @@ export function useTableSelectionCopy(
  * 实现要点：border-collapse: separate（sticky 独立边框无共享错位）+ thead 整体 zIndex 高于冻结 td
  * （整行表头永远在最上）；sticky 偏移用表头实测宽度（浏览器布局后真实列宽）。
  */
-function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout, stickyLeft = 0 }: {
+function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout, stickyLeft = 0, showIndex = false }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowClassName?: (row: T) => string | undefined;
@@ -160,12 +160,15 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
   fixedLayout?: boolean;
   /** 冻结左侧前 N 列（横向滚动时保持显示；默认 0 不冻结） */
   stickyLeft?: number;
+  /** 是否在最左侧显示「序号」列（各项目按需开启；默认不显示，避免全局硬编码影响所有使用方） */
+  showIndex?: boolean;
 }): React.JSX.Element {
-  // 所有表格统一在最左侧加「序号」列（从 1 开始递增）
-  const allColumns: TableColumn<T>[] = [
-    { header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } },
-    ...columns,
-  ];
+  // 「序号」列由各项目按需开启（showIndex），不再全局硬编码——否则所有使用该组件的表格都会出现序号列
+  const allColumns: TableColumn<T>[] = [];
+  if (showIndex) {
+    allColumns.push({ header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } });
+  }
+  allColumns.push(...columns);
   // 固定列宽模式：列宽按「全量行内容」计算（而非仅可见行），保证内容完整展示且滚动时不跳动。
   // 已指定 style.width 的列按指定值；其余取表头与全部行该列渲染文本的最大估算宽度（中文 14px/字、ASCII 8px/字 + 内边距）。
   const colWidths = useMemo(() => {
@@ -356,18 +359,21 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
 
 export const VirtualTable = memo(VirtualTableInner) as typeof VirtualTableInner;
 
-/** 小表（全量渲染，无虚拟滚动/序号列内置于列定义）：适合结果摘要类小表格 */
-export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHeight = 300 }: {
+/** 小表（全量渲染，无虚拟滚动；序号列按 showIndex 可选开启）：适合结果摘要类小表格 */
+export function DataTable<T>({ rows, columns, emptyText = "暂无数据", maxHeight = 300, showIndex = false }: {
   rows: T[];
   columns: TableColumn<T>[];
   emptyText?: string;
   maxHeight?: number;
+  /** 是否在最左侧显示「序号」列（默认不显示） */
+  showIndex?: boolean;
 }) {
-  // 所有表格统一在最左侧加「序号」列（从 1 开始递增）
-  const allColumns: TableColumn<T>[] = [
-    { header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } },
-    ...columns,
-  ];
+  // 「序号」列由各项目按需开启（showIndex），不全局硬编码
+  const allColumns: TableColumn<T>[] = [];
+  if (showIndex) {
+    allColumns.push({ header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } });
+  }
+  allColumns.push(...columns);
   if (rows.length === 0) {
     return (
       <div style={{ padding: 24, textAlign: "center", color: "var(--text-secondary)", fontSize: 12 }}>
