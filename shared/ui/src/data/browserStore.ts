@@ -20,6 +20,7 @@ import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { populateBrowserIcons, stripBrowserCache } from "../utils/browser-icons";
 import { toBCPBrowser } from "../utils/browser-mapping";
+import { applyZiniaoEnvNames } from "../utils/ziniao-env-map";
 
 const LS_BROWSERS = "core-browsers-cache";
 const LS_EXE_PATHS = "core-cfg-exe-paths";
@@ -220,8 +221,11 @@ export function refreshBrowserData(force = false): Promise<void> {
         }
       }
 
-      populateBrowserIcons(merged);
-      safeSetJSON(LS_BROWSERS, stripBrowserCache(merged));
+      // 4) 紫鸟环境店铺名：按 core-ziniao-env-map 覆盖（登录绑定后生效，见 utils/ziniao-env-map.ts）
+      const mergedWithNames = merged.map(applyZiniaoEnvNames);
+
+      populateBrowserIcons(mergedWithNames);
+      safeSetJSON(LS_BROWSERS, stripBrowserCache(mergedWithNames));
 
       // 保证 loading 反馈（转圈）最短可见时长，避免检测过快导致加载图标一闪而过
       const remaining = MIN_LOADING_MS - (Date.now() - startedAt);
@@ -233,7 +237,7 @@ export function refreshBrowserData(force = false): Promise<void> {
       startTransition(() => {
         setState(s => ({
           ...s,
-          browsers: merged,
+          browsers: mergedWithNames,
           exePaths: nextExe,
           userDataDirs: nextDirs,
           loading: false,

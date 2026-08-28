@@ -217,6 +217,8 @@ export {
   clearAllAppkitCache,
 } from "./localStorageKeys";
 export { populateBrowserIcons, getBrowserIcon, stripBrowserCache } from "./utils/browser-icons";
+export { getZiniaoEnvMap, setZiniaoEnvMap, applyZiniaoEnvNames } from "./utils/ziniao-env-map";
+export type { ZiniaoEnvMap, ZiniaoEnvInfo } from "./utils/ziniao-env-map";
 
 // 数据管理
 export { DataManagerPanel } from "./components/DataManagerPanel";

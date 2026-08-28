@@ -3,7 +3,9 @@ import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
 import { killAllBrowserProcesses } from "../../api";
 import { debugLaunchWithLockCheck } from "../browserLaunch";
-import { ziniaoPatchStatus, ziniaoPatchApply } from "../../ziniao-api";
+import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList } from "../../ziniao-api";
+import { setZiniaoEnvMap, type ZiniaoEnvMap } from "../../utils/ziniao-env-map";
+import { refreshBrowserData } from "../../data/browserStore";
 import { Button } from "../controls/Button";
 import type { BCPBrowser, BCPProfile } from "./types";
 import { ProfileCard } from "./ProfileCard";
@@ -194,6 +196,42 @@ export function BrowserConfigInner({
       setZiniaoPatch(prev => ({ ...prev, patching: false }));
     }
   }, [checkZiniaoPatch, showToast]);
+
+  // ── 紫鸟店铺名称绑定：用户手动登录后点此，拉取 agent getBrowserList 写入映射并刷新检测
+  // （环境目录静态检测只有 containerId，真实店名唯一来源是登录后的 agent 服务） ──
+  const [syncingShops, setSyncingShops] = useState(false);
+  const handleBindShops = useCallback(async () => {
+    if (browser.browser_type !== "ziniao") return;
+    setSyncingShops(true);
+    try {
+      showToast("正在打开紫鸟并探测登录状态（首次约需 40 秒），请确保已登录…", "info");
+      const launch = await ziniaoAgentLaunch();
+      if (!launch.launched) showToast("紫鸟已在运行", "info");
+      const st = await ziniaoAgentStatus();
+      if (!st.running) { showToast("紫鸟主程序未运行", "error"); return; }
+      if (!st.port) {
+        showToast(st.note || "未发现 agent 服务，请确认已登录紫鸟", "error");
+        return;
+      }
+      const list = await ziniaoAgentBrowserList(st.port);
+      if (!list.length) { showToast("未获取到店铺列表（请确认已登录后重试）", "warning"); return; }
+      const map: ZiniaoEnvMap = {};
+      for (const s of list) {
+        map[String(s.browserId)] = {
+          name: s.browserName,
+          platform_name: s.platform_name,
+          store_username: s.store_username,
+        };
+      }
+      setZiniaoEnvMap(map);
+      refreshBrowserData(true);
+      showToast(`绑定完成：${list.length} 个店铺已关联到环境目录`, "success");
+    } catch (e) {
+      showToast(`绑定失败: ${e}`, "error");
+    } finally {
+      setSyncingShops(false);
+    }
+  }, [browser.browser_type, showToast]);
 
   // ── 路径有效性检查（300ms 防抖后并行检查，单次 setState 批量更新） ──
   useEffect(() => {
@@ -529,6 +567,17 @@ export function BrowserConfigInner({
 
           {onCreateUserDataDir && (
             <div className="config-actions">
+              {browser.browser_type === 'ziniao' && (
+                <Button
+                  variant="primary"
+                  onClick={handleBindShops}
+                  disabled={syncingShops}
+                  title="打开紫鸟并探测登录态，拉取店铺列表写入名称映射（未登录则先登录紫鸟再点此）"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                  {syncingShops ? "绑定中…" : "登录并绑定店铺名称"}
+                </Button>
+              )}
               <Button
                 variant="primary"
                 onClick={() => setNewUserModal(true)}
