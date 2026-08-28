@@ -396,14 +396,29 @@ function CurrentBrowserCards({
   // ── 命令 / 快捷方式（右键菜单入口，与全局配置行为一致） ──
   const [cmdModal, setCmdModal] = useState<{ browserType: string; profile: BCPProfile; info: LaunchCommandInfo; portStr: string } | null>(null);
 
+  // 打开弹窗时若该配置已可连，直接用其真实运行端口生成命令（而非固定端口）
+  const profileStatusRef = useRef(profileStatus);
+  profileStatusRef.current = profileStatus;
+
   const doShowCommand = useCallback(async (bt: string, p: BCPProfile) => {
     try {
-      const info = await getLaunchCommand(bt, p.id, p.user_data_dir, 0);
-      setCmdModal({ browserType: bt, profile: p, info, portStr: "" });
+      const key = mkKey(bt, p);
+      const curPort = profileStatusRef.current.ports[key] ?? null;
+      const portNum = curPort ? Number(curPort) || 0 : 0;
+      const info = await getLaunchCommand(bt, p.id, p.user_data_dir, portNum);
+      setCmdModal({ browserType: bt, profile: p, info, portStr: curPort ? String(curPort) : "" });
     } catch (e) {
       showToast(`获取命令失败: ${e}`, "error");
     }
   }, [showToast]);
+
+  // 弹窗打开期间 5s 轮询持续刷新：当前可连端口动态展示（如调试打开产生的动态端口）
+  const cmdRunningPort = useMemo(() => {
+    if (!cmdModal) return null;
+    const key = mkKey(cmdModal.browserType, cmdModal.profile);
+    const p = profileStatus.ports[key];
+    return p ? Number(p) || null : null;
+  }, [cmdModal, profileStatus]);
 
   const doCreateShortcut = useCallback(async (bt: string, p: BCPProfile) => {
     try {
@@ -548,6 +563,7 @@ function CurrentBrowserCards({
           profile={cmdModal.profile}
           info={cmdModal.info}
           portStr={cmdModal.portStr}
+          runningPort={cmdRunningPort}
           canLaunch
           onClose={() => setCmdModal(null)}
           onLaunch={async (p, portStr) => {

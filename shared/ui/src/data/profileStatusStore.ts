@@ -31,6 +31,11 @@ export interface ProfileStatusMaps {
    * shared = 与同目录其它配置共享同一实例，无独立进程可杀
    */
   kind: Record<string, "own" | "shared">;
+  /**
+   * key = bt|user_data_dir|profile_id → 实际运行的调试端口（可连时为端口字符串，未启动/不可连为 null）。
+   * 动态端口每次启动都不同，用于命令弹窗等场景展示真实可连端口
+   */
+  ports: Record<string, string | null>;
 }
 
 export interface ProfileStatusItem {
@@ -44,7 +49,7 @@ const POLL_INTERVAL_MS = 5000;
 
 // ── 共享状态 ──
 
-let state: ProfileStatusMaps = { launch: {}, conn: {}, kind: {} };
+let state: ProfileStatusMaps = { launch: {}, conn: {}, kind: {}, ports: {} };
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let ticking = false;
@@ -138,6 +143,7 @@ async function tick(immediate = false): Promise<void> {
     const launch: Record<string, LaunchStatus> = {};
     const conn: Record<string, ConnectionStatus> = {};
     const kind: Record<string, "own" | "shared"> = {};
+    const ports: Record<string, string | null> = {};
     for (const it of items) {
       const key = `${it.bt}|${it.dir}|${it.id}`;
       const st = byLookup[`${it.dir}|${it.id}`];
@@ -145,11 +151,14 @@ async function tick(immediate = false): Promise<void> {
         launch[key] = "not_launched";
         conn[key] = "not_connectable";
         kind[key] = "own";
+        ports[key] = null;
         continue;
       }
       launch[key] = st.running_kind === "shared" ? "shared" : "launched";
       conn[key] = st.cdp_reachable ? "connectable" : "not_connectable";
       kind[key] = st.running_kind === "shared" ? "shared" : "own";
+      // 仅可连时才有可信端口；不可连（如无 --remote-debugging-port 启动）视为无端口
+      ports[key] = st.cdp_reachable ? st.debug_port : null;
     }
 
     // 与前一次对比，只有实际变化时才更新，避免无意义重渲染
@@ -168,11 +177,16 @@ async function tick(immediate = false): Promise<void> {
       }
     }
     if (!changed) {
+      for (const [k, v] of Object.entries(ports)) {
+        if (state.ports[k] !== v) { changed = true; break; }
+      }
+    }
+    if (!changed) {
       for (const k of Object.keys(state.launch)) {
         if (!(k in launch)) { changed = true; break; }
       }
     }
-    if (changed) setState({ launch, conn, kind });
+    if (changed) setState({ launch, conn, kind, ports });
   } catch {
     // 检测失败时保持上次状态
   } finally {

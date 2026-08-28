@@ -13,7 +13,7 @@ export interface LaunchCommandInfo {
 }
 
 export function CommandModal({
-  profile, info, portStr, canLaunch, onClose, onLaunch,
+  profile, info, portStr, canLaunch, onClose, onLaunch, runningPort,
 }: {
   profile: BCPProfile;
   info: LaunchCommandInfo;
@@ -21,7 +21,11 @@ export function CommandModal({
   canLaunch: boolean;
   onClose: () => void;
   onLaunch: (p: BCPProfile, portStr: string) => void;
+  /** 动态检测到的当前运行端口（可连时传入）；未启动/不可连为 null 时回退 info.debug_port */
+  runningPort?: number | null;
 }) {
+  const livePort = runningPort || (info.debug_port > 0 ? info.debug_port : null);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -34,7 +38,17 @@ export function CommandModal({
         <div className="modal-body">
           <div className="cmd-field"><label>完整命令</label><div className="cmd-box"><code>{info.command_line}</code><button className="cmd-copy" onClick={() => navigator.clipboard.writeText(info.command_line)}>复制</button></div></div>
           <div className="cmd-field"><label>可执行文件</label><code className="cmd-inline">{info.exe_path}</code></div>
-          <div className="cmd-field"><label>调试端口</label><code className="cmd-inline" style={{ color: "var(--text-secondary)", userSelect: "none" }}>{info.debug_port > 0 ? `--remote-debugging-port=${info.debug_port}` : "未指定（正常启动，不带调试端口）"}</code></div>
+          <div className="cmd-field">
+            <label>调试端口</label>
+            {runningPort ? (
+              <div className="cmd-port-live">
+                <code className="cmd-inline">{`--remote-debugging-port=${runningPort}`}</code>
+                <span className="cmd-port-live-badge" title="该端口为当前运行实例动态检测所得（每轮 5s 轮询自动刷新）">已连接 · 动态端口</span>
+              </div>
+            ) : (
+              <code className="cmd-inline" style={{ color: "var(--text-secondary)", userSelect: "none" }}>{livePort ? `--remote-debugging-port=${livePort}` : "未指定（正常启动，不带调试端口）"}</code>
+            )}
+          </div>
           <div className="cmd-field"><label>参数</label><div className="cmd-args">{info.args.map((arg, i) => <code key={i} className="cmd-arg">{arg}</code>)}</div></div>
         </div>
         <div className="modal-footer">

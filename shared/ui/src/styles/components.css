@@ -205,6 +205,28 @@
   word-break: break-all;
 }
 
+/* 动态调试端口（当前运行实例的真实端口，轮询自动刷新） */
+.cmd-port-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cmd-port-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .cmd-args {
   display: flex;
   flex-wrap: wrap;
