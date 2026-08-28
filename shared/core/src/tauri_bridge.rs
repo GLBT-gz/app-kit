@@ -345,6 +345,15 @@ fn save_file(path: String, data_b64: String) -> Result<(), String> {
     std::fs::write(&path, &bytes).map_err(|e| format!("保存文件失败: {}", e))
 }
 
+/// 读取文件并以 Base64 返回（Excel 导入等前端解析场景）
+#[cfg(feature = "cmd-utils")]
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<String, String> {
+    use base64::Engine as _;
+    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 // ── 数据库表管理（cmd-db）──
 
 /// SQLite 数据库表信息

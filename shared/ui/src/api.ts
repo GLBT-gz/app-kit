@@ -99,6 +99,11 @@ export async function saveFile(path: string, dataB64: string): Promise<void> {
   return pluginInvoke("save_file", { path, dataB64 });
 }
 
+/** 读取文件并以 Base64 返回（Excel 导入等前端解析场景） */
+export async function readFileBase64(path: string): Promise<string> {
+  return pluginInvoke("read_file_base64", { path });
+}
+
 // ── 浏览器配置管理 ──
 
 /** 检测所有已安装的浏览器（内置 + 注册的自定义浏览器） */

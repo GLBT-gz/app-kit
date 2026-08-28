@@ -21,6 +21,7 @@ export {
   clearDbTable,
   deleteDataFiles,
   saveFile,
+  readFileBase64,
   detectBrowsers,
   detectCustomProfiles,
   getLaunchCommand,
