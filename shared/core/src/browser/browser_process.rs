@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 use super::browser_paths::get_user_data_dir;
+use super::browser_register::{registered_browser_types, registered_process_name};
 use serde::Serialize;
 
 /// 扫描正在运行的浏览器实例（含调试端口）
@@ -290,6 +291,11 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
     let mut running_by_key: HashMap<String, Option<u16>> = HashMap::new();
     // 正在运行主进程的 user-data-dir 集合（小写），用于同目录多 profile 的兜底探测
     let mut running_dirs: HashSet<String> = HashSet::new();
+    // 注册式浏览器（如紫鸟）产生的实例：key 与所在目录单独收集。
+    // 紫鸟环境由 agent 拉起，进程名 ziniaobrowser.exe，命令行 --profile-directory=Default
+    // （环境目录是独立 Chrome User Data，每目录一个实例），无法用「目录\containerId」精确命中，
+    // 因此按目录前缀匹配；这些目录同时进入 running_dirs 供目录级兜底。
+    let mut custom_running: HashMap<String, Option<u16>> = HashMap::new();
 
     for exe_name in &["msedge.exe", "chrome.exe"] {
         let (instances, dirs) = scan_running_browser_instances_with_dirs(exe_name);
@@ -305,6 +311,24 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
             if let Some(def) = get_user_data_dir(bt) {
                 running_dirs.insert(def.to_lowercase());
             }
+        }
+    }
+
+    // 注册式浏览器（紫鸟/易得客等）：按其注册的进程名扫描，按目录前缀匹配
+    for bt in registered_browser_types() {
+        let Some(proc) = registered_process_name(&bt) else { continue };
+        if proc.is_empty()
+            || proc.eq_ignore_ascii_case("msedge.exe")
+            || proc.eq_ignore_ascii_case("chrome.exe")
+        {
+            continue;
+        }
+        let (instances, dirs) = scan_running_browser_instances_with_dirs(&proc);
+        for (key, port_opt) in instances {
+            custom_running.entry(key).or_insert(port_opt);
+        }
+        for d in dirs {
+            running_dirs.insert(d.to_lowercase());
         }
     }
 
@@ -326,6 +350,25 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 owner_profile_id: None,
             });
         } else if running_dirs.contains(&user_data_dir.to_lowercase()) {
+            // 注册式浏览器：该目录正在运行（如紫鸟环境目录，每目录一个独立实例），
+            // 视为该 profile（环境）已启动，端口从同目录实例取
+            let custom = custom_running.iter().find(|(k, _)| {
+                k.to_lowercase().starts_with(&format!("{}\\", user_data_dir).to_lowercase())
+            });
+            if custom.is_some() {
+                let port = custom.and_then(|(_, p)| *p);
+                let cdp_reachable = port.map_or(false, |p| check_cdp_reachable(p));
+                result.push(BrowserProcessState {
+                    user_data_dir: user_data_dir.clone(),
+                    profile_id: profile_id.clone(),
+                    is_running: true,
+                    debug_port: port.map(|p| p.to_string()),
+                    cdp_reachable,
+                    running_kind: "own".to_string(),
+                    owner_profile_id: None,
+                });
+                continue;
+            }
             // 该目录已有浏览器主进程在运行，但该 profile 未精确命中命令行：
             // 可能是同目录多 profile 共享主进程（单实例锁），也可能是默认目录实例。
             // 用 RestartManager 逐 profile 精确探测其目录是否正被浏览器进程持有打开句柄，
