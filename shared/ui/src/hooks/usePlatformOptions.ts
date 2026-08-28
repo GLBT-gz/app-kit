@@ -8,6 +8,7 @@ import type { BrowserOption } from "../components/PlatformConfigPanel";
  *
  * 过滤：紫鸟主程序入口（id=Default）不是店铺环境，不作为平台绑定目标
  * （历史勾选残留 key 也不会进入选项）。
+ * 排序：按 displayName 字典序（localeCompare），避免随勾选顺序显得杂乱。
  */
 export function usePlatformOptions(
   selectedCardKeys: string[],
@@ -31,6 +32,7 @@ export function usePlatformOptions(
           || browsers.find(b => b.browser_type === bt)?.profiles?.find(p => p.user_data_dir === udDir && p.id === pid);
         const displayName = profile?.user_name || profile?.email || profile?.name || pid;
         return { key, displayName: `${browserName} / ${displayName}` };
-      });
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, "zh-Hans-CN"));
   }, [selectedCardKeys, browsers, cachedProfiles]);
 }
