@@ -191,6 +191,8 @@ export {
   useRegisterProfileStatusInterest,
 } from "./data/profileStatusStore";
 export { launchProfileSmart, closeProfileSmart, registerBrowserLaunchHandler, registerBrowserCloseHandler } from "./data/browser-ops";
+export { useZiniaoMainStatus } from "./data/ziniaoStatus";
+export type { ZiniaoMainStatus } from "./data/ziniaoStatus";
 export type {
   LaunchStatus,
   ConnectionStatus,

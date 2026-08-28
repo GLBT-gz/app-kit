@@ -9,6 +9,7 @@ import {
   useRegisterProfileStatusInterest,
   type ProfileStatusItem,
 } from "../data/profileStatusStore";
+import { useZiniaoMainStatus } from "../data/ziniaoStatus";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 import { mkKey, isDefaultUserDir, isMultiUserDir, isZiniaoMain, getSortGroup } from "../utils/profile-rules";
 import { debugLaunchWithLockCheck } from "./browserLaunch";
@@ -179,6 +180,8 @@ function CurrentBrowserCards({
 
   // ── 浏览器运行状态：共享轮询 store（全局单调度器，多实例不重复轮询） ──
   const profileStatus = useProfileStatusSnapshot();
+  // 紫鸟主程序状态：进程扫描抓不到 ziniao.exe，走 agent 探测（全局单例轮询）
+  const ziniaoMainStatus = useZiniaoMainStatus();
   const statusItems = useMemo(() => {
     const items: ProfileStatusItem[] = [];
     for (const [bt, ps] of Object.entries(profilesByBrowser)) {
@@ -531,8 +534,8 @@ function CurrentBrowserCards({
                       isMainProgram={isMain}
                       siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
-                  launchStatus={profileStatus.launch[key]}
-                  connStatus={profileStatus.conn[key]}
+                      launchStatus={isMain ? (ziniaoMainStatus.running ? "launched" : "not_launched") : profileStatus.launch[key]}
+                      connStatus={isMain ? undefined : profileStatus.conn[key]}
                       onCardClick={handleCardClick}
                       onCardContextMenu={handleCardContextMenu}
                       onCardMouseDown={handleCardMouseDown}
