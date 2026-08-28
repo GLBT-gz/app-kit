@@ -219,9 +219,11 @@ export function BrowserConfigInner({
       }
       const list = await ziniaoAgentBrowserList(st.port);
       if (!list.length) { showToast("未获取到店铺列表（请确认已登录后重试）", "warning"); return; }
-      // 诊断：记录原始字段名，便于发现店铺头像等未映射字段（dev 控制台可见）
+      // 诊断：记录原始字段名，便于发现店铺头像等未映射字段
+      let rawKeys: string[] = [];
       try {
         const raw = await ziniaoAgentRawBrowserList(st.port);
+        rawKeys = raw.first_keys || [];
         console.log("[ziniao-bind] 原始字段:", raw.first_keys, raw.first_item);
       } catch { /* 诊断失败不影响主流程 */ }
       const map: ZiniaoEnvMap = {};
@@ -238,7 +240,11 @@ export function BrowserConfigInner({
       }
       setZiniaoEnvMap(map);
       refreshBrowserData(true);
-      showToast(`绑定完成：${list.length} 个店铺已关联（解析到 ${avatarCount} 个头像）`, "success");
+      if (avatarCount > 0) {
+        showToast(`绑定完成：${list.length} 个店铺已关联（解析到 ${avatarCount} 个头像）`, "success");
+      } else {
+        showToast(`绑定完成：${list.length} 个店铺已关联，未找到头像字段。原始字段: ${rawKeys.join(", ") || "(未知)"}`, "warning");
+      }
     } catch (e) {
       showToast(`绑定失败: ${e}`, "error");
     } finally {
