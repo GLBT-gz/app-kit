@@ -15,10 +15,10 @@
 // ============================================================
 
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
+import type { ZiniaoAgentBrowser } from "../ziniao-api";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 
 const LS_ZINIAO_ENV_MAP = "core-ziniao-env-map";
-
 /** 单个环境的店铺信息（key = containerId / 紫鸟 browserId） */
 export interface ZiniaoEnvInfo {
   name: string;
@@ -53,4 +53,36 @@ export function applyZiniaoEnvNames(browser: BCPBrowser): BCPBrowser {
       return { ...p, name: info.name || p.name };
     }),
   };
+}
+
+/**
+ * 由共享数据源派生紫鸟店铺列表（统一数据源，替代各项目自有的 sample-shops 缓存）。
+ *
+ * - 数据源 = browserStore 的紫鸟 profiles（静态目录扫描，id=containerId）+
+ *   core-ziniao-env-map（登录绑定后的店名/平台/账号）
+ * - 排除紫鸟主程序入口（id=Default）
+ * - 兼容 ZiniaoAgentBrowser 形状，项目侧可直接喂给 useZiniaoAgent 的 stepOpen/stepClose 等
+ */
+export function deriveZiniaoAgentBrowsers(browser: BCPBrowser): ZiniaoAgentBrowser[] {
+  if (browser.browser_type !== "ziniao") return [];
+  const map = getZiniaoEnvMap();
+  return (browser.profiles || [])
+    .filter(p => p.id !== "Default")
+    .map(p => {
+      const info = map[p.id];
+      return {
+        browserOauth: "",
+        browserId: Number(p.id),
+        browserName: p.name,
+        browserIp: "",
+        siteId: 0,
+        isExpired: false,
+        proxyType: 0,
+        isDynamic: false,
+        store_username: info?.store_username ?? "",
+        tags: [],
+        platform_id: 0,
+        platform_name: info?.platform_name ?? "",
+      } as ZiniaoAgentBrowser;
+    });
 }

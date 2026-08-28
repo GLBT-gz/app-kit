@@ -185,7 +185,8 @@ export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
 export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
 export { useBrowserSettingsTabs } from "./hooks/useBrowserSettingsTabs";
 export type { BrowserSettingsTabsOptions, SelectedProfile } from "./hooks/useBrowserSettingsTabs";
-export { refreshBrowserData } from "./data/browserStore";
+export { refreshBrowserData, useBrowserStore } from "./data/browserStore";
+export { syncZiniaoShopNames } from "./data/ziniaoSync";
 export {
   useProfileStatusSnapshot,
   useRegisterProfileStatusInterest,
@@ -220,7 +221,7 @@ export {
   clearAllAppkitCache,
 } from "./localStorageKeys";
 export { populateBrowserIcons, getBrowserIcon, stripBrowserCache } from "./utils/browser-icons";
-export { getZiniaoEnvMap, setZiniaoEnvMap, applyZiniaoEnvNames } from "./utils/ziniao-env-map";
+export { getZiniaoEnvMap, setZiniaoEnvMap, applyZiniaoEnvNames, deriveZiniaoAgentBrowsers } from "./utils/ziniao-env-map";
 export type { ZiniaoEnvMap, ZiniaoEnvInfo } from "./utils/ziniao-env-map";
 
 // 数据管理
