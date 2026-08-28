@@ -524,7 +524,16 @@ export function BrowserConfigInner({
 
           {onCreateUserDataDir && (
             <div className="config-actions">
-              <Button variant="primary" onClick={() => setNewUserModal(true)}>
+              <Button
+                variant="primary"
+                onClick={() => setNewUserModal(true)}
+                disabled={browser.browser_type === 'edecker' || browser.browser_type === 'ziniao'}
+                title={
+                  browser.browser_type === 'edecker' || browser.browser_type === 'ziniao'
+                    ? '易得客/紫鸟 的用户/环境由各自主程序管理，不支持在此新增'
+                    : undefined
+                }
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
                 新增用户
               </Button>
