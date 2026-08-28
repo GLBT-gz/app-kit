@@ -31,6 +31,8 @@ export interface PlatformDef {
 export interface BrowserOption {
   key: string;
   displayName: string;
+  /** 浏览器类型（edge/chrome/edecker/ziniao 等），用于选项排序 */
+  bt?: string;
 }
 
 // ── 全局平台注册表 ──
