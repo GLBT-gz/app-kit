@@ -29,14 +29,14 @@ pub fn scan_running_browser_instances(exe_name: &str) -> HashMap<String, u16> {
     port_map
 }
 
-/// Windows 原生进程枚举：一次性快照全系统进程，读取与目标 exe 名匹配的进程命令行。
+/// Windows 原生进程枚举：一次性快照全系统进程，读取与目标 exe 名匹配的进程命令行与 PID。
 ///
 /// 用 CreateToolhelp32Snapshot + NtQueryInformationProcess(ProcessCommandLineInformation)
 /// 替代 PowerShell Get-CimInstance / wmic 子进程——旧实现每次冷启动 PowerShell（约 1s+），
 /// 且在同步 Tauri 命令里阻塞主线程，导致「当前浏览器配置」tab 滚轮卡顿（详见踩坑记录）。
-/// 返回 (exe_name, command_line) 列表；读取失败（受保护进程等）的进程自动跳过。
+/// 返回 (exe_name, command_line, pid) 列表；读取失败（受保护进程等）的进程自动跳过。
 #[cfg(windows)]
-fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
+fn scan_running_processes_with_pid(exe_names: &[&str]) -> Vec<(String, String, u32)> {
     use std::ffi::c_void;
     use std::mem::size_of;
 
@@ -165,7 +165,7 @@ fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
         Some(to_string(&raw[..read]))
     }
 
-    let mut result: Vec<(String, String)> = Vec::new();
+    let mut result: Vec<(String, String, u32)> = Vec::new();
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
     if snapshot == -1 {
         return result;
@@ -188,7 +188,7 @@ fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
             };
             if handle != 0 {
                 if let Some(cmd) = read_command_line(handle) {
-                    result.push((exe, cmd));
+                    result.push((exe, cmd, entry.th32_process_id));
                 }
                 unsafe { CloseHandle(handle) };
             }
@@ -197,6 +197,15 @@ fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
     }
     unsafe { CloseHandle(snapshot) };
     result
+}
+
+/// 原生枚举（兼容旧接口，丢弃 PID）
+#[cfg(windows)]
+fn scan_running_processes_native(exe_names: &[&str]) -> Vec<(String, String)> {
+    scan_running_processes_with_pid(exe_names)
+        .into_iter()
+        .map(|(e, c, _)| (e, c))
+        .collect()
 }
 
 /// 非 Windows 环境回退：不启动子进程枚举，直接返回空（本工具面向 Windows 浏览器自动化）。
@@ -661,12 +670,19 @@ fn scan_running_browser_instances_with_dirs(
 /// 扫描注册式浏览器（如紫鸟）的运行实例：直接按 `--user-data-dir` 建立「目录→端口」映射。
 ///
 /// 与 Edge/Chrome 的关键差异：紫鸟环境内核（ziniaobrowser.exe）命令行含
-/// `--user-data-dir` 与 `--remote-debugging-port`，但**不含** `--profile-directory`
-/// （每个环境目录就是一个独立单 profile 的 Chrome User Data），
-/// 无法用「目录\profile」精确命中，因此按目录匹配（每个环境目录 = 一个独立实例）。
+/// `--user-data-dir` 但**不含** `--profile-directory`（每个环境目录就是一个独立单 profile
+/// 的 Chrome User Data），无法用「目录\profile」精确命中，因此按目录匹配。
+///
+/// 端口解析两级：优先命令行 `--remote-debugging-port`；缺失时（新架构端口随机，见
+/// platform-ziniao agent::find_cdp_port）扫描内核进程的 127.0.0.1 监听端口，
+/// 取 TCP 可连者为 CDP 端口。
 fn scan_running_custom_dirs(exe_name: &str) -> HashMap<String, Option<u16>> {
     let mut dirs: HashMap<String, Option<u16>> = HashMap::new();
-    for (_exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+
+    // 1) 原生枚举浏览器进程（含 PID）：跳过子进程与后台驻留
+    let mut dir_by_pid: HashMap<u32, String> = HashMap::new();
+    let mut cmdline_port: HashMap<u32, Option<u16>> = HashMap::new();
+    for (_exe, cmd_line, pid) in scan_running_processes_with_pid(&[exe_name]) {
         let args = cmd_args(&cmd_line);
         // 只保留 browser process：子进程（renderer/gpu 等）都带 --type=
         if args.iter().any(|a| a.starts_with("--type=")) {
@@ -677,10 +693,60 @@ fn scan_running_custom_dirs(exe_name: &str) -> HashMap<String, Option<u16>> {
             continue;
         }
         let Some(ud) = extract_cmd_arg(&cmd_line, "--user-data-dir") else { continue };
-        let port = extract_cmd_arg(&cmd_line, "--remote-debugging-port")
-            .and_then(|ps| ps.parse::<u16>().ok());
-        dirs.entry(ud.to_lowercase()).or_insert(port);
+        dir_by_pid.insert(pid, ud.to_lowercase());
+        cmdline_port.insert(
+            pid,
+            extract_cmd_arg(&cmd_line, "--remote-debugging-port")
+                .and_then(|ps| ps.parse::<u16>().ok()),
+        );
     }
+    if dir_by_pid.is_empty() {
+        return dirs;
+    }
+
+    // 2) netstat -ano 一次性取这些 PID 在 127.0.0.1 上监听的端口（对应 agent::listening_ports）
+    let pids: Vec<u32> = dir_by_pid.keys().copied().collect();
+    let mut listen_ports: HashMap<u32, Vec<u16>> = HashMap::new();
+    if let Ok(out) = std::process::Command::new("netstat")
+        .arg("-ano")
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for line in stdout.lines() {
+            let mut it = line.split_whitespace();
+            if !it.next().unwrap_or("").eq_ignore_ascii_case("tcp") {
+                continue;
+            }
+            let Some(local) = it.next() else { continue };
+            if !(local.starts_with("127.0.0.1:") || local.starts_with("0.0.0.0:") || local.starts_with("[::1]:")) {
+                continue;
+            }
+            let _foreign = it.next(); // Foreign Address 列
+            if !it.next().unwrap_or("").eq_ignore_ascii_case("listening") {
+                continue;
+            }
+            let Some(pid) = it.next().and_then(|s| s.parse::<u32>().ok()) else { continue };
+            let Some(port) = local.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok()) else { continue };
+            if pids.contains(&pid) {
+                listen_ports.entry(pid).or_default().push(port);
+            }
+        }
+    }
+
+    // 3) 每目录解析端口：命令行端口可用则用，否则取该内核进程监听端口中 TCP 可连者
+    for (pid, dir) in &dir_by_pid {
+        let chosen = cmdline_port
+            .get(pid)
+            .and_then(|p| *p)
+            .filter(|p| check_cdp_reachable(*p))
+            .or_else(|| {
+                listen_ports
+                    .get(pid)
+                    .and_then(|ports| ports.iter().copied().find(|p| check_cdp_reachable(*p)))
+            });
+        dirs.entry(dir.clone()).or_insert(chosen);
+    }
+
     dirs
 }
 

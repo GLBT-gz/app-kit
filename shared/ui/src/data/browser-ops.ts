@@ -12,6 +12,8 @@
 // ============================================================
 
 import { launchBrowserProfile, killBrowserProfileProcess } from "../api";
+import { debugLaunchWithLockCheck } from "../components/browserLaunch";
+import type { BCPProfile } from "../components/BrowserConfigPanel/types";
 import {
   ziniaoAgentStatus,
   ziniaoAgentLaunch,
@@ -64,6 +66,38 @@ export async function closeProfileSmart(
   const h = closeHandlers.get(browserType);
   if (h) return h(browserType, profileId, userDataDir);
   return killBrowserProfileProcess(browserType, profileId, userDataDir);
+}
+
+/**
+ * 智能调试启动。
+ *
+ * 默认（Edge/Chrome）：锁检查 + 关闭旧进程 + 找随机端口 + 启动（debugLaunchWithLockCheck）。
+ * 注册式托管浏览器（如紫鸟）：不走「杀进程+换端口重启」模型——环境由 agent 拉起并分配
+ * 调试端口，直接经 launchProfileSmart 打开后解析真实 CDP 端口返回。
+ */
+export async function debugLaunchProfileSmart(
+  browserType: string,
+  profile: BCPProfile,
+  opts: {
+    profiles: BCPProfile[];
+    log: (msg: string, level?: "info" | "warning" | "success") => void;
+  },
+): Promise<{ port: number; pid: string } | null> {
+  if (browserType === "ziniao") {
+    const msg = await launchProfileSmart(browserType, profile.id, profile.user_data_dir, 0);
+    const browserId = Number(profile.id);
+    if (Number.isNaN(browserId)) throw new Error(`无效的紫鸟环境 ID: ${profile.id}`);
+    // 打开后解析真实 CDP 端口（新架构端口随机，按内核进程监听精确归属）
+    const port = await ziniaoAgentCdpPort(browserId);
+    return { port, pid: msg.replace("PID:", "") };
+  }
+  return debugLaunchWithLockCheck({
+    browserType,
+    profiles: opts.profiles,
+    profile,
+    launch: (bt, id, dir, port) => launchProfileSmart(bt, id, dir, port),
+    log: opts.log,
+  });
 }
 
 // ── 紫鸟适配（app-kit 内置：ziniao-api 已在此库，无需项目注册） ──

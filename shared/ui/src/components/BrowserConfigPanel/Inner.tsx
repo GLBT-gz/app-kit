@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
 import { killAllBrowserProcesses } from "../../api";
-import { debugLaunchWithLockCheck } from "../browserLaunch";
+import { debugLaunchProfileSmart } from "../../data/browser-ops";
 import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList } from "../../ziniao-api";
 import { setZiniaoEnvMap, type ZiniaoEnvMap } from "../../utils/ziniao-env-map";
 import { refreshBrowserData } from "../../data/browserStore";
@@ -381,17 +381,14 @@ export function BrowserConfigInner({
     } catch (e) { showToast(`获取命令失败: ${e}`, "error"); }
   };
 
-  /** 调试启动：复用共享 util（锁检查 + 杀旧进程 + 找端口 + 启动），与当前配置行为一致 */
+  /** 调试启动：智能适配（Edge/Chrome 锁检查+换端口重启；紫鸟 agent 打开后解析真实 CDP 端口） */
   const doDebugLaunch = async (p: BCPProfile) => {
     if (!onLaunchProfile) return;
     const key = `${p.user_data_dir}|${p.id}`;
     setLaunching(key);
     try {
-      const result = await debugLaunchWithLockCheck({
-        browserType: browser.browser_type,
+      const result = await debugLaunchProfileSmart(browser.browser_type, p, {
         profiles: browser.profiles || [],
-        profile: p,
-        launch: onLaunchProfile,
         log: (msg, level) => showToast(msg, level),
       });
       if (!result) return; // 用户取消关闭确认

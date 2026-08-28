@@ -3,7 +3,6 @@ import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
 import { killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
-import { launchProfileSmart, closeProfileSmart } from "../data/browser-ops";
 import {
   useProfileStatusSnapshot,
   useRegisterProfileStatusInterest,
@@ -11,10 +10,9 @@ import {
 } from "../data/profileStatusStore";
 import { useZiniaoMainStatus } from "../data/ziniaoStatus";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
+import { launchProfileSmart, closeProfileSmart, debugLaunchProfileSmart } from "../data/browser-ops";
 import { mkKey, isDefaultUserDir, isMultiUserDir, isZiniaoMain, getSortGroup } from "../utils/profile-rules";
-import { debugLaunchWithLockCheck } from "./browserLaunch";
 import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
-
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
 // 类型与轮询调度器见 data/profileStatusStore.ts（全局单例，多实例共享）
 
@@ -349,21 +347,18 @@ function CurrentBrowserCards({
     setLaunching(key);
     try {
       const profiles = browsers.find(b => b.browser_type === bt)?.profiles || [];
-      const result = await debugLaunchWithLockCheck({
-        browserType: bt,
+      const result = await debugLaunchProfileSmart(bt, p, {
         profiles,
-        profile: p,
-        launch: (bt2, id, dir, port) => (onLaunchProfile || launchProfileSmart)(bt2, id, dir, port),
         log: (msg, level) => showToast(msg, level),
       });
       if (!result) return; // 用户取消关闭确认
-      showToast(`「${p.name}」调试启动成功 (PID: ${result.pid}, 端口: ${result.port})`, "success");
+      showToast(`「${p.name}」调试启动成功 (端口: ${result.port})`, "success");
     } catch (e) {
       showToast(`调试打开失败: ${e}`, "error");
     } finally {
       setLaunching(null);
     }
-  }, [onLaunchProfile, browsers, showToast]);
+  }, [browsers, showToast]);
 
   /** 关闭该配置：kill_browser_profile_process 按 user-data-dir + profile-directory
    *  精确匹配进程树（taskkill /T），只关闭该配置对应的浏览器实例，不影响其它配置 */
