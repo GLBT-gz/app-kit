@@ -221,6 +221,7 @@ export {
   clearAllAppkitCache,
 } from "./localStorageKeys";
 export { populateBrowserIcons, getBrowserIcon, stripBrowserCache } from "./utils/browser-icons";
+export { compareBrowserDisplayName } from "./utils/display-sort";
 export { getZiniaoEnvMap, setZiniaoEnvMap, applyZiniaoEnvNames, deriveZiniaoAgentBrowsers } from "./utils/ziniao-env-map";
 export type { ZiniaoEnvMap, ZiniaoEnvInfo } from "./utils/ziniao-env-map";
 

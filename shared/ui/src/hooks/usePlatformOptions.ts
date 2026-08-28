@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import type { BrowserOption } from "../components/PlatformConfigPanel";
+import { compareBrowserDisplayName } from "../utils/display-sort";
 
 /**
  * 从多选卡片 key 推导平台选择器选项。
@@ -42,7 +43,7 @@ export function usePlatformOptions(
         const ra = BT_ORDER[a.bt] ?? 10;
         const rb = BT_ORDER[b.bt] ?? 10;
         if (ra !== rb) return ra - rb;
-        return a.displayName.localeCompare(b.displayName, "zh-Hans-CN");
+        return compareBrowserDisplayName(a.displayName, b.displayName);
       });
   }, [selectedCardKeys, browsers, cachedProfiles]);
 }
