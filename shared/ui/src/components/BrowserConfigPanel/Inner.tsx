@@ -3,9 +3,10 @@ import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
 import { killAllBrowserProcesses } from "../../api";
 import { debugLaunchProfileSmart } from "../../data/browser-ops";
-import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList, ziniaoAgentRawBrowserList } from "../../ziniao-api";
+import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList, ziniaoAgentRawBrowserList, ziniaoActivate } from "../../ziniao-api";
 import { setZiniaoEnvMap, pickShopAvatar, type ZiniaoEnvMap } from "../../utils/ziniao-env-map";
 import { refreshBrowserData } from "../../data/browserStore";
+import { useProfileStatusSnapshot } from "../../data/profileStatusStore";
 import { Button } from "../controls/Button";
 import type { BCPBrowser, BCPProfile } from "./types";
 import { ProfileCard } from "./ProfileCard";
@@ -150,6 +151,9 @@ export function BrowserConfigInner({
   const [launching, setLaunching] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
   const [newUserModal, setNewUserModal] = useState(false);
+
+  // 运行状态快照（紫鸟已打开环境的端口缓存，供「已打开则快速激活」）
+  const profileStatus = useProfileStatusSnapshot();
 
   const showToast = useCallback((text: string, type: "success" | "error" | "info" | "warning" = "info") => {
     const id = Date.now();
@@ -373,6 +377,16 @@ export function BrowserConfigInner({
     setLaunching(key);
     showToast("启动中...", "info");
     try {
+      // 紫鸟环境已打开且可连：直接激活窗口（毫秒级），避免重复走 agent 启动链
+      if (browser.browser_type === "ziniao") {
+        const statusKey = `ziniao|${p.user_data_dir}|${p.id}`;
+        const cachedPort = profileStatus.ports[statusKey];
+        if (cachedPort && profileStatus.conn[statusKey] === "connectable") {
+          await ziniaoActivate(Number(cachedPort));
+          showToast(`${browser.browser_name}「${p.name}」已激活`, "success");
+          return;
+        }
+      }
       const portNum = Number(portStr) || 0;
       const msg = await onLaunchProfile(browser.browser_type, p.id, p.user_data_dir, portNum);
       const pid = msg.replace("PID:", "");

@@ -11,6 +11,7 @@ import {
 import { useZiniaoMainStatus } from "../data/ziniaoStatus";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 import { launchProfileSmart, closeProfileSmart, debugLaunchProfileSmart } from "../data/browser-ops";
+import { ziniaoActivate } from "../ziniao-api";
 import { mkKey, isDefaultUserDir, isMultiUserDir, isZiniaoMain, getSortGroup } from "../utils/profile-rules";
 import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
@@ -330,7 +331,24 @@ function CurrentBrowserCards({
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
-              const fn = onLaunchProfile || launchProfileSmart;
+      // 紫鸟环境已打开且可连：直接激活窗口（CDP Page.bringToFront，毫秒级），
+      // 避免重复走 agent 启动链（探测端口 40s + startBrowser + 解析端口）造成的「慢半拍」
+      if (bt === "ziniao") {
+        const cachedPort = profileStatus.ports[key];
+        if (cachedPort && profileStatus.conn[key] === "connectable") {
+          const portNum = Number(cachedPort);
+          if (portNum) {
+            try {
+              await ziniaoActivate(portNum);
+              showToast(`「${p.name}」已激活`, "success");
+              return;
+            } catch {
+              // 激活失败（端口已失效/窗口已关）→ 回退完整启动
+            }
+          }
+        }
+      }
+      const fn = onLaunchProfile || launchProfileSmart;
       const msg = await fn(bt, p.id, p.user_data_dir, 0);
       const pid = msg.replace("PID:", "");
       showToast(`「${p.name}」已启动${pid ? ` (PID: ${pid})` : ""}`, "success");
@@ -339,7 +357,7 @@ function CurrentBrowserCards({
     } finally {
       setLaunching(null);
     }
-  }, [onLaunchProfile, showToast]);
+  }, [onLaunchProfile, showToast, profileStatus]);
 
   /** 调试打开：复用共享 util（锁检查 + 杀旧进程 + 找端口 + 启动），与全局配置行为一致 */
   const doDebugOpen = useCallback(async (bt: string, p: BCPProfile) => {
