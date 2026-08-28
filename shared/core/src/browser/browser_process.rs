@@ -291,11 +291,8 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
     let mut running_by_key: HashMap<String, Option<u16>> = HashMap::new();
     // 正在运行主进程的 user-data-dir 集合（小写），用于同目录多 profile 的兜底探测
     let mut running_dirs: HashSet<String> = HashSet::new();
-    // 注册式浏览器（如紫鸟）产生的实例：key 与所在目录单独收集。
-    // 紫鸟环境由 agent 拉起，进程名 ziniaobrowser.exe，命令行 --profile-directory=Default
-    // （环境目录是独立 Chrome User Data，每目录一个实例），无法用「目录\containerId」精确命中，
-    // 因此按目录前缀匹配；这些目录同时进入 running_dirs 供目录级兜底。
-    let mut custom_running: HashMap<String, Option<u16>> = HashMap::new();
+    // 注册式浏览器（如紫鸟）的运行环境目录 → 端口（每个目录一个独立实例，按目录匹配）
+    let mut custom_dirs: HashMap<String, Option<u16>> = HashMap::new();
 
     for exe_name in &["msedge.exe", "chrome.exe"] {
         let (instances, dirs) = scan_running_browser_instances_with_dirs(exe_name);
@@ -314,7 +311,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         }
     }
 
-    // 注册式浏览器（紫鸟/易得客等）：按其注册的进程名扫描，按目录前缀匹配
+    // 注册式浏览器（紫鸟/易得客等）：按其注册的进程名扫描，按目录匹配
     for bt in registered_browser_types() {
         let Some(proc) = registered_process_name(&bt) else { continue };
         if proc.is_empty()
@@ -323,12 +320,9 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         {
             continue;
         }
-        let (instances, dirs) = scan_running_browser_instances_with_dirs(&proc);
-        for (key, port_opt) in instances {
-            custom_running.entry(key).or_insert(port_opt);
-        }
-        for d in dirs {
-            running_dirs.insert(d.to_lowercase());
+        for (dir, port) in scan_running_custom_dirs(&proc) {
+            custom_dirs.entry(dir.clone()).or_insert(port);
+            running_dirs.insert(dir);
         }
     }
 
@@ -349,26 +343,19 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 running_kind: "own".to_string(),
                 owner_profile_id: None,
             });
-        } else if running_dirs.contains(&user_data_dir.to_lowercase()) {
-            // 注册式浏览器：该目录正在运行（如紫鸟环境目录，每目录一个独立实例），
-            // 视为该 profile（环境）已启动，端口从同目录实例取
-            let custom = custom_running.iter().find(|(k, _)| {
-                k.to_lowercase().starts_with(&format!("{}\\", user_data_dir).to_lowercase())
+        } else if let Some(port_opt) = custom_dirs.get(&user_data_dir.to_lowercase()) {
+            // 注册式浏览器环境目录（如紫鸟店铺环境）：每目录一个独立实例，按目录即已运行
+            let cdp_reachable = port_opt.map_or(false, |p| check_cdp_reachable(p));
+            result.push(BrowserProcessState {
+                user_data_dir: user_data_dir.clone(),
+                profile_id: profile_id.clone(),
+                is_running: true,
+                debug_port: port_opt.map(|p| p.to_string()),
+                cdp_reachable,
+                running_kind: "own".to_string(),
+                owner_profile_id: None,
             });
-            if custom.is_some() {
-                let port = custom.and_then(|(_, p)| *p);
-                let cdp_reachable = port.map_or(false, |p| check_cdp_reachable(p));
-                result.push(BrowserProcessState {
-                    user_data_dir: user_data_dir.clone(),
-                    profile_id: profile_id.clone(),
-                    is_running: true,
-                    debug_port: port.map(|p| p.to_string()),
-                    cdp_reachable,
-                    running_kind: "own".to_string(),
-                    owner_profile_id: None,
-                });
-                continue;
-            }
+        } else if running_dirs.contains(&user_data_dir.to_lowercase()) {
             // 该目录已有浏览器主进程在运行，但该 profile 未精确命中命令行：
             // 可能是同目录多 profile 共享主进程（单实例锁），也可能是默认目录实例。
             // 用 RestartManager 逐 profile 精确探测其目录是否正被浏览器进程持有打开句柄，
@@ -669,6 +656,32 @@ fn scan_running_browser_instances_with_dirs(
         }
     }
     (instances, dirs)
+}
+
+/// 扫描注册式浏览器（如紫鸟）的运行实例：直接按 `--user-data-dir` 建立「目录→端口」映射。
+///
+/// 与 Edge/Chrome 的关键差异：紫鸟环境内核（ziniaobrowser.exe）命令行含
+/// `--user-data-dir` 与 `--remote-debugging-port`，但**不含** `--profile-directory`
+/// （每个环境目录就是一个独立单 profile 的 Chrome User Data），
+/// 无法用「目录\profile」精确命中，因此按目录匹配（每个环境目录 = 一个独立实例）。
+fn scan_running_custom_dirs(exe_name: &str) -> HashMap<String, Option<u16>> {
+    let mut dirs: HashMap<String, Option<u16>> = HashMap::new();
+    for (_exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
+        let args = cmd_args(&cmd_line);
+        // 只保留 browser process：子进程（renderer/gpu 等）都带 --type=
+        if args.iter().any(|a| a.starts_with("--type=")) {
+            continue;
+        }
+        // 跳过后台驻留进程（--no-startup-window），避免误判
+        if args.iter().any(|a| a.starts_with("--no-startup-window")) {
+            continue;
+        }
+        let Some(ud) = extract_cmd_arg(&cmd_line, "--user-data-dir") else { continue };
+        let port = extract_cmd_arg(&cmd_line, "--remote-debugging-port")
+            .and_then(|ps| ps.parse::<u16>().ok());
+        dirs.entry(ud.to_lowercase()).or_insert(port);
+    }
+    dirs
 }
 
 /// 从命令行中提取 (user_data_dir, profile_id, port) 并入 result
