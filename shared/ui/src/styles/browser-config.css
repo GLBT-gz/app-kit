@@ -922,6 +922,16 @@
   line-height: 1.1;
 }
 
+/* 紫鸟主程序入口标签（非店铺环境，排第一位、锁定） */
+.current-card-main-label {
+  font-size: 9px;
+  color: var(--accent);
+  text-align: center;
+  margin-top: 2px;
+  line-height: 1.1;
+  font-weight: 500;
+}
+
 /* 多用户目录警告标记（仅警告图标，无背景） */
 .current-card-warn {
   position: absolute;

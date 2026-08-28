@@ -69,6 +69,12 @@ export async function closeProfileSmart(
 // ── 紫鸟适配（app-kit 内置：ziniao-api 已在此库，无需项目注册） ──
 
 registerBrowserLaunchHandler("ziniao", async (_bt, profileId, _dir, _debugPort) => {
+  // 紫鸟主程序入口（id=Default）：直接打开紫鸟主程序，不视为店铺环境
+  if (profileId === "Default") {
+    const launched = await ziniaoAgentLaunch();
+    return `PID:${launched.pid ?? ""}`;
+  }
+
   const browserId = Number(profileId);
   if (Number.isNaN(browserId)) throw new Error(`无效的紫鸟环境 ID: ${profileId}`);
 

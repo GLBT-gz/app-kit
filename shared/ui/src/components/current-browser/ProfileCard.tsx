@@ -15,6 +15,8 @@ export interface ProfileCardProps {
   isSelected: boolean;
   isDefault: boolean;
   isSibling: boolean;
+  /** 紫鸟主程序入口（非店铺环境）：排第一位、锁定不可选，右键「打开」直接开主程序 */
+  isMainProgram?: boolean;
   /** 多用户目录下的用户总数（用于提示文案） */
   siblingUserCount?: number;
   isLaunching: boolean;
@@ -35,6 +37,7 @@ export const ProfileCard = memo(function ProfileCard({
   isSelected,
   isDefault,
   isSibling,
+  isMainProgram,
   siblingUserCount,
   isLaunching,
   launchStatus,
@@ -48,6 +51,7 @@ export const ProfileCard = memo(function ProfileCard({
   if (isSelected) cls += " current-card--selected";
   if (isDefault) cls += " current-card--default";
   if (isSibling) cls += " current-card--sibling";
+  if (isMainProgram) cls += " current-card--default";
 
   return (
     <button
@@ -58,14 +62,16 @@ export const ProfileCard = memo(function ProfileCard({
       onContextMenu={(e) => {
         onCardContextMenu?.(e, browserType, profile);
       }}
-      // 默认路径卡片不禁用：需保持右键菜单可用（启动/全部终止）；点击选择由父组件拦截提示
+      // 默认路径/主程序卡片不禁用：需保持右键菜单可用（打开/全部终止）；点击选择由父组件拦截提示
       disabled={isLaunching}
       title={
-        isDefault
-          ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
-          : isSibling
-            ? `该目录下共 ${siblingUserCount ?? 2} 个用户 — 同一 user-data-dir 同一时刻只能打开一个实例（单实例锁），建议每个用户使用独立目录`
-            : "选择此浏览器配置"
+        isMainProgram
+          ? "紫鸟主程序 — 浏览器主入口，非店铺环境；右键可打开主程序"
+          : isDefault
+            ? "浏览器默认用户路径 — 基于浏览器安全规范，不可用于自动化控制"
+            : isSibling
+              ? `该目录下共 ${siblingUserCount ?? 2} 个用户 — 同一 user-data-dir 同一时刻只能打开一个实例（单实例锁），建议每个用户使用独立目录`
+              : "选择此浏览器配置"
       }
     >
       {/* 选中标记（先于警告图标渲染，以覆盖） */}
@@ -74,8 +80,8 @@ export const ProfileCard = memo(function ProfileCard({
           <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
         </span>
       )}
-      {/* 默认路径锁定标记 */}
-      {isDefault && (
+      {/* 锁定标记（默认路径 / 紫鸟主程序入口） */}
+      {(isDefault || isMainProgram) && (
         <span className="current-card-lock">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
         </span>
@@ -98,7 +104,7 @@ export const ProfileCard = memo(function ProfileCard({
         </span>
       )}
       {/* 头像 */}
-      <div className={"current-card-avatar" + (isDefault ? " current-card-avatar--dimmed" : "")}>
+      <div className={"current-card-avatar" + (isDefault || isMainProgram ? " current-card-avatar--dimmed" : "")}>
         {profile.avatar_base64 ? (
           <img src={profile.avatar_base64} alt={profile.name} className="current-card-avatar-img" draggable={false} />
         ) : (
@@ -119,12 +125,16 @@ export const ProfileCard = memo(function ProfileCard({
       {isDefault && (
         <div className="current-card-default-label">默认路径·不可用</div>
       )}
+      {/* 紫鸟主程序入口提示 */}
+      {isMainProgram && (
+        <div className="current-card-main-label">主程序入口</div>
+      )}
       {/* 多用户目录警告 */}
       {isSibling && (
         <div className="current-card-sibling-label">多用户目录·受限</div>
       )}
       {/* 单用户目录（完全规范） */}
-      {!isDefault && !isSibling && (
+      {!isDefault && !isMainProgram && !isSibling && (
         <div className="current-card-valid-label">单用户目录·可用</div>
       )}
       {/* 启动中遮罩 */}

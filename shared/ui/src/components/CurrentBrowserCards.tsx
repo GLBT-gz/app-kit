@@ -10,7 +10,7 @@ import {
   type ProfileStatusItem,
 } from "../data/profileStatusStore";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
-import { mkKey, isDefaultUserDir, isMultiUserDir, getSortGroup } from "../utils/profile-rules";
+import { mkKey, isDefaultUserDir, isMultiUserDir, isZiniaoMain, getSortGroup } from "../utils/profile-rules";
 import { debugLaunchWithLockCheck } from "./browserLaunch";
 import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
 
@@ -200,10 +200,14 @@ function CurrentBrowserCards({
       suppressClickRef.current = false;
       return;
     }
-    // 浏览器默认用户路径不可用于自动化控制：点击仅提示，不进入选择逻辑
+    // 浏览器默认用户路径 / 紫鸟主程序入口不可作为自动化控制目标：点击仅提示，不进入选择逻辑
     const b = browsers.find(x => x.browser_type === bt);
     if (b && isDefaultUserDir(b, p)) {
       showToast("浏览器默认用户路径不可用于自动化控制", "warning");
+      return;
+    }
+    if (b && isZiniaoMain(b, p)) {
+      showToast("紫鸟主程序为浏览器入口，非店铺环境；请右键「打开主程序」", "warning");
       return;
     }
     const key = mkKey(bt, p);
@@ -238,6 +242,7 @@ function CurrentBrowserCards({
     if (!onSelectionChange || e.button !== 0) return;
     const b = browsers.find(x => x.browser_type === bt);
     if (b && isDefaultUserDir(b, p)) return; // 锁定卡片不可勾选：退回普通点击（toast 提示）
+    if (b && isZiniaoMain(b, p)) return; // 紫鸟主程序入口锁定不可勾选
     const key = mkKey(bt, p);
     const isSelected = (selectedKeysRef.current || []).includes(key);
     dragRef.current = {
@@ -508,10 +513,11 @@ function CurrentBrowserCards({
                 {displayProfiles.map(p => {
                   const key = mkKey(bt, p);
                   const isDefault = isDefaultUserDir(browser, p);
+                  const isMain = isZiniaoMain(browser, p);
                   const counts = dirProfileCounts[bt];
                   const isSibling = isMultiUserDir(browser, p, counts);
-                  const isSelected = !isDefault && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
-                  const isLaunching = !isDefault && !isSelectMode && !isMultiSelectMode && launching === key;
+                  const isSelected = !isDefault && !isMain && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
+                  const isLaunching = !isDefault && !isMain && !isSelectMode && !isMultiSelectMode && launching === key;
 
                   return (
                     <ProfileCard
@@ -522,6 +528,7 @@ function CurrentBrowserCards({
                       isSelected={isSelected}
                       isDefault={isDefault}
                       isSibling={isSibling}
+                      isMainProgram={isMain}
                       siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
                   launchStatus={profileStatus.launch[key]}

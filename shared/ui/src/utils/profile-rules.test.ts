@@ -12,6 +12,7 @@ import {
   mkKey,
   isDefaultUserDir,
   isMultiUserDir,
+  isZiniaoMain,
   countProfilesPerDir,
   getSortGroup,
   getDirDisplayName,
@@ -112,9 +113,34 @@ describe("countProfilesPerDir", () => {
   });
 });
 
+describe("isZiniaoMain", () => {
+  const ziniao = makeBrowser({ browser_type: "ziniao" });
+
+  it("紫鸟 id=Default → true", () => {
+    expect(isZiniaoMain(ziniao, makeProfile({ id: "Default" }))).toBe(true);
+  });
+
+  it("紫鸟环境（id=containerId）→ false", () => {
+    expect(isZiniaoMain(ziniao, makeProfile({ id: "12345678" }))).toBe(false);
+  });
+
+  it("非紫鸟 → false", () => {
+    expect(isZiniaoMain(makeBrowser(), makeProfile({ id: "Default" }))).toBe(false);
+  });
+});
+
 describe("getSortGroup", () => {
   const b = makeBrowser();
+  const ziniao = makeBrowser({ browser_type: "ziniao" });
   const sharedCounts = { "D:\\shared": 2 };
+
+  it("紫鸟主程序入口 → 0（排最前）", () => {
+    expect(getSortGroup(ziniao, makeProfile({ id: "Default", user_data_dir: ziniao.default_user_data_dir! }), sharedCounts)).toBe(0);
+  });
+
+  it("紫鸟环境 → 2（非默认路径）", () => {
+    expect(getSortGroup(ziniao, makeProfile({ id: "123", user_data_dir: "D:\\env\\chrome_123" }), sharedCounts)).toBe(2);
+  });
 
   it("默认路径 → 0（最前）", () => {
     expect(getSortGroup(b, makeProfile({ user_data_dir: b.default_user_data_dir! }), sharedCounts)).toBe(0);
