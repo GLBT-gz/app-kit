@@ -190,6 +190,7 @@ export {
   useProfileStatusSnapshot,
   useRegisterProfileStatusInterest,
 } from "./data/profileStatusStore";
+export { launchProfileSmart, closeProfileSmart, registerBrowserLaunchHandler, registerBrowserCloseHandler } from "./data/browser-ops";
 export type {
   LaunchStatus,
   ConnectionStatus,

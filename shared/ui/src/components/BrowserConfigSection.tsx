@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, memo, startTransition } from "react";
 import { BrowserConfigPanel, type BCPBrowser } from "./BrowserConfigPanel";
-import { detectCustomProfiles, getLaunchCommand, launchBrowserProfile, openDir, checkPathExists, createNewUserDataDir, createDesktopShortcut } from "../api";
+import { detectCustomProfiles, getLaunchCommand, openDir, checkPathExists, createNewUserDataDir, createDesktopShortcut } from "../api";
+import { launchProfileSmart } from "../data/browser-ops";
 import { open } from "@tauri-apps/plugin-dialog";
 import { safeGetJSON } from "../localStorageKeys";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
@@ -124,7 +125,7 @@ function BrowserConfigSection({
       onDetectProfiles={handleDetectProfiles}
       refreshing={loading}
       onRefreshAll={handleRefresh}
-      onLaunchProfile={launchBrowserProfile}
+      onLaunchProfile={launchProfileSmart}
       onGetLaunchCommand={getLaunchCommand}
       onCreateUserDataDir={createNewUserDataDir}
       onCreateShortcut={createDesktopShortcut}

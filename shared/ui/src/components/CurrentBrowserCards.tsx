@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
 import type { BCPBrowser, BCPProfile } from "./BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { getBrowserIcon } from "../utils/browser-icons";
-import { launchBrowserProfile, killBrowserProfileProcess, killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
+import { killAllBrowserProcesses, getLaunchCommand, createDesktopShortcut } from "../api";
+import { launchProfileSmart, closeProfileSmart } from "../data/browser-ops";
 import {
   useProfileStatusSnapshot,
   useRegisterProfileStatusInterest,
@@ -323,7 +324,7 @@ function CurrentBrowserCards({
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
-      const fn = onLaunchProfile || launchBrowserProfile;
+              const fn = onLaunchProfile || launchProfileSmart;
       const msg = await fn(bt, p.id, p.user_data_dir, 0);
       const pid = msg.replace("PID:", "");
       showToast(`「${p.name}」已启动${pid ? ` (PID: ${pid})` : ""}`, "success");
@@ -344,7 +345,7 @@ function CurrentBrowserCards({
         browserType: bt,
         profiles,
         profile: p,
-        launch: (bt2, id, dir, port) => (onLaunchProfile || launchBrowserProfile)(bt2, id, dir, port),
+        launch: (bt2, id, dir, port) => (onLaunchProfile || launchProfileSmart)(bt2, id, dir, port),
         log: (msg, level) => showToast(msg, level),
       });
       if (!result) return; // 用户取消关闭确认
@@ -366,7 +367,7 @@ function CurrentBrowserCards({
         showToast("该配置与同目录其它配置共享同一浏览器实例，无法单独关闭", "warning");
         return;
       }
-      const msg = await killBrowserProfileProcess(bt, p.id, p.user_data_dir);
+      const msg = await closeProfileSmart(bt, p.id, p.user_data_dir);
       showToast(`「${p.name}」已关闭${msg ? ` (${msg})` : ""}`, "success");
     } catch (e) {
       const err = String(e);
@@ -570,7 +571,7 @@ function CurrentBrowserCards({
             const portNum = Number(portStr) || 0;
             setLaunching(mkKey(cmdModal.browserType, p));
             try {
-              const fn = onLaunchProfile || launchBrowserProfile;
+const fn = onLaunchProfile || launchProfileSmart;
               const msg = await fn(cmdModal.browserType, p.id, p.user_data_dir, portNum);
               const pid = msg.replace("PID:", "");
               showToast(`「${p.name}」已启动${pid ? ` (PID: ${pid})` : ""}`, "success");
