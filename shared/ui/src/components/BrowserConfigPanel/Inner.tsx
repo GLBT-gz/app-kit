@@ -277,7 +277,9 @@ export function BrowserConfigInner({
 
   const profiles = localProfiles;
   const hasProfiles = profiles.length > 0;
-  const filteredProfiles = profiles.filter(p => selectedDirs.includes(p.user_data_dir));
+  // 紫鸟：环境目录直接作为 profile 展示（每环境一卡），不经过「显示目录」筛选
+  const isZiniao = browser.browser_type === 'ziniao';
+  const filteredProfiles = isZiniao ? profiles : profiles.filter(p => selectedDirs.includes(p.user_data_dir));
 
   const addDir = (dir?: string) => {
     const d = dir?.trim() || newDir.trim();
@@ -428,6 +430,8 @@ export function BrowserConfigInner({
             </div>
           </div>
 
+          {/* 紫鸟：环境目录由主程序管理，直接以 profile 卡片展示，不提供手动目录管理 */}
+          {!isZiniao && (
           <div className="config-field">
             <label>用户数据目录</label>
             {userDirs.map((dir, i) => (
@@ -490,6 +494,7 @@ export function BrowserConfigInner({
               )}
             </div>
           </div>
+          )}
 
           {/* ── 易得客专属：配置目录（店铺实际路径 {UserData的父目录}\Profiles，只读） ── */}
           {browser.browser_type === 'edecker' && browser.default_user_data_dir && (() => {

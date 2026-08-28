@@ -12,7 +12,7 @@ use super::browser_process::profile_cache;
 /// 读取浏览器用户配置（增强版）
 /// 结果缓存于进程级 HashMap 中，同一 (user_data_dir, is_edge) 组合避免重复解析磁盘；
 /// 命中前校验 Local State 文件 mtime，文件变化后自动失效重读
-pub(crate) fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
+pub fn read_profiles(user_data_dir: &str, is_edge: bool) -> Vec<ProfileInfo> {
     let local_state_path = Path::new(user_data_dir).join("Local State");
     // 进程级缓存：同一目录 + 同一 is_edge 参数避免重复解析；
     // 命中前校验 Local State 文件 mtime，文件已变化（改名/改头像等）则视为失效重读

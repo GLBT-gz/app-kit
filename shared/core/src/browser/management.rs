@@ -22,13 +22,13 @@ use super::icons::{CHROME_ICO, EDGE_ICO};
 use super::browser_register::{CUSTOM_DETECTORS, custom_detector};
 use super::browser_kill::kill_browser_process_inner;
 use super::browser_paths::{detect_chrome, detect_edge, get_browser_version, get_exe_paths, scan_brand_rpa_dirs, scan_peer_user_data_dirs};
-use super::browser_profiles::read_profiles;
 
 // 重导出子模块公开 API（保持外部路径不变）
 pub use super::browser_register::{BrowserDetector, register_browser_detector, registered_browser_types, registered_process_name};
 pub use super::browser_process::{BrowserProcessState, detect_and_assign_ports, detect_browser_running_processes, is_running_instance_headless, scan_running_browser_instances, scan_running_browser_processes, split_windows_command_line};
 pub use super::browser_kill::kill_browser_by_exe_name;
 pub use super::browser_avatar::ImageData;
+pub use super::browser_profiles::read_profiles;
 
 
 // ============ 公共 API ============
