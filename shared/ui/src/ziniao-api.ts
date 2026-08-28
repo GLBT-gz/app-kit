@@ -264,6 +264,8 @@ export interface ZiniaoAgentBrowser {
   tags: unknown[];
   platform_id: number;
   platform_name: string;
+  /** 服务端未映射的原始字段（可能含店铺头像/图标），原样保留 */
+  extra?: Record<string, unknown>;
 }
 
 /** agent_mode 主程序状态 */
@@ -303,6 +305,16 @@ export async function ziniaoAgentProcStatus(): Promise<ZiniaoAgentStatus> {
 export async function ziniaoAgentBrowserList(port: number): Promise<ZiniaoAgentBrowser[]> {
   if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_browser_list");
   return tauriInvoke("ziniao_agent_browser_list", { port });
+}
+
+/** 诊断：getBrowserList 首项完整原始字段（发现店铺头像等未映射字段） */
+export async function ziniaoAgentRawBrowserList(port: number): Promise<{
+  count: number;
+  first_keys?: string[];
+  first_item?: unknown;
+}> {
+  if (!isTauriRuntime()) throw tauriRuntimeError("ziniao_agent_browser_raw_list");
+  return tauriInvoke("ziniao_agent_browser_raw_list", { port });
 }
 
 /** 直开指定店铺 */

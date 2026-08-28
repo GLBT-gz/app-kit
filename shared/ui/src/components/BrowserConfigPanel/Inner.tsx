@@ -3,8 +3,8 @@ import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
 import { killAllBrowserProcesses } from "../../api";
 import { debugLaunchProfileSmart } from "../../data/browser-ops";
-import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList } from "../../ziniao-api";
-import { setZiniaoEnvMap, type ZiniaoEnvMap } from "../../utils/ziniao-env-map";
+import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoAgentLaunch, ziniaoAgentStatus, ziniaoAgentBrowserList, ziniaoAgentRawBrowserList } from "../../ziniao-api";
+import { setZiniaoEnvMap, pickShopAvatar, type ZiniaoEnvMap } from "../../utils/ziniao-env-map";
 import { refreshBrowserData } from "../../data/browserStore";
 import { Button } from "../controls/Button";
 import type { BCPBrowser, BCPProfile } from "./types";
@@ -215,17 +215,26 @@ export function BrowserConfigInner({
       }
       const list = await ziniaoAgentBrowserList(st.port);
       if (!list.length) { showToast("未获取到店铺列表（请确认已登录后重试）", "warning"); return; }
+      // 诊断：记录原始字段名，便于发现店铺头像等未映射字段（dev 控制台可见）
+      try {
+        const raw = await ziniaoAgentRawBrowserList(st.port);
+        console.log("[ziniao-bind] 原始字段:", raw.first_keys, raw.first_item);
+      } catch { /* 诊断失败不影响主流程 */ }
       const map: ZiniaoEnvMap = {};
+      let avatarCount = 0;
       for (const s of list) {
+        const avatar = pickShopAvatar(s.extra);
+        if (avatar) avatarCount++;
         map[String(s.browserId)] = {
           name: s.browserName,
           platform_name: s.platform_name,
           store_username: s.store_username,
+          avatar,
         };
       }
       setZiniaoEnvMap(map);
       refreshBrowserData(true);
-      showToast(`绑定完成：${list.length} 个店铺已关联到环境目录`, "success");
+      showToast(`绑定完成：${list.length} 个店铺已关联（解析到 ${avatarCount} 个头像）`, "success");
     } catch (e) {
       showToast(`绑定失败: ${e}`, "error");
     } finally {
