@@ -169,7 +169,7 @@ export async function killBrowserProfileProcess(browserType: string, profileId: 
   return pluginInvoke("kill_browser_profile_process", { browserType, profileId, userDataDir });
 }
 
-/** 杀死指定浏览器的所有进程（Edge → msedge.exe, Chrome → chrome.exe, EDecker → edecker.exe） */
+/** 杀死指定浏览器的所有进程（Edge → msedge.exe, Chrome → chrome.exe, 注册式浏览器按其注册的进程名） */
 export async function killAllBrowserProcesses(browserType: string): Promise<string> {
   return pluginInvoke("kill_all_browser_processes", { browserType });
 }

@@ -33,96 +33,7 @@ export {
   testBrowserAutomation,
 } from "./api";
 export type { DataFileEntry, DatabaseFileEntry, DbTableInfo } from "./api";
-export { isTauriRuntime } from "./tauri-utils";
-
-// ── 紫鸟自动化 API（独立模块，保持 api.ts 中性） ──
-export {
-  ziniaoPatchStatus,
-  ziniaoPatchApply,
-  ziniaoListEnvs,
-  ziniaoListTabs,
-  ziniaoOpenTab,
-  ziniaoNavigate,
-  ziniaoActivate,
-  ziniaoEnterShop,
-  ziniaoEval,
-  ziniaoEvalTab,
-  ziniaoEvalAll,
-  ziniaoActivateTarget,
-  ziniaoInsertText,
-  ziniaoKeyTap,
-  ziniaoMouseClick,
-  ziniaoScreenshot,
-  ziniaoAgentLaunch,
-  ziniaoAgentStatus,
-  ziniaoAgentProcStatus,
-  ziniaoAgentStop,
-  ziniaoAgentBrowserList,
-  ziniaoAgentStartBrowser,
-  ziniaoAgentCdpPort,
-  ziniaoAgentRunning,
-  ziniaoAgentClose,
-  ziniaoParseSidebar,
-  ziniaoSwitchMenu,
-  ziniaoSamplePrepare,
-  ziniaoSampleFetchTab,
-  ZINIAO_SAMPLE_TABS,
-  crossBrowserStart,
-  crossBrowserLoginCheck,
-  crossBrowserClose,
-  crossSamplePrepare,
-  crossSampleFetchTab,
-} from "./ziniao-api";
-export type { ZiniaoTab, ZiniaoEnvStatus, ZiniaoEvalResult } from "./ziniao-api";
-export type { ZiniaoAgentBrowser, ZiniaoAgentStatus } from "./ziniao-api";
-export type { ZiniaoSidebarItem, ZiniaoSidebarGroup, ZiniaoSidebarParse, ZiniaoSwitchMenuResult } from "./ziniao-api";
-export type { ZiniaoSampleRow, ZiniaoTabFetchResult, ZiniaoSamplePrepare } from "./ziniao-api";
-export type { CrossStart, CrossLoginStatus } from "./ziniao-api";
-
-// ── 店小秘平台 API（独立模块，保持 api.ts 中性） ──
-export {
-  saveDxmCredentials,
-  loadDxmCredentials,
-  ensureBrowserDianxiaomi,
-  dxmLogin,
-  dxmOpenPage,
-  dxmSubmitVerifyCode,
-  cancelDxmAutomation,
-  dxmMonitorStart,
-  dxmMonitorStatus,
-  dxmMonitorReconnect,
-  dxmListTabs,
-  dxmTabActivate,
-  dxmTabClose,
-  dxmTabOpen,
-  dxmTabRename,
-} from "./dxm-api";
-export type { DxmCredentials, DxmBrowserOpts, DxmTabInfo } from "./dxm-api";
-
-// ── 多维表格平台 API（独立模块，保持 api.ts 中性） ──
-export {
-  testKdocsOpen,
-  testKdocsSidebar,
-  testKdocsParseScripts,
-  testKdocsRunScript,
-  cancelKdocs,
-} from "./kdocs-api";
-export type { KdocsBrowserOpts } from "./kdocs-api";
-
-// ── Temu 平台 API（独立模块，保持 api.ts 中性） ──
-export {
-  loadTemuCachedShops,
-  testTemuAutoLogin,
-  testTemuClosePopups,
-  testTemuGetShops,
-  testTemuSwitchShop,
-  testTemuNavigateMenu,
-} from "./temu-api";
-export type { TemuBrowserOpts, TemuPlatform, TemuCachedShop } from "./temu-api";
-
-// ── 海多客平台 API（独立模块，保持 api.ts 中性） ──
-export { testHaiduokeOpenLogin } from "./haiduoke-api";
-export type { HaiduokeBrowserOpts } from "./haiduoke-api";
+export { isTauriRuntime, tauriRuntimeError, tauriInvoke, pluginInvoke } from "./tauri-utils";
 
 // Components
 export { AppLayout } from "./components/AppLayout";
@@ -186,15 +97,14 @@ export { useBrowserBaseData } from "./hooks/useBrowserBaseData";
 export type { BrowserBaseData } from "./hooks/useBrowserBaseData";
 export { useBrowserSettingsTabs } from "./hooks/useBrowserSettingsTabs";
 export type { BrowserSettingsTabsOptions, SelectedProfile } from "./hooks/useBrowserSettingsTabs";
-export { refreshBrowserData, useBrowserStore } from "./data/browserStore";
-export { syncZiniaoShopNames } from "./data/ziniaoSync";
+export { refreshBrowserData, useBrowserStore, registerBrowserTransform } from "./data/browserStore";
+export { registerBrowserUIExtension, getBrowserUIExtension, managesOwnProfiles } from "./data/browser-extensions";
+export type { BrowserUIExtension, BrowserUIExtensionCtx } from "./data/browser-extensions";
 export {
   useProfileStatusSnapshot,
   useRegisterProfileStatusInterest,
 } from "./data/profileStatusStore";
-export { launchProfileSmart, closeProfileSmart, debugLaunchProfileSmart, registerBrowserLaunchHandler, registerBrowserCloseHandler } from "./data/browser-ops";
-export { useZiniaoMainStatus } from "./data/ziniaoStatus";
-export type { ZiniaoMainStatus } from "./data/ziniaoStatus";
+export { launchProfileSmart, closeProfileSmart, debugLaunchProfileSmart, registerBrowserLaunchHandler, registerBrowserCloseHandler, registerBrowserDebugLaunchHandler, isManagedBrowserType } from "./data/browser-ops";
 export type {
   LaunchStatus,
   ConnectionStatus,
@@ -205,8 +115,6 @@ export { usePlatformOptions } from "./hooks/usePlatformOptions";
 export { usePlatformSelections } from "./hooks/usePlatformSelections";
 export { useBrowserProfilesCache } from "./hooks/useBrowserProfilesCache";
 export { useWheelTabSwitch } from "./hooks/useWheelTabSwitch";
-export { useZiniaoAgent } from "./hooks/useZiniaoAgent";
-export type { UseZiniaoAgentReturn, ZnLogFn, SetShopState } from "./hooks/useZiniaoAgent";
 export { resolvePlatformBrowser, usePlatformBrowserInfo } from "./hooks/usePlatformBrowserInfo";
 export type { CachedPlatformProfile, ProfilesCache } from "./hooks/usePlatformBrowserInfo";
 export { useLogWidthPct, LOG_WIDTH_DEFAULT_PCT } from "./hooks/useLogWidthPct";
@@ -223,8 +131,6 @@ export {
 } from "./localStorageKeys";
 export { populateBrowserIcons, getBrowserIcon, stripBrowserCache } from "./utils/browser-icons";
 export { compareBrowserDisplayName } from "./utils/display-sort";
-export { getZiniaoEnvMap, setZiniaoEnvMap, applyZiniaoEnvNames, deriveZiniaoAgentBrowsers } from "./utils/ziniao-env-map";
-export type { ZiniaoEnvMap, ZiniaoEnvInfo } from "./utils/ziniao-env-map";
 
 // 数据管理
 export { DataManagerPanel } from "./components/DataManagerPanel";
@@ -275,21 +181,3 @@ export type { AutomationSettingsProps } from "./components/AutomationSettings";
 
 export { ContextMenu, openContextMenu, CTX_MENU_EVENT } from "./components/ContextMenu";
 export type { ContextMenuItem } from "./components/ContextMenu";
-
-// ── 紫鸟自动化 ──
-export { ZiniaoStoreList } from "./components/ziniao/ZiniaoStoreList";
-export type { ZiniaoStoreListProps } from "./components/ziniao/ZiniaoStoreList";
-export { ZiniaoTestPanel } from "./components/ziniao/ZiniaoTestPanel";
-export type { ZiniaoPanelCtx, ZiniaoPatchInfo } from "./components/ziniao/ZiniaoTestPanel";
-
-// ── 平台测试面板（按平台收拢，多项目共享） ──
-export { DxmTestPanel } from "./components/platform-test/DxmTestPanel";
-export type { DxmTestPanelProps, PlatformTestCtx } from "./components/platform-test/DxmTestPanel";
-export { KdocsTestPanel } from "./components/platform-test/KdocsTestPanel";
-export type { KdocsTestPanelProps, KdocsPanelModule } from "./components/platform-test/KdocsTestPanel";
-export { TemuTestPanel } from "./components/platform-test/TemuTestPanel";
-export type { TemuTestPanelProps } from "./components/platform-test/TemuTestPanel";
-export { HaiduokeTestPanel } from "./components/platform-test/HaiduokeTestPanel";
-export type { HaiduokeTestPanelProps } from "./components/platform-test/HaiduokeTestPanel";
-export { PLATFORM_TEST_REGISTRY } from "./components/platform-test/registry";
-export type { PlatformTestRecord, PlatformTestCommand } from "./components/platform-test/registry";

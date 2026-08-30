@@ -8,7 +8,7 @@ use tracing::info;
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 设置配置存储目录。
-/// 每个使用 glbt_core 的项目应在 setup 阶段调用此函数，
+/// 每个使用 appkit_core 的项目应在 setup 阶段调用此函数，
 /// 使用 Tauri 的 `app.path().app_data_dir()` 作为参数。
 pub fn set_config_dir(dir: PathBuf) {
     CONFIG_DIR.set(dir).unwrap_or_else(|_| {

@@ -6,12 +6,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 // ── 自定义浏览器检测器注册表（注册式） ──
 
-/// 自定义浏览器检测器：由业务项目注册（如 003 注册易得客6）
+/// 自定义浏览器检测器：由业务项目注册（注册式扩展点）
 #[derive(Clone)]
 pub struct BrowserDetector {
     /// 生成完整浏览器信息（含 exe 路径、用户数据目录、版本、children 等）
     pub detect: Arc<dyn Fn() -> BrowserInfo + Send + Sync>,
-    /// 浏览器进程名（用于 kill 全部进程），如 "edecker.exe"
+    /// 浏览器进程名（用于 kill 全部进程），如 "custom.exe"
     pub process_name: Arc<dyn Fn() -> String + Send + Sync>,
 }
 

@@ -1,4 +1,4 @@
-// 开关（滑块开关）：替代各项目手写的 temu-toggle / inventory-wh-toggle span 模拟开关
+// 开关（滑块开关）：替代各项目手写的自定义模拟开关
 // 主题变量样式见 styles/controls.css
 //
 // 交互说明：

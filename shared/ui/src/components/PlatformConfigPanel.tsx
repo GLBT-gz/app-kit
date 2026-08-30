@@ -22,16 +22,16 @@ import { CustomSelect } from "./CustomSelect";
 // ── 类型定义 ──
 
 export interface PlatformDef {
-  /** 平台唯一标识（如 "temu-gz"） */
+  /** 平台唯一标识 */
   key: string;
-  /** 平台显示名称（如 "Temu 广州"） */
+  /** 平台显示名称 */
   label: string;
 }
 
 export interface BrowserOption {
   key: string;
   displayName: string;
-  /** 浏览器类型（edge/chrome/edecker/ziniao 等），用于选项排序 */
+  /** 浏览器类型（edge/chrome 或注册类型），用于选项排序 */
   bt?: string;
 }
 

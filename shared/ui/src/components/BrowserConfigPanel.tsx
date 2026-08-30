@@ -8,7 +8,6 @@
 //   - BrowserConfigPanel/Inner.tsx        浏览器配置详情（路径/目录/Profile 管理）
 //   - BrowserConfigPanel/ProfileCard.tsx  用户配置卡片
 //   - BrowserConfigPanel/ChildWindows.tsx 子浏览器窗口列表
-//   - BrowserConfigPanel/ZiniaoPatchCard.tsx 紫鸟 CDP 补丁卡片
 //   - BrowserConfigPanel/CommandModal.tsx 启动命令弹窗
 //   - BrowserConfigPanel/NewUserModal.tsx 新增用户弹窗
 //

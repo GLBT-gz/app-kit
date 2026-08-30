@@ -49,7 +49,7 @@ export interface ShopListPanelProps {
   /** 每行操作按钮区（渲染在信息区与开关之间，如「打开/激活」） */
   renderAction?: (shop: ShopListShop) => ReactNode;
   emptyText?: string;
-  /** 额外 CSS class（追加到根 .temu-shop-section） */
+  /** 额外 CSS class（追加到根 .shop-section） */
   className?: string;
 }
 
@@ -215,42 +215,42 @@ export function ShopListPanel({
   }, [onToggle, onBatchEnd]);
 
   return (
-    <div className={`temu-shop-section${className ? ` ${className}` : ""}`}>
-      <div className="temu-card-header">
-        <span className="temu-card-title">{title}</span>
-        <span className="temu-card-count">{orderedShops.length}</span>
-        <button className="temu-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
+    <div className={`shop-section${className ? ` ${className}` : ""}`}>
+      <div className="shop-card-header">
+        <span className="shop-card-title">{title}</span>
+        <span className="shop-card-count">{orderedShops.length}</span>
+        <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
         {showBulkButtons && (
           <>
-            <button className="temu-default-select-btn" onClick={() => { orderedShops.forEach(s => { if (s.entity) onToggle(s.mall_name, true); }); }} title="仅选择已配置主体的店铺">默认选择</button>
-            <button className="temu-select-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, true)); }} title="全选">全选</button>
-            <button className="temu-deselect-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, false)); }} title="全不选">全不选</button>
+            <button className="shop-default-select-btn" onClick={() => { orderedShops.forEach(s => { if (s.entity) onToggle(s.mall_name, true); }); }} title="仅选择已配置主体的店铺">默认选择</button>
+            <button className="shop-select-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, true)); }} title="全选">全选</button>
+            <button className="shop-deselect-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, false)); }} title="全不选">全不选</button>
           </>
         )}
-        {hint && <span className="temu-card-hint">{hint}</span>}
+        {hint && <span className="shop-card-hint">{hint}</span>}
       </div>
-      <div className="temu-shop-list" ref={shopTableRef}
+      <div className="shop-list" ref={shopTableRef}
         onMouseMove={handleListMouseMove} onMouseUp={handleListMouseUp} onMouseLeave={handleListMouseUp}
       >
         {orderedShops.length === 0 ? (
-          <div className="temu-shop-empty">{emptyText}</div>
+          <div className="shop-empty">{emptyText}</div>
         ) : (
           orderedShops.flatMap((s, i) => [
             <div key={`gap-${i}`} className={`drop-indicator${dropIdx === i ? " active" : ""}`} />,
             <div key={s.mall_id || s.mall_name}
-              className={`temu-shop-item${!enabledMap[s.mall_name] ? " disabled" : ""}${draggingName === s.mall_name ? " dragging" : ""}`}
+              className={`shop-item${!enabledMap[s.mall_name] ? " disabled" : ""}${draggingName === s.mall_name ? " dragging" : ""}`}
               data-shop-name={s.mall_name}
             >
-              <div className="temu-shop-drag-handle" onMouseDown={(e) => handleDotMouseDown(s.mall_name, e)}>⠿</div>
-              <div className="temu-shop-info">
-                <div className="temu-shop-name">
+              <div className="shop-drag-handle" onMouseDown={(e) => handleDotMouseDown(s.mall_name, e)}>⠿</div>
+              <div className="shop-info">
+                <div className="shop-name">
                   {s.mall_name}
                   {currentShop === s.mall_name && <span className="shop-running-indicator">▶ 处理中</span>}
                 </div>
-                <div className="temu-shop-meta">
-                  <span className="temu-shop-sub">{(s.alias || s.mall_name)}{s.owner ? ` · ${s.owner}` : ""}</span>
-                  {showNoEntity && !s.entity && <span className="temu-no-entity">未配置主体</span>}
-                  {shopSummaries?.[s.mall_name] && <span className="temu-shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
+                <div className="shop-meta">
+                  <span className="shop-sub">{(s.alias || s.mall_name)}{s.owner ? ` · ${s.owner}` : ""}</span>
+                  {showNoEntity && !s.entity && <span className="shop-no-entity">未配置主体</span>}
+                  {shopSummaries?.[s.mall_name] && <span className="shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
                 </div>
               </div>
               {renderAction?.(s)}

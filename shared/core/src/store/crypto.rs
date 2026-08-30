@@ -7,7 +7,7 @@
 //! ## 使用示例
 //!
 //! ```ignore
-//! use glbt_core::store::crypto;
+//! use appkit_core::store::crypto;
 //!
 //! let password_enc = crypto::encrypt_password("mypassword", MY_SECRET)?;
 //! let password_dec = crypto::decrypt_password(&password_enc, MY_SECRET)?;

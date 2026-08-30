@@ -15,29 +15,32 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// 浏览器类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum BrowserType {
     Edge,
     Chrome,
-    /// 易得客（Chromium 内核商业浏览器，公司专用）
-    EDecker,
+    /// 注册式自定义浏览器类型：类型字符串由业务侧注册/传入，框架保持中性
+    Registered(String),
 }
 
 impl BrowserType {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             BrowserType::Edge => "edge",
             BrowserType::Chrome => "chrome",
-            BrowserType::EDecker => "edecker",
+            BrowserType::Registered(name) => name,
         }
     }
 
-    pub fn process_name(&self) -> &'static str {
+    pub fn process_name(&self) -> String {
         match self {
-            BrowserType::Edge => "msedge.exe",
-            BrowserType::Chrome => "chrome.exe",
-            BrowserType::EDecker => "edecker.exe",
+            BrowserType::Edge => "msedge.exe".to_string(),
+            BrowserType::Chrome => "chrome.exe".to_string(),
+            // 注册式浏览器的进程名由业务侧注册（kill 全部进程等场景）
+            BrowserType::Registered(name) => {
+                browser_register::registered_process_name(name).unwrap_or_default()
+            }
         }
     }
 
@@ -46,7 +49,8 @@ impl BrowserType {
         match self {
             BrowserType::Edge => local.join("Microsoft").join("Edge").join("User Data"),
             BrowserType::Chrome => local.join("Google").join("Chrome").join("User Data"),
-            BrowserType::EDecker => local.join("eDecker6").join("User Data"),
+            // 注册式浏览器的主程序/环境目录由业务侧检测器提供，框架不做假设
+            BrowserType::Registered(_) => PathBuf::new(),
         }
     }
 }

@@ -12,4 +12,3 @@ pub mod crypto;
 pub mod encrypted;
 pub mod json;
 pub mod shop_cache;
-pub mod yideke_shop_cache;

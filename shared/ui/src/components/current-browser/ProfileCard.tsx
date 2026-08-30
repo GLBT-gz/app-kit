@@ -125,7 +125,7 @@ export const ProfileCard = memo(function ProfileCard({
       {isDefault && (
         <div className="current-card-default-label">默认路径·不可用</div>
       )}
-      {/* 紫鸟主程序入口提示 */}
+      {/* 主程序入口提示 */}
       {isMainProgram && (
         <div className="current-card-main-label">主程序入口</div>
       )}

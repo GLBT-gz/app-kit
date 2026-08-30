@@ -20,7 +20,20 @@ import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import { safeGetJSON, safeSetJSON } from "../localStorageKeys";
 import { populateBrowserIcons, stripBrowserCache } from "../utils/browser-icons";
 import { toBCPBrowser } from "../utils/browser-mapping";
-import { applyZiniaoEnvNames } from "../utils/ziniao-env-map";
+
+/** 浏览器列表后处理钩子（业务侧可注册，如按外部映射覆盖环境显示名） */
+type BrowserTransform = (browser: BCPBrowser) => BCPBrowser;
+
+const browserTransforms: BrowserTransform[] = [];
+
+/** 注册浏览器列表后处理钩子（刷新时按注册顺序依次应用） */
+export function registerBrowserTransform(fn: BrowserTransform): void {
+  browserTransforms.push(fn);
+}
+
+function applyBrowserTransforms(b: BCPBrowser): BCPBrowser {
+  return browserTransforms.reduce((acc, fn) => fn(acc), b);
+}
 
 const LS_BROWSERS = "core-browsers-cache";
 const LS_EXE_PATHS = "core-cfg-exe-paths";
@@ -162,7 +175,7 @@ export function refreshBrowserData(force = false): Promise<void> {
         const dirs = (dirsByType[bt] && dirsByType[bt].length > 0)
           ? dirsByType[bt]
           : (b.user_data_dirs || []);
-        // 注册式专用浏览器（易得客店铺 / 紫鸟环境）以 children 展示，主配置由
+        // 注册式专用浏览器（其店铺/环境窗口）以 children 展示，主配置由
         // Rust 端 detect 提供：不随 user_data_dirs 重新读取 profiles，
         // 避免历史缓存的目录列表被误当作多用户 profile 覆盖主配置
         if (b.children && b.children.length > 0) return b;
@@ -221,8 +234,8 @@ export function refreshBrowserData(force = false): Promise<void> {
         }
       }
 
-      // 4) 紫鸟环境店铺名：按 core-ziniao-env-map 覆盖（登录绑定后生效，见 utils/ziniao-env-map.ts）
-      const mergedWithNames = merged.map(applyZiniaoEnvNames);
+      // 4) 业务侧后处理（如按外部映射覆盖环境显示名，见 registerBrowserTransform）
+      const mergedWithNames = merged.map(applyBrowserTransforms);
 
       populateBrowserIcons(mergedWithNames);
       safeSetJSON(LS_BROWSERS, stripBrowserCache(mergedWithNames));

@@ -1,12 +1,10 @@
-//! 店铺缓存（Temu + 易得客 统一存储）
+//! 店铺缓存（多平台店铺统一存储）
 //!
 //! 获取店铺列表后自动缓存到 `shop_cache.json`。
 //! 用户可编辑所属人、别名、备注，保存在同一文件中。
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-
-use super::yideke_shop_cache::YidekeCachedShop;
 
 /// 单个缓存店铺
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,7 +39,7 @@ impl Default for SortRule {
     }
 }
 
-/// 店铺缓存（Temu + 易得客 统一结构）
+/// 店铺缓存（多平台店铺统一结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShopCache {
     pub gz_shops: Vec<CachedShop>,
@@ -50,9 +48,6 @@ pub struct ShopCache {
     pub gz_sort: SortRule,
     #[serde(default)]
     pub hk_sort: SortRule,
-    /// 易得客店铺列表
-    #[serde(default)]
-    pub yideke_shops: Vec<YidekeCachedShop>,
 }
 
 impl Default for ShopCache {
@@ -62,7 +57,6 @@ impl Default for ShopCache {
             hk_shops: Vec::new(),
             gz_sort: SortRule::default(),
             hk_sort: SortRule::default(),
-            yideke_shops: Vec::new(),
         }
     }
 }

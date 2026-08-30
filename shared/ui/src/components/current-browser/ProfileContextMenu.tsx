@@ -8,7 +8,7 @@
 
 import { useState, useEffect, memo } from "react";
 import type { BCPBrowser, BCPProfile } from "../BrowserConfigPanel";
-import { isDefaultUserDir, isZiniaoMain } from "../../utils/profile-rules";
+import { isDefaultUserDir, isMainEntryProfile } from "../../utils/profile-rules";
 
 /** 右键菜单事件名 */
 export const CTX_MENU_EVENT = "appkit:profile-ctx-menu";
@@ -83,9 +83,9 @@ export const ProfileContextMenu = memo(function ProfileContextMenu({
   const { x, y, bt, p } = menu;
   const ctxBrowser = browsers.find(b => b.browser_type === bt);
   const ctxIsDefault = ctxBrowser ? isDefaultUserDir(ctxBrowser, p) : false;
-  const ctxIsMain = ctxBrowser ? isZiniaoMain(ctxBrowser, p) : false;
+  const ctxIsMain = ctxBrowser ? isMainEntryProfile(ctxBrowser, p) : false;
   // 菜单高度按项数估算（每项约 32px + 上下 padding 8px），与通用 ContextMenu 保持一致
-  // 紫鸟主程序入口：打开主程序（1 项）；默认目录：启动/全部终止/命令/快捷方式（4 项）；
+  // 主程序入口：打开主程序（1 项）；默认目录：启动/全部终止/命令/快捷方式（4 项）；
   // 普通：打开/调试打开/关闭/命令/快捷方式（5 项）
   const itemCount = ctxIsMain ? 1 : ctxIsDefault ? 4 : 5;
   const menuHeight = itemCount * 32 + 8;
@@ -104,7 +104,7 @@ export const ProfileContextMenu = memo(function ProfileContextMenu({
         <button
           className="ctx-item"
           onClick={() => run(onOpen)}
-          title="打开紫鸟主程序（浏览器主入口，非店铺环境）"
+          title="打开主程序（浏览器主入口，非可控环境）"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
           打开主程序

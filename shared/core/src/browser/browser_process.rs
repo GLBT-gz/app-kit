@@ -320,7 +320,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         }
     }
 
-    // 注册式浏览器（紫鸟/易得客等）：按其注册的进程名扫描，按目录匹配
+    // 注册式浏览器（由业务侧注册）：按其注册的进程名扫描，按目录匹配
     for bt in registered_browser_types() {
         let Some(proc) = registered_process_name(&bt) else { continue };
         if proc.is_empty()
@@ -353,7 +353,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 owner_profile_id: None,
             });
         } else if let Some(port_opt) = custom_dirs.get(&user_data_dir.to_lowercase()) {
-            // 注册式浏览器环境目录（如紫鸟店铺环境）：每目录一个独立实例，按目录即已运行
+            // 注册式浏览器环境目录（如店铺环境）：每目录一个独立实例，按目录即已运行
             let cdp_reachable = port_opt.map_or(false, |p| check_cdp_reachable(p));
             result.push(BrowserProcessState {
                 user_data_dir: user_data_dir.clone(),
@@ -667,14 +667,14 @@ fn scan_running_browser_instances_with_dirs(
     (instances, dirs)
 }
 
-/// 扫描注册式浏览器（如紫鸟）的运行实例：直接按 `--user-data-dir` 建立「目录→端口」映射。
+/// 扫描注册式浏览器的运行实例：直接按 `--user-data-dir` 建立「目录→端口」映射。
 ///
-/// 与 Edge/Chrome 的关键差异：紫鸟环境内核（ziniaobrowser.exe）命令行含
+/// 与 Edge/Chrome 的关键差异：注册式浏览器内核命令行含
 /// `--user-data-dir` 但**不含** `--profile-directory`（每个环境目录就是一个独立单 profile
 /// 的 Chrome User Data），无法用「目录\profile」精确命中，因此按目录匹配。
 ///
 /// 端口解析两级：优先命令行 `--remote-debugging-port`；缺失时（新架构端口随机，见
-/// platform-ziniao agent::find_cdp_port）扫描内核进程的 127.0.0.1 监听端口，
+/// 业务侧 agent 的端口探测）扫描内核进程的 127.0.0.1 监听端口，
 /// 取 TCP 可连者为 CDP 端口。
 fn scan_running_custom_dirs(exe_name: &str) -> HashMap<String, Option<u16>> {
     let mut dirs: HashMap<String, Option<u16>> = HashMap::new();

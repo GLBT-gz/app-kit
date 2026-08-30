@@ -3,10 +3,11 @@ import { useTableSelectionCopy } from "./table";
 
 /**
  * SheetTable —— 二维字符串数组表格（headers: string[] + rows: string[][]），
- * 收敛 002/003 各页面的 temu-merged-table 内联实现。
+ * 收敛各项目页面的内联表格实现。
  * 内置：单元格框选 + Ctrl+C 复制（容器级事件委托，td 带 data-r/data-c）、
  * 可选虚拟滚动（spacer 切片式，大表）、可选序号列、可选 Delete 删行、sticky 表头。
- * 样式沿用项目本地 temu-table-* 类名（002/003 样式有差异，不收敛 CSS，保证视觉零变化）。
+ * 样式类名通过 scrollClassName/tableClassName/emptyClassName/copyTipClassName 传入
+ * （框架默认中性类名，业务侧可传自己的项目本地类名，保证视觉零变化）。
  */
 export interface SheetTableProps {
   headers: string[];
@@ -20,17 +21,25 @@ export interface SheetTableProps {
   cellClassName?: (value: string, r: number, c: number, row: string[]) => string | undefined;
   /** 覆盖单元格渲染（tooltip span / 着色 JSX） */
   cellContent?: (value: string, r: number, c: number, row: string[]) => React.ReactNode;
-  /** 框选后按 Delete/Backspace 删除选中行区间（002 weekly/dianxiaomi） */
+  /** 框选后按 Delete/Backspace 删除选中行区间 */
   onDeleteSelection?: (r1: number, r2: number) => void;
   /** 附加到 scroll 容器（如 `rules-content`、显隐控制类） */
   className?: string;
+  /** scroll 容器基础类名（业务侧可传项目本地类名；默认框架中性类名） */
+  scrollClassName?: string;
+  /** table 元素类名（业务侧可传项目本地类名；默认框架中性类名） */
+  tableClassName?: string;
+  /** 空状态容器类名（业务侧可传项目本地类名；默认框架中性类名） */
+  emptyClassName?: string;
   /** 复制提示浮层的类名（各项目样式类不同） */
   copyTipClassName?: string;
 }
 
 export function SheetTable({
   headers, rows, virtual = false, showRowNum = false, emptyText = "暂无数据",
-  rowClassName, cellClassName, cellContent, onDeleteSelection, className, copyTipClassName = "temu-copy-tip",
+  rowClassName, cellClassName, cellContent, onDeleteSelection, className,
+  scrollClassName = "sheet-table-scroll", tableClassName = "sheet-table", emptyClassName = "sheet-table-empty",
+  copyTipClassName = "sheet-table-copy-tip",
 }: SheetTableProps) {
   const ROW_HEIGHT = 30;
   const OVERSCAN = 10;
@@ -127,16 +136,16 @@ export function SheetTable({
 
   if (rows.length === 0) {
     return (
-      <div className={`temu-table-empty ${className ?? ""}`}>
+      <div className={`${emptyClassName} ${className ?? ""}`}>
         {emptyText}
       </div>
     );
   }
 
   return (
-    <div className={`temu-table-scroll ${className ?? ""}`} ref={containerRef} onScroll={handleScroll}
+    <div className={`${scrollClassName} ${className ?? ""}`} ref={containerRef} onScroll={handleScroll}
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
-      <table className="temu-merged-table">
+      <table className={tableClassName}>
         <thead ref={theadRef}>
           <tr>
             {showRowNum && <th style={virtual ? { height: ROW_HEIGHT } : undefined}>#</th>}

@@ -41,7 +41,7 @@ impl Logger {
         }
     }
 
-    /// 设置日志前缀（如 `"[Temu] "`）
+    /// 设置日志前缀（如 `"[App] "`）
     pub fn with_prefix(mut self, prefix: &str) -> Self {
         self.prefix = prefix.to_string();
         self

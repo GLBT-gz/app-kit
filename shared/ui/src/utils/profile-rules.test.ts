@@ -12,12 +12,27 @@ import {
   mkKey,
   isDefaultUserDir,
   isMultiUserDir,
-  isZiniaoMain,
+  isMainEntryProfile,
   countProfilesPerDir,
   getSortGroup,
   getDirDisplayName,
 } from "./profile-rules";
 import type { BCPBrowser, BCPProfile } from "../components/BrowserConfigPanel";
+import { registerBrowserUIExtension } from "../data/browser-extensions";
+
+// 测试用托管型浏览器扩展（框架本身不含具体平台知识，此处模拟业务侧注册）
+const MANAGED_A = "managed-a";
+const MANAGED_B = "managed-b";
+registerBrowserUIExtension({
+  browserType: MANAGED_A,
+  managesOwnProfiles: true,
+  isMainEntry: (id) => id === "Default",
+});
+registerBrowserUIExtension({
+  browserType: MANAGED_B,
+  managesOwnProfiles: true,
+  isMainEntry: (id) => id === "Default",
+});
 
 function makeBrowser(overrides: Partial<BCPBrowser> = {}): BCPBrowser {
   return {
@@ -64,7 +79,7 @@ describe("isDefaultUserDir", () => {
     expect(isDefaultUserDir(makeBrowser({ default_user_data_dir: undefined }), makeProfile())).toBe(false);
   });
 
-  it.each(["edecker", "ziniao"])("%s 的默认路径视为可用主配置 → false", (bt) => {
+  it.each([MANAGED_A, MANAGED_B])("%s 的默认路径视为可用主配置 → false", (bt) => {
     const special = makeBrowser({ browser_type: bt });
     expect(isDefaultUserDir(special, makeProfile({ user_data_dir: b.default_user_data_dir }))).toBe(false);
   });
@@ -92,7 +107,7 @@ describe("isMultiUserDir", () => {
     expect(isMultiUserDir(b, p, { [p.user_data_dir]: 5 })).toBe(false);
   });
 
-  it.each(["edecker", "ziniao"])("%s 不适用多用户限制", (bt) => {
+  it.each([MANAGED_A, MANAGED_B])("%s 不适用多用户限制", (bt) => {
     const special = makeBrowser({ browser_type: bt });
     expect(isMultiUserDir(special, makeProfile({ user_data_dir: dir }), counts)).toBe(false);
   });
@@ -113,33 +128,33 @@ describe("countProfilesPerDir", () => {
   });
 });
 
-describe("isZiniaoMain", () => {
-  const ziniao = makeBrowser({ browser_type: "ziniao" });
+describe("isMainEntryProfile", () => {
+  const managed = makeBrowser({ browser_type: MANAGED_A });
 
-  it("紫鸟 id=Default → true", () => {
-    expect(isZiniaoMain(ziniao, makeProfile({ id: "Default" }))).toBe(true);
+  it("托管型 id=Default → true", () => {
+    expect(isMainEntryProfile(managed, makeProfile({ id: "Default" }))).toBe(true);
   });
 
-  it("紫鸟环境（id=containerId）→ false", () => {
-    expect(isZiniaoMain(ziniao, makeProfile({ id: "12345678" }))).toBe(false);
+  it("托管型环境（id=containerId）→ false", () => {
+    expect(isMainEntryProfile(managed, makeProfile({ id: "12345678" }))).toBe(false);
   });
 
-  it("非紫鸟 → false", () => {
-    expect(isZiniaoMain(makeBrowser(), makeProfile({ id: "Default" }))).toBe(false);
+  it("未注册扩展的浏览器 → false", () => {
+    expect(isMainEntryProfile(makeBrowser(), makeProfile({ id: "Default" }))).toBe(false);
   });
 });
 
 describe("getSortGroup", () => {
   const b = makeBrowser();
-  const ziniao = makeBrowser({ browser_type: "ziniao" });
+  const managed = makeBrowser({ browser_type: MANAGED_A });
   const sharedCounts = { "D:\\shared": 2 };
 
-  it("紫鸟主程序入口 → 0（排最前）", () => {
-    expect(getSortGroup(ziniao, makeProfile({ id: "Default", user_data_dir: ziniao.default_user_data_dir! }), sharedCounts)).toBe(0);
+  it("主程序入口 → 0（排最前）", () => {
+    expect(getSortGroup(managed, makeProfile({ id: "Default", user_data_dir: managed.default_user_data_dir! }), sharedCounts)).toBe(0);
   });
 
-  it("紫鸟环境 → 2（非默认路径）", () => {
-    expect(getSortGroup(ziniao, makeProfile({ id: "123", user_data_dir: "D:\\env\\chrome_123" }), sharedCounts)).toBe(2);
+  it("托管型环境 → 2（非默认路径）", () => {
+    expect(getSortGroup(managed, makeProfile({ id: "123", user_data_dir: "D:\\env\\chrome_123" }), sharedCounts)).toBe(2);
   });
 
   it("默认路径 → 0（最前）", () => {

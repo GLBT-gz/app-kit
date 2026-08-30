@@ -3,7 +3,6 @@
 @import "./controls.css";
 @import "./log-panel.css";
 @import "./test-layout.css";
-@import "./platform-test.css";
 @import "./topbar.css";
 @import "./browser-config.css";
 @import "./settings.css";
@@ -11,4 +10,3 @@
 @import "./shop-list.css";
 @import "./about-panel.css";
 @import "./shortcuts.css";
-@import "./ziniao.css";

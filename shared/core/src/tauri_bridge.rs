@@ -36,7 +36,7 @@ async fn detect_browsers() -> Vec<crate::browser::BrowserInfo> {
     management::detect_all_browsers()
 }
 
-/// 返回当前支持的（已注册）浏览器类型：内置 edge/chrome + 业务项目注册的类型（如 edecker）
+/// 返回当前支持的（已注册）浏览器类型：内置 edge/chrome + 业务项目注册的类型
 #[cfg(feature = "cmd-browser")]
 #[tauri::command]
 fn detect_browser_types() -> Vec<String> {
@@ -159,7 +159,7 @@ fn kill_all_browser_processes(browser_type: String) -> Result<String, String> {
     let exe_name = match browser_type.as_str() {
         "edge" => "msedge.exe".to_string(),
         "chrome" => "chrome.exe".to_string(),
-        // 注册式：自定义浏览器类型的进程名由业务项目注册（如 003 的易得客 → edecker.exe）
+        // 注册式：自定义浏览器类型的进程名由业务项目注册
         _ => {
             if let Some(name) = management::registered_process_name(&browser_type) {
                 name

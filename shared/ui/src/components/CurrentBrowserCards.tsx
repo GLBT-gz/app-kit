@@ -8,11 +8,10 @@ import {
   useRegisterProfileStatusInterest,
   type ProfileStatusItem,
 } from "../data/profileStatusStore";
-import { useZiniaoMainStatus } from "../data/ziniaoStatus";
 import { useBrowserStore, refreshBrowserData } from "../data/browserStore";
 import { launchProfileSmart, closeProfileSmart, debugLaunchProfileSmart } from "../data/browser-ops";
-import { ziniaoActivate } from "../ziniao-api";
-import { mkKey, isDefaultUserDir, isMultiUserDir, isZiniaoMain, getSortGroup } from "../utils/profile-rules";
+import { getBrowserUIExtension, useBrowserMainStatuses } from "../data/browser-extensions";
+import { mkKey, isDefaultUserDir, isMultiUserDir, isMainEntryProfile, getSortGroup } from "../utils/profile-rules";
 import { CommandModal, type LaunchCommandInfo } from "./BrowserConfigPanel/CommandModal";
 // ── 浏览器状态（两个独立维度：是否启动 + 是否可连） ──
 // 类型与轮询调度器见 data/profileStatusStore.ts（全局单例，多实例共享）
@@ -179,8 +178,8 @@ function CurrentBrowserCards({
 
   // ── 浏览器运行状态：共享轮询 store（全局单调度器，多实例不重复轮询） ──
   const profileStatus = useProfileStatusSnapshot();
-  // 紫鸟主程序状态：进程扫描抓不到 ziniao.exe，走 agent 探测（全局单例轮询）
-  const ziniaoMainStatus = useZiniaoMainStatus();
+  // 主程序状态：进程扫描抓不到主程序时由业务扩展提供（全局单例轮询）
+  const mainStatuses = useBrowserMainStatuses();
   const statusItems = useMemo(() => {
     const items: ProfileStatusItem[] = [];
     for (const [bt, ps] of Object.entries(profilesByBrowser)) {
@@ -202,14 +201,14 @@ function CurrentBrowserCards({
       suppressClickRef.current = false;
       return;
     }
-    // 浏览器默认用户路径 / 紫鸟主程序入口不可作为自动化控制目标：点击仅提示，不进入选择逻辑
+    // 浏览器默认用户路径 / 主程序入口不可作为自动化控制目标：点击仅提示，不进入选择逻辑
     const b = browsers.find(x => x.browser_type === bt);
     if (b && isDefaultUserDir(b, p)) {
       showToast("浏览器默认用户路径不可用于自动化控制", "warning");
       return;
     }
-    if (b && isZiniaoMain(b, p)) {
-      showToast("紫鸟主程序为浏览器入口，非店铺环境；请右键「打开主程序」", "warning");
+    if (b && isMainEntryProfile(b, p)) {
+      showToast("该项为浏览器主程序入口，非可控环境；请右键「打开主程序」", "warning");
       return;
     }
     const key = mkKey(bt, p);
@@ -244,7 +243,7 @@ function CurrentBrowserCards({
     if (!onSelectionChange || e.button !== 0) return;
     const b = browsers.find(x => x.browser_type === bt);
     if (b && isDefaultUserDir(b, p)) return; // 锁定卡片不可勾选：退回普通点击（toast 提示）
-    if (b && isZiniaoMain(b, p)) return; // 紫鸟主程序入口锁定不可勾选
+    if (b && isMainEntryProfile(b, p)) return; // 主程序入口锁定不可勾选
     const key = mkKey(bt, p);
     const isSelected = (selectedKeysRef.current || []).includes(key);
     dragRef.current = {
@@ -331,17 +330,19 @@ function CurrentBrowserCards({
     const key = mkKey(bt, p);
     setLaunching(key);
     try {
-      // 紫鸟环境已打开且可连：直接激活窗口（CDP Page.bringToFront，毫秒级），
-      // 避免重复走 agent 启动链（探测端口 40s + startBrowser + 解析端口）造成的「慢半拍」
-      if (bt === "ziniao") {
+      // 托管型浏览器环境已打开且可连：走扩展的快速激活（CDP Page.bringToFront，毫秒级），
+      // 避免重复走其主程序启动链（探测端口 + startBrowser + 解析端口）造成的「慢半拍」
+      const quickActivate = getBrowserUIExtension(bt)?.quickActivate;
+      if (quickActivate) {
         const cachedPort = profileStatus.ports[key];
         if (cachedPort && profileStatus.conn[key] === "connectable") {
           const portNum = Number(cachedPort);
           if (portNum) {
             try {
-              await ziniaoActivate(portNum);
-              showToast(`「${p.name}」已激活`, "success");
-              return;
+              if (await quickActivate(portNum)) {
+                showToast(`「${p.name}」已激活`, "success");
+                return;
+              }
             } catch {
               // 激活失败（端口已失效/窗口已关）→ 回退完整启动
             }
@@ -529,7 +530,7 @@ function CurrentBrowserCards({
                 {displayProfiles.map(p => {
                   const key = mkKey(bt, p);
                   const isDefault = isDefaultUserDir(browser, p);
-                  const isMain = isZiniaoMain(browser, p);
+                  const isMain = isMainEntryProfile(browser, p);
                   const counts = dirProfileCounts[bt];
                   const isSibling = isMultiUserDir(browser, p, counts);
                   const isSelected = !isDefault && !isMain && ((isMultiSelectMode && selectedKeySet.has(key)) || (isSelectMode && selectedKey === key));
@@ -547,7 +548,7 @@ function CurrentBrowserCards({
                       isMainProgram={isMain}
                       siblingUserCount={counts?.[p.user_data_dir]}
                       isLaunching={isLaunching}
-                      launchStatus={isMain ? (ziniaoMainStatus.running ? "launched" : "not_launched") : profileStatus.launch[key]}
+                      launchStatus={isMain ? ((mainStatuses[bt]?.running ?? false) ? "launched" : "not_launched") : profileStatus.launch[key]}
                       connStatus={isMain ? undefined : profileStatus.conn[key]}
                       onCardClick={handleCardClick}
                       onCardContextMenu={handleCardContextMenu}

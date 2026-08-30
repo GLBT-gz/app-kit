@@ -3,13 +3,11 @@ import { safeGetJSON, safeSetJSON } from "../../localStorageKeys";
 import { getBrowserIcon } from "../../utils/browser-icons";
 import { killAllBrowserProcesses } from "../../api";
 import { debugLaunchProfileSmart } from "../../data/browser-ops";
-import { ziniaoPatchStatus, ziniaoPatchApply, ziniaoActivate } from "../../ziniao-api";
-import { syncZiniaoShopNames } from "../../data/ziniaoSync";
+import { getBrowserUIExtension, managesOwnProfiles } from "../../data/browser-extensions";
 import { useProfileStatusSnapshot } from "../../data/profileStatusStore";
 import { Button } from "../controls/Button";
 import type { BCPBrowser, BCPProfile } from "./types";
 import { ProfileCard } from "./ProfileCard";
-import { ZiniaoPatchCard, type ZiniaoPatchState } from "./ZiniaoPatchCard";
 import { ChildWindows } from "./ChildWindows";
 import { CommandModal, type LaunchCommandInfo } from "./CommandModal";
 import { NewUserModal } from "./NewUserModal";
@@ -151,7 +149,7 @@ export function BrowserConfigInner({
   const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" | "warning" }>>([]);
   const [newUserModal, setNewUserModal] = useState(false);
 
-  // 运行状态快照（紫鸟已打开环境的端口缓存，供「已打开则快速激活」）
+  // 运行状态快照（已打开环境的端口缓存，供「已打开则快速激活」）
   const profileStatus = useProfileStatusSnapshot();
 
   const showToast = useCallback((text: string, type: "success" | "error" | "info" | "warning" = "info") => {
@@ -160,63 +158,8 @@ export function BrowserConfigInner({
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
 
-  // ── 紫鸟 CDP patch 状态（无痕化集成；仅 ziniao 且命令可用时展示） ──
-  const [ziniaoPatch, setZiniaoPatch] = useState<ZiniaoPatchState>({ supported: false, loading: false, patching: false, patched: false, v109: false, arch: "", detail: "" });
-  const checkZiniaoPatch = useCallback(async () => {
-    if (browser.browser_type !== "ziniao") return;
-    setZiniaoPatch(prev => ({ ...prev, loading: true }));
-    try {
-      const st = await ziniaoPatchStatus();
-      setZiniaoPatch({
-        supported: true,
-        loading: false,
-        patching: false,
-        patched: st.patched,
-        v109: st.v109,
-        arch: st.arch,
-        detail: st.detail,
-      });
-    } catch {
-      // 命令不可用（其他项目未注册）→ 隐藏入口
-      setZiniaoPatch(prev => ({ ...prev, supported: false, loading: false }));
-    }
-  }, [browser.browser_type]);
-  useEffect(() => {
-    if (browser.browser_type !== "ziniao") return;
-    checkZiniaoPatch();
-  }, [browser.browser_type, checkZiniaoPatch]);
-
-  // 紫鸟一键 patch（showToast 定义之后；弹 UAC 提权）
-  const applyZiniaoPatch = useCallback(async () => {
-    setZiniaoPatch(prev => ({ ...prev, patching: true }));
-    try {
-      const msg = await ziniaoPatchApply();
-      showToast(msg, "info");
-      await checkZiniaoPatch();
-    } catch (e) {
-      showToast(String(e), "error");
-    } finally {
-      setZiniaoPatch(prev => ({ ...prev, patching: false }));
-    }
-  }, [checkZiniaoPatch, showToast]);
-
-  // ── 紫鸟店铺名称绑定：用户手动登录后点此，拉取 agent getBrowserList 写入映射并刷新检测
-  // （环境目录静态检测只有 containerId，真实店名唯一来源是登录后的 agent 服务；
-  //   核心逻辑复用 data/ziniaoSync.ts 的 syncZiniaoShopNames） ──
-  const [syncingShops, setSyncingShops] = useState(false);
-  const handleBindShops = useCallback(async () => {
-    if (browser.browser_type !== "ziniao") return;
-    setSyncingShops(true);
-    try {
-      showToast("正在打开紫鸟并探测登录状态（首次约需 40 秒），请确保已登录…", "info");
-      const count = await syncZiniaoShopNames();
-      showToast(`绑定完成：${count} 个店铺已关联到环境目录`, "success");
-    } catch (e) {
-      showToast(`绑定失败: ${e}`, "error");
-    } finally {
-      setSyncingShops(false);
-    }
-  }, [browser.browser_type, showToast]);
+  // ── 业务侧注册的配置面板附加卡片（如补丁状态、登录绑定入口） ──
+  const uiExt = getBrowserUIExtension(browser.browser_type);
 
   // ── 路径有效性检查（300ms 防抖后并行检查，单次 setState 批量更新） ──
   useEffect(() => {
@@ -265,6 +208,14 @@ export function BrowserConfigInner({
     }
   }, [onDetectProfiles, browser.browser_type, exePathProp]);
 
+  // 业务扩展的附加卡片上下文（refresh 复用统一检测入口）
+  const extraCtx = useMemo(
+    () => ({ showToast, refresh: () => detectProfiles(userDirs, false) }),
+    [showToast, detectProfiles, userDirs],
+  );
+  const configExtras = uiExt?.useConfigPanelExtras?.(extraCtx) ?? null;
+  const configActions = uiExt?.useConfigPanelActions?.(extraCtx) ?? null;
+
   // ── 不再自动检测 profiles：由 browserStore 统一检测（单一数据源），
   // 避免同一批目录被 detectCustomProfiles 重复扫描 + 全量卡片渲染（卡顿根因）。
   // 手动检测保留：doDetect（「重新检测」按钮 / 新增用户后 500ms 自动触发）
@@ -300,9 +251,9 @@ export function BrowserConfigInner({
 
   const profiles = localProfiles;
   const hasProfiles = profiles.length > 0;
-  // 紫鸟：环境目录直接作为 profile 展示（每环境一卡），不经过「显示目录」筛选
-  const isZiniao = browser.browser_type === 'ziniao';
-  const filteredProfiles = isZiniao ? profiles : profiles.filter(p => selectedDirs.includes(p.user_data_dir));
+  // 主程序托管型：环境目录直接作为 profile 展示（每环境一卡），不经过「显示目录」筛选
+  const isManaged = managesOwnProfiles(browser.browser_type);
+  const filteredProfiles = isManaged ? profiles : profiles.filter(p => selectedDirs.includes(p.user_data_dir));
 
   const addDir = (dir?: string) => {
     const d = dir?.trim() || newDir.trim();
@@ -349,14 +300,16 @@ export function BrowserConfigInner({
     setLaunching(key);
     showToast("启动中...", "info");
     try {
-      // 紫鸟环境已打开且可连：直接激活窗口（毫秒级），避免重复走 agent 启动链
-      if (browser.browser_type === "ziniao") {
-        const statusKey = `ziniao|${p.user_data_dir}|${p.id}`;
+      // 托管型环境已打开且可连：走扩展快速激活（毫秒级），避免重复走其主程序启动链
+      const quickActivate = uiExt?.quickActivate;
+      if (quickActivate) {
+        const statusKey = `${browser.browser_type}|${p.user_data_dir}|${p.id}`;
         const cachedPort = profileStatus.ports[statusKey];
         if (cachedPort && profileStatus.conn[statusKey] === "connectable") {
-          await ziniaoActivate(Number(cachedPort));
-          showToast(`${browser.browser_name}「${p.name}」已激活`, "success");
-          return;
+          if (await quickActivate(Number(cachedPort))) {
+            showToast(`${browser.browser_name}「${p.name}」已激活`, "success");
+            return;
+          }
         }
       }
       const portNum = Number(portStr) || 0;
@@ -376,7 +329,7 @@ export function BrowserConfigInner({
     } catch (e) { showToast(`获取命令失败: ${e}`, "error"); }
   };
 
-  /** 调试启动：智能适配（Edge/Chrome 锁检查+换端口重启；紫鸟 agent 打开后解析真实 CDP 端口） */
+  /** 调试启动：智能适配（Edge/Chrome 锁检查+换端口重启；托管型浏览器由其服务分配端口） */
   const doDebugLaunch = async (p: BCPProfile) => {
     if (!onLaunchProfile) return;
     const key = `${p.user_data_dir}|${p.id}`;
@@ -460,8 +413,8 @@ export function BrowserConfigInner({
             </div>
           </div>
 
-          {/* 紫鸟：环境目录由主程序管理，直接以 profile 卡片展示，不提供手动目录管理 */}
-          {!isZiniao && (
+          {/* 主程序托管型：环境目录由主程序管理，直接以 profile 卡片展示，不提供手动目录管理 */}
+          {!isManaged && (
           <div className="config-field">
             <label>用户数据目录</label>
             {userDirs.map((dir, i) => (
@@ -526,8 +479,8 @@ export function BrowserConfigInner({
           </div>
           )}
 
-          {/* ── 易得客专属：配置目录（店铺实际路径 {UserData的父目录}\Profiles，只读） ── */}
-          {browser.browser_type === 'edecker' && browser.default_user_data_dir && (() => {
+          {/* ── 注册式浏览器专属：配置目录（店铺实际路径 {UserData的父目录}\Profiles，只读） ── */}
+          {getBrowserUIExtension(browser.browser_type)?.showProfilesDir && browser.default_user_data_dir && (() => {
             const profilesPath = browser.default_user_data_dir!.replace(/\\User Data$/i, '') + '\\Profiles';
             return (
               <div className="config-field">
@@ -559,24 +512,14 @@ export function BrowserConfigInner({
 
           {onCreateUserDataDir && (
             <div className="config-actions">
-              {browser.browser_type === 'ziniao' && (
-                <Button
-                  variant="primary"
-                  onClick={handleBindShops}
-                  disabled={syncingShops}
-                  title="打开紫鸟并探测登录态，拉取店铺列表写入名称映射（未登录则先登录紫鸟再点此）"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-                  {syncingShops ? "绑定中…" : "登录并绑定店铺名称"}
-                </Button>
-              )}
+              {configActions}
               <Button
                 variant="primary"
                 onClick={() => setNewUserModal(true)}
-                disabled={browser.browser_type === 'edecker' || browser.browser_type === 'ziniao'}
+                disabled={isManaged}
                 title={
-                  browser.browser_type === 'edecker' || browser.browser_type === 'ziniao'
-                    ? '易得客/紫鸟 的用户/环境由各自主程序管理，不支持在此新增'
+                  isManaged
+                    ? (uiExt?.addProfileDisabledHint ?? '该浏览器的用户/环境由其主程序管理，不支持在此新增')
                     : undefined
                 }
               >
@@ -626,12 +569,10 @@ export function BrowserConfigInner({
           </div>
         )}
 
-        {/* ── 紫鸟 CDP patch 状态卡片（应用内无痕化） ── */}
-        {browser.browser_type === 'ziniao' && ziniaoPatch.supported && (
-          <ZiniaoPatchCard state={ziniaoPatch} onApply={applyZiniaoPatch} />
-        )}
+        {/* ── 业务扩展的附加卡片（如补丁状态） ── */}
+        {configExtras}
 
-        {/* ── 子浏览器窗口列表（易得客店铺窗口 / 紫鸟环境窗口） ── */}
+        {/* ── 子浏览器窗口列表（托管型浏览器的店铺/环境窗口） ── */}
         <ChildWindows browser={browser} />
 
         {hasProfiles && filteredProfiles.length > 0 && (

@@ -148,13 +148,6 @@ registerDataItems(
       desc: "浏览器用户数据目录配置缓存",
       default: {} as Record<string, string[]>,
     },
-    /** 紫鸟环境店铺名称映射（containerId → 店铺名，登录绑定后写入，全局浏览器配置/平台选择器共用） */
-    "core-ziniao-env-map": {
-      storage: "localStorage",
-      category: "cache",
-      desc: "紫鸟环境店铺名称映射（登录绑定后由 getBrowserList 写入，覆盖检测出的环境目录名）",
-      default: {} as Record<string, { name: string; platform_name?: string; store_username?: string }>,
-    },
 
     // ── 数据管理快照 ──
 

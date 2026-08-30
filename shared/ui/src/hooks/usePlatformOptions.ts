@@ -1,20 +1,25 @@
 import { useMemo } from "react";
 import type { BCPBrowser } from "../components/BrowserConfigPanel";
 import type { BrowserOption } from "../components/PlatformConfigPanel";
+import { getBrowserUIExtension } from "../data/browser-extensions";
 import { compareBrowserDisplayName } from "../utils/display-sort";
 
 /**
  * 从多选卡片 key 推导平台选择器选项。
  * displayName 优先级：user_name → email → name → pid
  *
- * 过滤：紫鸟主程序入口（id=Default）不是店铺环境，不作为平台绑定目标
- * （历史勾选残留 key 也不会进入选项）。
- * 排序：先按浏览器类型优先级（edge → chrome → 易得客 → 紫鸟），同类型内按
+ * 过滤：主程序入口 profile（由业务侧 isMainEntry 判定，如 id=Default）不是店铺环境，
+ * 不作为平台绑定目标（历史勾选残留 key 也不会进入选项）。
+ * 排序：内置 edge → chrome 固定前置，注册类型按业务侧注册的 sortOrder，同类型内按
  * displayName 字典序（localeCompare zh-Hans-CN），不再随勾选顺序杂乱。
  */
 
-/** 浏览器类型排序优先级（未列出的类型排在最后） */
-const BT_ORDER: Record<string, number> = { edge: 0, chrome: 1, edecker: 2, ziniao: 3 };
+/** 浏览器类型排序权重（内置 edge/chrome 固定，注册类型由业务侧注册，未注册排最后） */
+function browserSortOrder(bt: string): number {
+  if (bt === "edge") return 0;
+  if (bt === "chrome") return 1;
+  return getBrowserUIExtension(bt)?.sortOrder ?? 10;
+}
 
 export function usePlatformOptions(
   selectedCardKeys: string[],
@@ -25,7 +30,8 @@ export function usePlatformOptions(
     return selectedCardKeys
       .filter(key => {
         const parts = key.split("|");
-        return !(parts[0] === "ziniao" && parts[2] === "Default");
+        // 主程序入口 profile（如 id=Default）由业务侧 isMainEntry 判定，不作为平台绑定目标
+        return !(getBrowserUIExtension(parts[0])?.isMainEntry?.(parts[2]) === true);
       })
       .map(key => {
         const parts = key.split("|");
@@ -40,8 +46,8 @@ export function usePlatformOptions(
         return { key, displayName: `${browserName} / ${displayName}`, bt };
       })
       .sort((a, b) => {
-        const ra = BT_ORDER[a.bt] ?? 10;
-        const rb = BT_ORDER[b.bt] ?? 10;
+        const ra = browserSortOrder(a.bt);
+        const rb = browserSortOrder(b.bt);
         if (ra !== rb) return ra - rb;
         return compareBrowserDisplayName(a.displayName, b.displayName);
       });
