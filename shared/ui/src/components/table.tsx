@@ -145,23 +145,48 @@ export function useTableSelectionCopy(
 
 /** 虚拟滚动表格 - 只渲染可视区域内的行，适合大列表；支持文本框选复制、悬停提示、表头点击
  *
- * fixedLayout=true 时列宽固定且按「全量行内容」计算（内容完整展示、滚动时列宽不跳动，
- * 已指定 style.width 的列按指定值）；默认 auto 布局（列宽随当前可见行内容自适应）。
+ * 虚拟滚动**始终启用**(`virtual=true` 是默认且唯一行为):只渲染可视行 + 上下 overscan 行,
+ * 万行表格 DOM 节点数 ≈ 屏幕可见行数 × 列数;`virtual=false` 强制全量渲染(适合
+ * rows.length < 200 的小表,可以省掉 ResizeObserver/scroll state 的开销)。
+ *
+ * fixedLayout=true 时列宽按「采样估算」计算(头 N 行 + 尾 N 行 + 中间采样)
+ * —— **不会**遍历全表。已指定 style.width 的列按指定值;默认 auto 布局
+ * (列宽随当前可见行内容自适应)。
+ *
  * stickyLeft=N 时冻结左侧前 N 列（横向滚动保持显示，末列右侧自动加 accent 分隔线）；
  * 实现要点：border-collapse: separate（sticky 独立边框无共享错位）+ thead 整体 zIndex 高于冻结 td
  * （整行表头永远在最上）；sticky 偏移用表头实测宽度（浏览器布局后真实列宽）。
  */
-function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, fixedLayout, stickyLeft = 0, showIndex = false }: {
+function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHeader, virtual = true, fixedLayout, stickyLeft = 0, showIndex = false, onDeleteSelection, className, style, sampleHead = 200, sampleTail = 50, sampleStride = 50 }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowClassName?: (row: T) => string | undefined;
-  emptyText?: string;
+  /** 空状态文案，可传 ReactNode（如带 spinner 的「正在加载…」） */
+  emptyText?: React.ReactNode;
   listHeader?: React.ReactNode;
+  /**
+   * 是否启用虚拟滚动。
+   * - `true`(默认):只渲染可视行 + overscan,大表必备。
+   * - `false`:全量渲染所有行(适合 <200 行的小表,省掉 ResizeObserver/scroll state 开销)。
+   */
+  virtual?: boolean;
   fixedLayout?: boolean;
   /** 冻结左侧前 N 列（横向滚动时保持显示；默认 0 不冻结） */
   stickyLeft?: number;
   /** 是否在最左侧显示「序号」列（各项目按需开启；默认不显示，避免全局硬编码影响所有使用方） */
   showIndex?: boolean;
+  /** 框选后按 Delete/Backspace 时回调 (r1, r2)，由调用方决定如何处理选中行区间（如清空某几列、清空整行）。 */
+  onDeleteSelection?: (r1: number, r2: number) => void;
+  /** 追加到滚动容器（.inventory-table-scroll）上的 CSS 类名，便于项目本地控制显隐（如 .log-panel--hidden）。 */
+  className?: string;
+  /** 追加到滚动容器的内联样式，用于 display:none 显隐等不能用 class 表达的场景。 */
+  style?: React.CSSProperties;
+  /** fixedLayout 模式下列宽估算时取头部多少行（默认 200） */
+  sampleHead?: number;
+  /** fixedLayout 模式下列宽估算时取尾部多少行（默认 50，覆盖表格末尾的长字符串） */
+  sampleTail?: number;
+  /** fixedLayout 模式下列宽估算时中间采样步长（每 N 行取 1 行，默认 50） */
+  sampleStride?: number;
 }): React.JSX.Element {
   // 「序号」列由各项目按需开启（showIndex），不再全局硬编码——否则所有使用该组件的表格都会出现序号列
   const allColumns: TableColumn<T>[] = [];
@@ -169,8 +194,9 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     allColumns.push({ header: "序号", render: (_r, index) => index + 1, style: { width: 48, textAlign: "center", color: "var(--text-secondary)" } });
   }
   allColumns.push(...columns);
-  // 固定列宽模式：列宽按「全量行内容」计算（而非仅可见行），保证内容完整展示且滚动时不跳动。
-  // 已指定 style.width 的列按指定值；其余取表头与全部行该列渲染文本的最大估算宽度（中文 14px/字、ASCII 8px/字 + 内边距）。
+  // 固定列宽模式：列宽按「采样估算」计算（头 sampleHead 行 + 尾 sampleTail 行 + 中间 stride 采样），
+  // 避免遍历几万行导致 fixedLayout 在大表上成为性能瓶颈。
+  // 已指定 style.width 的列按指定值；其余取表头与采样行该列渲染文本的最大估算宽度（中文 14px/字、ASCII 8px/字 + 内边距）。
   const colWidths = useMemo(() => {
     if (!fixedLayout) return null;
     const textWidth = (s: string) => {
@@ -178,14 +204,30 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
       for (const ch of s) w += ch.charCodeAt(0) > 255 ? 14 : 8;
       return w;
     };
+    // 采样下标：头 sampleHead 行 + 尾 sampleTail 行 + 中间按 stride 采样
+    const sampleIdx: number[] = [];
+    const head = Math.min(sampleHead, rows.length);
+    for (let i = 0; i < head; i++) sampleIdx.push(i);
+    if (sampleTail > 0 && rows.length > head) {
+      const tailStart = Math.max(head, rows.length - sampleTail);
+      for (let i = tailStart; i < rows.length; i++) sampleIdx.push(i);
+    }
+    if (sampleStride > 1) {
+      for (let i = head; i < Math.max(head, rows.length - sampleTail); i += sampleStride) {
+        if (i >= head && i < (rows.length - sampleTail)) sampleIdx.push(i);
+      }
+    }
     return allColumns.map((col, ci) => {
       if (col.style?.width !== undefined) return col.style.width as number;
       let w = textWidth(col.header) + 24;
-      for (const r of rows) w = Math.max(w, textWidth(toText(col.render(r, ci))) + 24);
+      for (const idx of sampleIdx) {
+        const r = rows[idx];
+        if (r !== undefined) w = Math.max(w, textWidth(toText(col.render(r, ci))) + 24);
+      }
       return Math.min(800, w);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixedLayout, columns, rows]);
+  }, [fixedLayout, columns, rows, sampleHead, sampleTail, sampleStride]);
   const ROW_HEIGHT = 28;
   const OVERSCAN = 15;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -224,7 +266,7 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     const col = columnsRef.current[c];
     if (!row || !col) return "";
     return toText(col.render(row, r));
-  });
+  }, onDeleteSelection);
 
   // 测量表头实际高度（sticky 模式下顺带测量各列宽度，供冻结列偏移计算）
   useEffect(() => {
@@ -238,7 +280,9 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     }
   });
 
+  // 仅在 virtual 模式下需要 ResizeObserver 测量容器高度（虚拟滚动需要它算可视行数）
   useEffect(() => {
+    if (!virtual) return;
     const el = containerRef.current;
     if (!el) return;
     const update = () => {
@@ -249,7 +293,7 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [virtual]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     cancelAnimationFrame(rafRef.current);
@@ -261,17 +305,24 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
   }, []);
 
   const th = theadHeight || 0;
-  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endIdx = Math.min(rows.length, Math.ceil((scrollTop + containerHeight - th) / ROW_HEIGHT) + OVERSCAN);
+  // 虚拟滚动：只渲染可视行 + 上下 overscan 行；非虚拟模式渲染全表（适合 < 200 行小表）
+  const startIdx = virtual ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN) : 0;
+  const endIdx = virtual ? Math.min(rows.length, Math.ceil((scrollTop + containerHeight - th) / ROW_HEIGHT) + OVERSCAN) : rows.length;
   const visibleRows = rows.slice(startIdx, endIdx);
-  const topPadding = startIdx * ROW_HEIGHT;
-  const bottomPadding = (rows.length - endIdx) * ROW_HEIGHT;
+  // 仅在 virtual 模式下需要 padding 行撑出"虚拟高度"，非虚拟模式 padding 全 0
+  const topPadding = virtual ? startIdx * ROW_HEIGHT : 0;
+  const bottomPadding = virtual ? (rows.length - endIdx) * ROW_HEIGHT : 0;
+
+  // 滚动容器的合并 className/style（让项目本地控制显隐）
+  const containerClass = ["inventory-table-scroll", className].filter(Boolean).join(" ");
+  const containerStyle = style;
 
   if (rows.length === 0) {
     return (
-      <div className="inventory-table-scroll" style={{
+      <div className={containerClass} style={{
         padding: 16, textAlign: "center", color: "var(--text-secondary)",
         display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1.6,
+        ...containerStyle,
       }}>
         {emptyText || "暂无数据"}
       </div>
@@ -279,7 +330,8 @@ function VirtualTableInner<T>({ rows, columns, rowClassName, emptyText, listHead
   }
 
   return (
-    <div className="inventory-table-scroll" ref={containerRef} onScroll={handleScroll}
+    <div className={containerClass} ref={containerRef} onScroll={handleScroll}
+      style={containerStyle}
       onMouseDown={sel.handleMouseDown} onMouseMove={sel.handleMouseMove} onMouseUp={sel.endDrag} onMouseLeave={sel.endDrag}>
       {listHeader}
       {/* 冻结表头正确做法：

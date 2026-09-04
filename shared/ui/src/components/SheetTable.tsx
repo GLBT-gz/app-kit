@@ -2,13 +2,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTableSelectionCopy } from "./table";
 
 /**
+ * @deprecated 请改用 {@link VirtualTable}（`./table`）。
+ *
  * SheetTable —— 二维字符串数组表格（headers: string[] + rows: string[][]），
  * 收敛各项目页面的内联表格实现。
  * 内置：单元格框选 + Ctrl+C 复制（容器级事件委托，td 带 data-r/data-c）、
  * 可选虚拟滚动（spacer 切片式，大表）、可选序号列、可选 Delete 删行、sticky 表头。
  * 样式类名通过 scrollClassName/tableClassName/emptyClassName/copyTipClassName 传入
  * （框架默认中性类名，业务侧可传自己的项目本地类名，保证视觉零变化）。
+ *
+ * 保留原因：002/003 历史页面仍依赖此 API（`@glbt/ui` 的 `SHEET_TABLE_LEGACY_CLASSES`
+ * 仍为兼容而导出）。**新页面不要再使用本组件**，请统一改用 `VirtualTable`——
+ * 它提供了更强的能力：内置 sticky 表头（不依赖项目 CSS）、冻结列（stickyLeft）、
+ * fixedLayout、内容自适应列宽等。框架不在 SheetTable 上继续投入新功能。
  */
+/** @deprecated 请改用 `VirtualTableProps`(`./table`)。保留至 002/003 完成迁移。 */
 export interface SheetTableProps {
   headers: string[];
   rows: string[][];
@@ -35,6 +43,7 @@ export interface SheetTableProps {
   copyTipClassName?: string;
 }
 
+/** @deprecated 请改用 `VirtualTable<T>({ rows, columns })`(`./table`)。 */
 export function SheetTable({
   headers, rows, virtual = false, showRowNum = false, emptyText = "暂无数据",
   rowClassName, cellClassName, cellContent, onDeleteSelection, className,

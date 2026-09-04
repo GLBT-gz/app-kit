@@ -118,6 +118,8 @@ export { useWheelTabSwitch } from "./hooks/useWheelTabSwitch";
 export { resolvePlatformBrowser, usePlatformBrowserInfo } from "./hooks/usePlatformBrowserInfo";
 export type { CachedPlatformProfile, ProfilesCache } from "./hooks/usePlatformBrowserInfo";
 export { useLogWidthPct, LOG_WIDTH_DEFAULT_PCT } from "./hooks/useLogWidthPct";
+export { useAutoLogView } from "./hooks/useAutoLogView";
+export type { AutoLogViewReturn } from "./hooks/useAutoLogView";
 
 // 工具
 export {
