@@ -67,14 +67,15 @@ export function useData<T>(
     setValue(deserialize(lsGet(keyRef.key), keyRef));
   }, [keyRef]);
 
-  // 跨标签页同步
+  // 跨标签页同步（导航/视图类状态可通过 syncCrossTab:false 关闭，各标签页独立）
   useEffect(() => {
+    if (keyRef.syncCrossTab === false) return;
     const handler = (e: StorageEvent) => {
       if (e.key === keyRef.key) forceUpdate();
     };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
-  }, [keyRef.key, forceUpdate]);
+  }, [keyRef.key, keyRef.syncCrossTab, forceUpdate]);
 
   // 同标签页同步（DataManager 删除数据后通知）
   useEffect(() => {

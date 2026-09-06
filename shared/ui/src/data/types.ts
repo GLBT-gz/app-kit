@@ -38,6 +38,12 @@ export interface FrontendItemDef<T = unknown> {
    */
   matchMode?: "exact" | "prefix";
   /**
+   * 是否跨标签页同步（storage 事件）。默认 true。
+   * 导航/视图类状态（如当前模块标签页）设为 false：各标签页各自独立，
+   * 避免一个页面切视图导致另一个页面跟着跳。
+   */
+  syncCrossTab?: boolean;
+  /**
    * 字段级描述，仅对 JSON 对象/字典有效。
    * key 为字段名，value 为面向用户的中文解释。
    * 展开数据项时，每个字段旁边会显示对应的描述。
@@ -113,6 +119,8 @@ export interface DataKeyRef<T = unknown> {
   desc: string;
   /** 存储位置 */
   storage: StorageBackend;
+  /** 是否跨标签页同步（storage 事件）；false = 各标签页独立 */
+  syncCrossTab?: boolean;
   /** 字段级描述映射 */
   fieldDescriptions?: Record<string, string>;
 }

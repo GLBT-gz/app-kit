@@ -117,6 +117,7 @@ export function defineDataStore<
         category: fDef.category,
         desc: fDef.desc,
         storage: "localStorage",
+        syncCrossTab: fDef.syncCrossTab,
         fieldDescriptions: fDef.fieldDescriptions,
       };
     }
