@@ -48,6 +48,9 @@ export interface ShopListPanelProps {
   onBatchEnd?: () => void;
   /** 每行操作按钮区（渲染在信息区与开关之间，如「打开/激活」） */
   renderAction?: (shop: ShopListShop) => ReactNode;
+  /** 每行状态标记区（渲染在 shop-name 行、currentShop 指示之后；如「登记中/已完成/失败」徽标）。
+   *  传入后由调用方自行渲染状态，不传则无（向后兼容）。 */
+  renderStatus?: (shop: ShopListShop) => ReactNode;
   emptyText?: string;
   /** 额外 CSS class（追加到根 .shop-section） */
   className?: string;
@@ -80,6 +83,7 @@ export function ShopListPanel({
   onBatchToggle,
   onBatchEnd,
   renderAction,
+  renderStatus,
   emptyText = "暂无店铺数据",
   className,
 }: ShopListPanelProps) {
@@ -246,6 +250,7 @@ export function ShopListPanel({
                 <div className="shop-name">
                   {s.mall_name}
                   {currentShop === s.mall_name && <span className="shop-running-indicator">▶ 处理中</span>}
+                  {renderStatus?.(s)}
                 </div>
                 <div className="shop-meta">
                   <span className="shop-sub">{(s.alias || s.mall_name)}{s.owner ? ` · ${s.owner}` : ""}</span>
