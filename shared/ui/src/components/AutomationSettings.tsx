@@ -11,6 +11,8 @@ export interface AutomationSettingsProps {
   minCards?: number;
   /** 凭证管理区域（项目自定义） */
   children?: ReactNode;
+  /** 每平台额外选项源（key = 平台 key），透传给 PlatformConfigPanel（如紫鸟店铺列表） */
+  extraPlatformOptions?: Record<string, BrowserOption[]>;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface AutomationSettingsProps {
  * </AutomationSettings>
  * ```
  */
-export function AutomationSettings({ platformOptions, selectedCardCount, minCards = 2, children }: AutomationSettingsProps) {
+export function AutomationSettings({ platformOptions, selectedCardCount, minCards = 2, children, extraPlatformOptions }: AutomationSettingsProps) {
   const enough = selectedCardCount >= minCards;
 
   return (
@@ -44,7 +46,7 @@ export function AutomationSettings({ platformOptions, selectedCardCount, minCard
       {!enough && (
         <div className="automation-hint">当前勾选 {selectedCardCount} 个，至少需要 {minCards} 个</div>
       )}
-      <PlatformConfigPanel options={platformOptions} />
+      <PlatformConfigPanel options={platformOptions} extraOptions={extraPlatformOptions} />
       {!enough && (
         <div className="platform-hint" style={{ padding: "8px 28px 0" }}>请先在上方勾选至少 {minCards} 个浏览器配置</div>
       )}

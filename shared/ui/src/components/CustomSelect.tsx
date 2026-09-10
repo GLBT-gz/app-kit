@@ -119,6 +119,8 @@ export function CustomMultiSelect({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // 悬浮提示：仅当选项文本被省略号截断（溢出）时显示完整名称
+  const [tip, setTip] = useState<{ key: string; y: number; x: number; flip: boolean } | null>(null);
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -132,6 +134,7 @@ export function CustomMultiSelect({
   }, [open]);
 
   useEffect(() => {
+    if (!open) setTip(null);
     if (!open) return;
     const handle = (e: MouseEvent) => {
       if (triggerRef.current?.contains(e.target as Node)) return;
@@ -192,13 +195,28 @@ export function CustomMultiSelect({
               {options.map(opt => (
                 <div key={opt.key}
                   className={`custom-select-option${values.includes(opt.key) ? " active" : ""}`}
-                  onClick={() => toggle(opt.key)}>
+                  onClick={() => toggle(opt.key)}
+                  onMouseEnter={(e) => {
+                    const span = e.currentTarget.querySelector("span");
+                    if (!span || span.scrollWidth <= span.clientWidth + 1) return; // 未溢出不提示
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const flip = rect.right + 260 > window.innerWidth; // 贴近右缘则向左翻
+                    setTip({ key: opt.key, y: rect.top + rect.height / 2, x: flip ? rect.left - 8 : rect.right + 8, flip });
+                  }}
+                  onMouseLeave={() => setTip((t) => (t && t.key === opt.key ? null : t))}>
                   <input type="checkbox" readOnly checked={values.includes(opt.key)} />
                   <span>{opt.displayName}</span>
                 </div>
               ))}
             </>
           )}
+        </div>,
+        document.body,
+      )}
+      {/* 悬浮完整名称（portal，跟随行位置，pointer-events:none 不遮挡交互） */}
+      {tip && open && createPortal(
+        <div className="custom-select-tip" style={{ position: "fixed", top: tip.y, left: tip.x, transform: `translateY(-50%)${tip.flip ? " translateX(-100%)" : ""}` }}>
+          {options.find(o => o.key === tip.key)?.displayName}
         </div>,
         document.body,
       )}

@@ -17,7 +17,7 @@
  *   <PlatformConfigPanel />
  */
 import { useData } from "../data";
-import { CustomSelect } from "./CustomSelect";
+import { CustomSelect, CustomMultiSelect } from "./CustomSelect";
 
 // ── 类型定义 ──
 
@@ -26,6 +26,19 @@ export interface PlatformDef {
   key: string;
   /** 平台显示名称 */
   label: string;
+  /**
+   * 多选模式（默认单选）。
+   * 多选平台：选项可勾选多个，选中值以**逗号分隔字符串**存入
+   * `platform-profile-{key}`（如 `"1003,1001"`；读取方用 parseMultiValue 解析）。
+   * 注意：不用 JSON 数组字符串 —— useData 在 default=null 时会 JSON.parse 成真数组，
+   * 与 string|null 的存储语义冲突。逗号分隔与单选同语义，双兼容。
+   */
+  multi?: boolean;
+  /**
+   * 从 options（浏览器配置）中排除的浏览器类型（如 ["ziniao"] 让跨境平台
+   * 下拉不出现紫鸟配置）。仅作用于 options；extraOptions（每平台专用选项源）不过滤。
+   */
+  excludeBt?: string[];
 }
 
 export interface BrowserOption {
@@ -33,6 +46,26 @@ export interface BrowserOption {
   displayName: string;
   /** 浏览器类型（edge/chrome 或注册类型），用于选项排序 */
   bt?: string;
+}
+
+/**
+ * 解析多选存储值 → string[]。
+ * 兼容两种格式：逗号分隔字符串（"1003,1001"）与旧版 JSON 数组字符串（["1003","1001"]）。
+ */
+export function parseMultiValue(value: string | null): string[] {
+  if (!value) return [];
+  const raw = String(value).trim();
+  if (!raw) return [];
+  // 兼容旧版 JSON 数组字符串
+  if (raw.startsWith("[")) {
+    try {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) return v.map(String);
+    } catch {
+      /* fallthrough */
+    }
+  }
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 // ── 全局平台注册表 ──
@@ -60,13 +93,42 @@ export function PlatformProfileSelector({
   options,
   value,
   onChange,
+  multi = false,
 }: {
   label: string;
   tooltip?: string;
   options: BrowserOption[];
   value: string | null;
   onChange: (key: string | null) => void;
+  /** 多选模式：用 CustomMultiSelect，值存 JSON 数组字符串 */
+  multi?: boolean;
 }) {
+  // 多选模式
+  if (multi) {
+    const values = parseMultiValue(value);
+    return (
+      <div className="platform-picker">
+        <div className="platform-picker-label" title={tooltip}>
+          {label}
+        </div>
+        <div className="platform-picker-row">
+          <CustomMultiSelect
+            options={options}
+            values={values}
+            onChange={(keys) => onChange(keys.length ? keys.join(",") : null)}
+            placeholder="选择（可多选）"
+          />
+          {values.length > 0 && (
+            <button className="platform-picker-clear" onClick={() => onChange(null)} title="清除选择">
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 单选模式（默认，保持原行为）
   return (
     <div className="platform-picker">
       <div className="platform-picker-label" title={tooltip}>
@@ -89,14 +151,21 @@ export function PlatformProfileSelector({
 export interface PlatformConfigPanelProps {
   /** 可选的浏览器环境列表（来自 CurrentBrowserCards 的多选结果） */
   options: BrowserOption[];
+  /**
+   * 每平台额外选项源（key = 平台 key）。
+   * 提供时该平台忽略 options，改用这里传入的选项（如「本土TK」的紫鸟店铺列表）。
+   * 多选平台若未提供则回退 options。
+   */
+  extraOptions?: Record<string, BrowserOption[]>;
 }
 
 /**
  * 平台配置面板。
  * 根据 registerPlatforms() 注册的平台列表，自动渲染每个平台的选择器。
  * 每个平台的选中值通过 useData("platform-profile-{key}") 持久化到 localStorage。
+ * 多选平台（PlatformDef.multi=true）用 CustomMultiSelect，值存 JSON 数组字符串。
  */
-export function PlatformConfigPanel({ options }: PlatformConfigPanelProps) {
+export function PlatformConfigPanel({ options, extraOptions }: PlatformConfigPanelProps) {
   const platforms = getRegisteredPlatforms();
 
   // 每个平台对应一个 useData hook
@@ -124,6 +193,15 @@ export function PlatformConfigPanel({ options }: PlatformConfigPanelProps) {
     );
   }
 
+  // 每平台选项：multi 平台优先用 extraOptions（专用选项源，不过滤）；
+  // 其余用 options，并按平台 excludeBt 过滤（如跨境平台排除紫鸟配置）。
+  const optionsFor = (p: PlatformDef): BrowserOption[] => {
+    const base = p.multi ? extraOptions?.[p.key] ?? options : options;
+    if (!p.excludeBt?.length) return base;
+    const excluded = new Set(p.excludeBt);
+    return base.filter((o) => !excluded.has(o.bt ?? ""));
+  };
+
   return (
     <div className="platform-section">
       <div className="platform-section-title">请为每个平台指定一个浏览器环境</div>
@@ -132,9 +210,10 @@ export function PlatformConfigPanel({ options }: PlatformConfigPanelProps) {
           <PlatformProfileSelector
             key={p.key}
             label={p.label}
-            options={options}
+            options={optionsFor(p)}
             value={selections[p.key]}
             onChange={(v) => setters[p.key](v)}
+            multi={p.multi}
           />
         ))}
       </div>

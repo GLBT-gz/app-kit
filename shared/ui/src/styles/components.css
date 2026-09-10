@@ -590,6 +590,57 @@
   pointer-events: none;
 }
 
+/* ── CustomMultiSelect（002 版）checkbox 行：flex 对齐 + 统一勾选框 ──
+   单选下拉的行没有 checkbox，不受 :has() 影响。 */
+.custom-select-dropdown .custom-select-option:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.custom-select-dropdown .custom-select-option:has(input[type="checkbox"]) input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.custom-select-dropdown .custom-select-option:has(input[type="checkbox"]) span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 多选行勾选状态：浅色高亮 + 主题色文字（勾选框已表达选中，避免实心 accent 色块） */
+.custom-select-dropdown .custom-select-option:has(input[type="checkbox"]).active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 多选行悬浮提示：完整名称（仅文本溢出时显示） */
+.custom-select-tip {
+  z-index: 10001;
+  max-width: 360px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-all;
+  pointer-events: none;
+}
+
 /* ========================================
    Mode Switch (自动化模式切换)
    ======================================== */

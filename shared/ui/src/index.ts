@@ -172,6 +172,7 @@ export type {
 export {
   PlatformConfigPanel,
   PlatformProfileSelector,
+  parseMultiValue,
   registerPlatforms,
   getRegisteredPlatforms,
 } from "./components/PlatformConfigPanel";
