@@ -62,6 +62,13 @@ export interface BrowserUIExtension {
   sortOrder?: number;
 
   /**
+   * profile 头像展示形状。
+   * - "circle"（默认）：圆形裁剪，适合真实头像照片（Edge/Chrome）
+   * - "rounded"：圆角矩形 + contain 不裁切，适合品牌 SVG 图标（如紫鸟店铺平台标）
+   */
+  avatarShape?: "circle" | "rounded";
+
+  /**
    * 子窗口（店铺/环境窗口）列表展示文案。
    * 提供后框架才会在浏览器配置面板渲染子窗口列表区。
    */
@@ -101,6 +108,11 @@ export function getBrowserUIExtension(browserType: string): BrowserUIExtension |
 /** 该浏览器类型的 profile 是否由主程序管理 */
 export function managesOwnProfiles(browserType: string): boolean {
   return extensions.get(browserType)?.managesOwnProfiles === true;
+}
+
+/** 该浏览器类型的 profile 头像展示形状（默认圆形） */
+export function getAvatarShape(browserType: string): "circle" | "rounded" {
+  return extensions.get(browserType)?.avatarShape ?? "circle";
 }
 
 /**

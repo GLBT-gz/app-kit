@@ -1027,6 +1027,20 @@
   border-radius: 50%;
 }
 
+/* 品牌图标（如紫鸟店铺平台标）：圆角矩形 + contain 不裁切，保持图标本体完整 */
+.current-card-avatar--rounded {
+  border-radius: 8px;
+}
+.current-card-avatar--rounded .current-card-avatar-img {
+  object-fit: contain;
+  border-radius: 8px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.current-card-avatar--rounded .current-card-avatar-placeholder {
+  border-radius: 8px;
+}
+
 .current-card-avatar-placeholder {
   width: 100%;
   height: 100%;

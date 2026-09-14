@@ -7,6 +7,7 @@ import { memo } from "react";
 import type { BCPProfile } from "../BrowserConfigPanel";
 import type { LaunchStatus, ConnectionStatus } from "../../data/profileStatusStore";
 import { getDirDisplayName } from "../../utils/profile-rules";
+import { getAvatarShape } from "../../data/browser-extensions";
 import { LAUNCH_LABELS, CONNECTION_LABELS } from "./labels";
 
 export interface ProfileCardProps {
@@ -104,7 +105,11 @@ export const ProfileCard = memo(function ProfileCard({
         </span>
       )}
       {/* 头像 */}
-      <div className={"current-card-avatar" + (isDefault || isMainProgram ? " current-card-avatar--dimmed" : "")}>
+      <div className={
+        "current-card-avatar"
+        + (isDefault || isMainProgram ? " current-card-avatar--dimmed" : "")
+        + (getAvatarShape(browserType) === "rounded" ? " current-card-avatar--rounded" : "")
+      }>
         {profile.avatar_base64 ? (
           <img src={profile.avatar_base64} alt={profile.name} className="current-card-avatar-img" draggable={false} />
         ) : (
