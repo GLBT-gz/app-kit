@@ -1,6 +1,8 @@
 use crate::cdp::commands;
 use crate::cdp::connection::CdpConnection;
 use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::time::Duration;
 use tracing::{debug, info};
 
 /// 在字符边界处安全地截断字符串，避免 UTF-8 字节边界 panic
@@ -241,4 +243,42 @@ impl<'a> Element<'a> {
     pub async fn outer_html(&self) -> Result<String> {
         commands::runtime_get_text(self.cdp, self.node_id).await
     }
+}
+
+/// CDP 页面 target（通过 http://127.0.0.1:{port}/json/list 获取）
+#[derive(Debug, Clone, Deserialize)]
+pub struct PageTarget {
+    #[serde(rename = "type")]
+    pub target_type: String,
+    pub url: String,
+    #[serde(rename = "webSocketDebuggerUrl")]
+    pub ws_url: Option<String>,
+}
+
+impl PageTarget {
+    /// 是否是普通 page target（排除 iframe/worker 等）
+    pub fn is_page(&self) -> bool {
+        self.target_type == "page"
+    }
+}
+
+/// 获取 CDP 页面 target 列表（`/json/list`）。
+/// 返回所有可连接的 page target，业务侧按 url 匹配/过滤选择目标店铺页面。
+pub async fn fetch_page_targets(cdp_port: u16) -> Result<Vec<PageTarget>> {
+    let url = format!("http://127.0.0.1:{}/json/list", cdp_port);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .no_proxy()
+        .build()
+        .context("构建 HTTP 客户端失败")?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .context("获取 target 列表失败")?;
+    let list = resp
+        .json::<Vec<PageTarget>>()
+        .await
+        .context("解析 target 列表失败")?;
+    Ok(list)
 }
