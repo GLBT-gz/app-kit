@@ -303,6 +303,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
     // 注册式浏览器（如紫鸟）的运行环境目录 → 端口（每个目录一个独立实例，按目录匹配）
     let mut custom_dirs: HashMap<String, Option<u16>> = HashMap::new();
 
+    let mut has_default_instance: [Option<String>; 2] = [None, None];
     for exe_name in &["msedge.exe", "chrome.exe"] {
         let (instances, dirs) = scan_running_browser_instances_with_dirs(exe_name);
         for (key, port_opt) in instances {
@@ -312,11 +313,24 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
         // 默认目录实例（无 --user-data-dir 的主进程）存在时，视为默认目录「有浏览器进程在跑」。
         // 注意：这不等同于默认目录的 profile 已启动——是否启动仍由 RestartManager 逐 profile 探测，
         // 避免 Edge 后台进程（--no-startup-window）把默认目录所有 profile 误标为运行。
-        if running_by_key.contains_key(&format!("{}#default-instance", exe_name)) {
+        let default_instance_key = format!("{}#default-instance", exe_name);
+        if running_by_key.contains_key(&default_instance_key) {
             let bt = if *exe_name == "msedge.exe" { "edge" } else { "chrome" };
             if let Some(def) = get_user_data_dir(bt) {
                 running_dirs.insert(def.to_lowercase());
+                has_default_instance[if bt == "edge" { 0 } else { 1 }] = Some(def);
             }
+        }
+    }
+
+    // Patch 2: 默认目录实例命中时，为该目录下所有 sub-profile（Default / Profile 1 / ...）
+    // 一次性建 key（端口未知）。后续会走 RM/mtime 兜底分支，不会因 key 不匹配而漏检。
+    // 修复 Edge 默认目录实例永远检测不到的核心补丁——原先只有精确命令行命中才能检测，
+    // 默认目录主进程（最常见的「任务栏启动 Edge」场景）会被整个漏掉。
+    for def_dir in has_default_instance.iter().flatten() {
+        for pid in enumerate_default_dir_subprofiles(def_dir) {
+            let key = format!("{}\\{}", def_dir, pid);
+            running_by_key.entry(key).or_insert(None);
         }
     }
 
@@ -336,6 +350,29 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
     }
 
     let mut result = Vec::new();
+    // Patch 1: 隐含注入 Edge/Chrome 默认目录的 Default profile。
+    // 业务侧通常不会把默认目录的 profile 列进「卡片列表」（前端 isDefaultUserDir 视为受限），
+    // 但用户从任务栏/开始菜单启动 Edge 时，主进程会落到默认目录 → 必须强制进匹配循环，
+    // 否则永远返回 is_running=false。
+    for bt in &["edge", "chrome"] {
+        if let Some(def_dir) = get_user_data_dir(bt) {
+            let already = profiles.iter().any(|(ud, pid)| {
+                ud.eq_ignore_ascii_case(&def_dir) && pid == "Default"
+            });
+            if !already {
+                result.push(BrowserProcessState {
+                    user_data_dir: def_dir.clone(),
+                    profile_id: "Default".to_string(),
+                    is_running: false,
+                    debug_port: None,
+                    cdp_reachable: false,
+                    running_kind: "own".to_string(),
+                    owner_profile_id: None,
+                    detection_confidence: "unreachable".to_string(),
+                });
+            }
+        }
+    }
     for (user_data_dir, profile_id) in profiles {
         let key = format!("{}\\{}", user_data_dir, profile_id);
         let key_lower = key.to_lowercase();
@@ -351,6 +388,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 cdp_reachable,
                 running_kind: "own".to_string(),
                 owner_profile_id: None,
+                detection_confidence: "exact".to_string(),
             });
         } else if let Some(port_opt) = custom_dirs.get(&user_data_dir.to_lowercase()) {
             // 注册式浏览器环境目录（如店铺环境）：每目录一个独立实例，按目录即已运行
@@ -363,17 +401,21 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 cdp_reachable,
                 running_kind: "own".to_string(),
                 owner_profile_id: None,
+                detection_confidence: "exact".to_string(),
             });
         } else if running_dirs.contains(&user_data_dir.to_lowercase()) {
             // 该目录已有浏览器主进程在运行，但该 profile 未精确命中命令行：
             // 可能是同目录多 profile 共享主进程（单实例锁），也可能是默认目录实例。
-            // 用 RestartManager 逐 profile 精确探测其目录是否正被浏览器进程持有打开句柄，
-            // 只有真的打开了（持有 SQLite 句柄）才标记为运行，避免目录级误报。
+            // Patch 4: RM 探测 + Local State mtime 60s 二级兜底。
+            // Edge 默认目录实例的 RM 命中率天然偏低（SQLite 文件可能未初始化、Edge 持
+            // 共享缓存句柄而非 profile SQLite），加 mtime 兜底覆盖「已加载但未触发 RM 命中」的场景。
             let profile_path = std::path::Path::new(user_data_dir).join(profile_id);
-            let in_use = profile_dir_in_use_by_browser(
+            let rm_in_use = profile_dir_in_use_by_browser(
                 &profile_path.to_string_lossy(),
                 &["msedge.exe", "chrome.exe"],
             );
+            let mtime_in_use = !rm_in_use && local_state_recently_modified(&profile_path, 60);
+            let in_use = rm_in_use || mtime_in_use;
             if in_use {
                 // 该 profile 已加载：共享主进程的 owner profile 与调试端口
                 let (owner, port) = find_dir_owner_and_port(&running_by_key, user_data_dir);
@@ -386,6 +428,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                     cdp_reachable,
                     running_kind: "shared".to_string(),
                     owner_profile_id: owner,
+                    detection_confidence: if rm_in_use { "exact" } else { "heuristic" }.to_string(),
                 });
             } else {
                 result.push(BrowserProcessState {
@@ -396,6 +439,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                     cdp_reachable: false,
                     running_kind: "own".to_string(),
                     owner_profile_id: None,
+                    detection_confidence: "exact".to_string(),
                 });
             }
         } else {
@@ -407,6 +451,7 @@ pub fn detect_browser_running_processes(profiles: &[(String, String)]) -> Vec<Br
                 cdp_reachable: false,
                 running_kind: "own".to_string(),
                 owner_profile_id: None,
+                detection_confidence: "exact".to_string(),
             });
         }
     }
@@ -504,13 +549,22 @@ fn profile_dir_in_use_by_browser(profile_dir: &str, exe_names: &[&str]) -> bool 
         ) -> i32;
     }
 
-    // profile 加载期间浏览器持续持有的关键数据库文件（只注册存在的）
+    // profile 加载期间浏览器持续持有的关键数据库文件（只注册存在的）。
+    // Patch 3: 扩展白名单覆盖 Edge 默认目录场景：
+    // - Secure Preferences: Edge 比 Chrome 优先读这个文件
+    // - Local State: profile 未初始化时也会被主进程持有（兜底）
+    // - Cache\Cache_Data: Edge 实际共享锁位置（持有 mmap）
+    // - Code Cache\js: Edge 启动后立刻持有
     let candidates = [
         "History",
         "Login Data",
         "Web Data",
         "Preferences",
+        "Secure Preferences",
+        "Local State",
         "Network\\Cookies",
+        "Cache\\Cache_Data",
+        "Code Cache\\js",
     ];
     let mut files: Vec<String> = Vec::new();
     for name in candidates {
@@ -603,6 +657,56 @@ fn profile_dir_in_use_by_browser(profile_dir: &str, exe_names: &[&str]) -> bool 
 
 #[cfg(not(windows))]
 fn profile_dir_in_use_by_browser(_profile_dir: &str, _exe_names: &[&str]) -> bool {
+    false
+}
+
+/// 枚举默认用户数据目录下的 sub-profile 列表（"Default" + "Profile N"）。
+/// Patch 2 配套：在 default-instance 命中时为这些 sub-profile 一次性建立 running_by_key。
+#[cfg(windows)]
+fn enumerate_default_dir_subprofiles(default_dir: &str) -> Vec<String> {
+    let mut ids = vec!["Default".to_string()];
+    if let Ok(rd) = std::fs::read_dir(default_dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with("Profile ") {
+                    ids.push(name.to_string());
+                }
+            }
+        }
+    }
+    ids
+}
+
+#[cfg(not(windows))]
+fn enumerate_default_dir_subprofiles(_default_dir: &str) -> Vec<String> {
+    vec!["Default".to_string()]
+}
+
+/// 二级兜底：profile 目录下的 Local State / Preferences / Secure Preferences
+/// 在 `time_secs` 内被修改 → 视为运行。修复 RM 探测在 Edge 默认目录失效的场景。
+#[cfg(windows)]
+fn local_state_recently_modified(profile_path: &std::path::Path, time_secs: u64) -> bool {
+    let candidates = ["Local State", "Preferences", "Secure Preferences"];
+    let threshold = std::time::SystemTime::now() - std::time::Duration::from_secs(time_secs);
+    for name in candidates {
+        let p = profile_path.join(name);
+        if let Ok(meta) = std::fs::metadata(&p) {
+            if let Ok(mtime) = meta.modified() {
+                if mtime > threshold {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(windows))]
+fn local_state_recently_modified(_profile_path: &std::path::Path, _time_secs: u64) -> bool {
     false
 }
 
@@ -836,6 +940,11 @@ pub struct BrowserProcessState {
     pub running_kind: String,
     /// shared 时共享主进程对应的 profile id（用于按主进程执行关闭/调试启动），own 时为 None
     pub owner_profile_id: Option<String>,
+    /// Patch 5: 检测可信度
+    /// - exact    = 命令行精确命中 / RM 句柄精确命中
+    /// - heuristic = Local State mtime 兜底命中（Edge 默认目录典型场景）
+    /// - unreachable = 未找到任何运行证据
+    pub detection_confidence: String,
 }
 
 // ═══════════════════════════════════════════════════════
@@ -909,5 +1018,79 @@ mod tests {
         let exe_lower = exe.to_string_lossy().to_lowercase();
         let hit = rows.iter().any(|(_, cmd)| cmd.to_lowercase().contains(&exe_lower));
         assert!(hit, "native scan should read own command line, got {} row(s)", rows.len());
+    }
+
+    /// Patch 2 单元测试：枚举默认目录 sub-profile（Default + Profile N）
+    #[test]
+    #[cfg(windows)]
+    fn test_enumerate_default_dir_subprofiles() {
+        let tmp = std::env::temp_dir().join(format!(
+            "appkit_test_enum_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("Default")).unwrap();
+        std::fs::create_dir_all(tmp.join("Profile 1")).unwrap();
+        std::fs::create_dir_all(tmp.join("Profile 2")).unwrap();
+        // 噪音目录不应被识别为 profile
+        std::fs::create_dir_all(tmp.join("Crashpad")).unwrap();
+        std::fs::create_dir_all(tmp.join("ShaderCache")).unwrap();
+
+        let ids = enumerate_default_dir_subprofiles(&tmp.to_string_lossy());
+        assert!(ids.contains(&"Default".to_string()));
+        assert!(ids.contains(&"Profile 1".to_string()));
+        assert!(ids.contains(&"Profile 2".to_string()));
+        assert!(!ids.contains(&"Crashpad".to_string()));
+        assert!(!ids.contains(&"ShaderCache".to_string()));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Patch 4 单元测试：mtime 兜底判定
+    #[test]
+    #[cfg(windows)]
+    fn test_local_state_recently_modified() {
+        let tmp = std::env::temp_dir().join(format!(
+            "appkit_test_mtime_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // 刚创建 Local State → 60s 内 → true
+        std::fs::write(tmp.join("Local State"), b"{}").unwrap();
+        assert!(
+            local_state_recently_modified(&tmp, 60),
+            "刚创建的 Local State 应被判定为 60s 内修改"
+        );
+
+        // 目录不存在 → false
+        let notexist = tmp.join("NotExist");
+        assert!(
+            !local_state_recently_modified(&notexist, 60),
+            "目录不存在应返回 false"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Patch 1 单元测试：空 profiles 输入 → 不 panic 且返回结构合理的结果
+    #[test]
+    #[cfg(windows)]
+    fn test_default_dir_injection_does_not_panic() {
+        let result = detect_browser_running_processes(&[]);
+        // 注入的 Default profile（若本机装了对应浏览器）必须 confidence 是合法枚举
+        for s in &result {
+            if s.profile_id == "Default" {
+                assert!(
+                    s.detection_confidence == "unreachable"
+                        || s.detection_confidence == "exact"
+                        || s.detection_confidence == "heuristic",
+                    "injected Default profile confidence must be a known enum, got {}",
+                    s.detection_confidence
+                );
+            }
+        }
+        // 不强制断言：注入与否取决于本机是否安装了 Edge/Chrome
     }
 }

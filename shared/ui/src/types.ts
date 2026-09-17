@@ -125,6 +125,14 @@ export interface BrowserProcessState {
   running_kind: "own" | "shared";
   /** shared 时共享主进程对应的 profile id（own 时为 null） */
   owner_profile_id: string | null;
+  /**
+   * 检测可信度（appkit-core 新增）：
+   * - "exact"       = 命令行精确命中 / RM 句柄精确命中
+   * - "heuristic"   = Local State mtime 兜底命中（Edge 默认目录典型场景）
+   * - "unreachable" = 未找到任何运行证据
+   * 未提供时视为 "exact"（向后兼容）
+   */
+  detection_confidence?: "exact" | "heuristic" | "unreachable";
 }
 
 /** 浏览器自动化测试参数（000 模板项目专用） */
