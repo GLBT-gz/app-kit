@@ -686,6 +686,63 @@ fn enumerate_default_dir_subprofiles(_default_dir: &str) -> Vec<String> {
     vec!["Default".to_string()]
 }
 
+/// 默认目录是否存在「近期活动」的二级兜底信号。
+/// 用于 `--no-startup-window` 主进程（Edge 开机自启 / 关闭所有窗口后的驻留进程）：
+/// 当默认目录下任一 sub-profile 的 Preferences/History/Secure Preferences，
+/// 或父目录的 Local State 在 time_secs 内被修改过 → 视为「该默认目录正在被浏览器持有」。
+///
+/// 用途：避免一刀切 skip `--no-startup-window` 主进程导致 Edge 后台驻留时
+/// 默认目录的所有 profile 一律显示「未启动」（即使浏览器刚关闭最后一个窗口、
+/// profile 的会话/历史/书签刚刚被写过）。
+#[cfg(windows)]
+fn default_dir_has_recent_activity(default_dir: &str, time_secs: u64) -> bool {
+    use std::time::SystemTime;
+    let p = std::path::Path::new(default_dir);
+    if !p.exists() {
+        return false;
+    }
+    let threshold = SystemTime::now() - std::time::Duration::from_secs(time_secs);
+
+    // 1) 检查每个 sub-profile（Default / Profile N）的核心文件 mtime
+    if let Ok(rd) = std::fs::read_dir(p) {
+        for entry in rd.flatten() {
+            let ep = entry.path();
+            if !ep.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name != "Default" && !name.starts_with("Profile ") {
+                continue;
+            }
+            for fname in &["Preferences", "History", "Secure Preferences"] {
+                let f = ep.join(fname);
+                if let Ok(meta) = std::fs::metadata(&f) {
+                    if let Ok(mt) = meta.modified() {
+                        if mt > threshold {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 2) 检查父目录的 Local State mtime（Edge 即使未打开窗口也会定期写）
+    let ls = p.join("Local State");
+    if let Ok(meta) = std::fs::metadata(&ls) {
+        if let Ok(mt) = meta.modified() {
+            if mt > threshold {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(windows))]
+fn default_dir_has_recent_activity(_default_dir: &str, _time_secs: u64) -> bool {
+    false
+}
+
 /// 二级兜底：profile 目录下的 Local State / Preferences / Secure Preferences
 /// 在 `time_secs` 内被修改 → 视为运行。修复 RM 探测在 Edge 默认目录失效的场景。
 #[cfg(windows)]
@@ -748,8 +805,17 @@ pub fn scan_running_browser_processes(exe_name: &str) -> HashMap<String, Option<
 /// user-data-dir，供同目录多 profile 场景做目录级兜底探测。主进程可能不带
 /// --profile-directory（此时 extract_instance_from_cmdline 会丢弃），但目录本身在运行。
 ///
-/// 注意：`--no-startup-window` 后台进程（如 Edge 开机自启 / 关闭所有窗口后的驻留进程）
-/// 没有可见窗口，不属于「浏览器已启动」，直接跳过，避免把其预加载的 profile 误判为运行。
+/// `--no-startup-window` 主进程（Edge 开机自启 / 关闭所有窗口后的驻留进程）的处理：
+/// 不能一刀切 skip —— Edge 默认目录进程几乎全是这种后台驻留，且没有可见窗口不等于
+/// 「用户没在用」：用户刚关闭最后一个窗口后的几秒到几分钟，profile 的 History/Preferences
+/// 仍会被后台进程持续写。如果直接 skip，会导致默认目录的所有 profile 一律显示「未启动」。
+///
+/// 二级判断逻辑：
+/// 1. 若是 default-instance 主进程（无 --user-data-dir）+ 默认目录近期无活动 → skip
+///    （真后台驻留，无 profile 加载）
+/// 2. 若是 default-instance 主进程 + 默认目录近期有活动 → 标记为 default-instance
+///    并把默认目录加入 dirs（走 Patch 1 注入的 Default profile + RM/mtime 兜底）
+/// 3. 否则（带 --user-data-dir 的 --no-startup-window 主进程）→ 保持原行为（业务侧配置）
 fn scan_running_browser_instances_with_dirs(
     exe_name: &str,
 ) -> (HashMap<String, Option<u16>>, Vec<String>) {
@@ -758,9 +824,33 @@ fn scan_running_browser_instances_with_dirs(
     for (exe, cmd_line) in scan_running_processes_native(&[exe_name]) {
         let args = cmd_args(&cmd_line);
         let is_child = args.iter().any(|a| a.starts_with("--type="));
-        if !is_child && args.iter().any(|a| a.starts_with("--no-startup-window")) {
+        let is_no_startup = args.iter().any(|a| a.starts_with("--no-startup-window"));
+
+        if !is_child && is_no_startup {
+            // 二级判断：仅当「无 --user-data-dir 且默认目录无活动」才 skip
+            let has_user_data_dir = extract_cmd_arg(&cmd_line, "--user-data-dir").is_some();
+            if !has_user_data_dir {
+                let bt = if exe.eq_ignore_ascii_case("msedge.exe") {
+                    "edge"
+                } else {
+                    "chrome"
+                };
+                if let Some(def_dir) = get_user_data_dir(bt) {
+                    if !default_dir_has_recent_activity(&def_dir, 60) {
+                        // 真后台驻留，无活动 → 保持原 skip 行为
+                        continue;
+                    }
+                    // 默认目录有近期活动 → 标记为 default-instance + 加入 dirs
+                    let key = format!("{}#default-instance", exe);
+                    instances.entry(key).or_insert(None);
+                    dirs.push(def_dir);
+                    continue;
+                }
+            }
+            // 带 --user-data-dir 的 --no-startup-window 主进程：保持原行为
             continue;
         }
+
         extract_instance_from_cmdline(&cmd_line, &exe, &mut instances);
         if !is_child {
             if let Some(ud) = extract_cmd_arg(&cmd_line, "--user-data-dir") {
@@ -1092,5 +1182,130 @@ mod tests {
             }
         }
         // 不强制断言：注入与否取决于本机是否安装了 Edge/Chrome
+    }
+
+    /// v2 单元测试：default_dir_has_recent_activity 兜底信号
+    #[test]
+    #[cfg(windows)]
+    fn test_default_dir_has_recent_activity() {
+        let tmp = std::env::temp_dir().join(format!(
+            "appkit_test_recent_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("Default")).unwrap();
+        std::fs::create_dir_all(tmp.join("Profile 1")).unwrap();
+
+        // 场景 A：默认目录无任何文件 → false
+        assert!(
+            !default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "空目录应返回 false"
+        );
+
+        // 场景 B：Default/Preferences 刚写 → true
+        std::fs::write(tmp.join("Default").join("Preferences"), b"{}").unwrap();
+        assert!(
+            default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "Default/Preferences 刚写 → 应返回 true"
+        );
+
+        // 场景 C：噪音子目录不影响判断（只认 Default + Profile *）
+        std::fs::create_dir_all(tmp.join("Crashpad").join("dummy")).unwrap();
+        assert!(
+            default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "Crashpad 噪音目录不应影响判断"
+        );
+
+        // 场景 D：Default/Preferences 写到很久以前 + Profile 1/History 新写 → true（任一即触发）
+        // 用 backdating 模拟：把 mtime 调成 1 小时前
+        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        filetime_set_mtime(tmp.join("Default").join("Preferences"), old_time);
+        std::fs::write(tmp.join("Profile 1").join("History"), b"x").unwrap();
+        assert!(
+            default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "Profile 1/History 新写 → 应返回 true"
+        );
+
+        // 场景 E：所有文件 mtime 调成 1 小时前 → false
+        filetime_set_mtime(tmp.join("Profile 1").join("History"), old_time);
+        let ls = tmp.join("Local State");
+        if ls.exists() {
+            filetime_set_mtime(ls, old_time);
+        }
+        assert!(
+            !default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "所有核心文件 mtime 调成 1 小时前 → 应返回 false"
+        );
+
+        // 场景 F：父目录 Local State 刚写 → true
+        std::fs::write(tmp.join("Local State"), b"{}").unwrap();
+        assert!(
+            default_dir_has_recent_activity(&tmp.to_string_lossy(), 60),
+            "Local State 刚写 → 应返回 true"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// 跨平台 mtime 设置辅助（依赖 std::fs，不引入额外 crate）
+    #[cfg(windows)]
+    fn filetime_set_mtime(path: std::path::PathBuf, t: std::time::SystemTime) {
+        let _ = std::process::Command::new("powershell")
+            .arg("-NoProfile")
+            .arg("-Command")
+            .arg(format!(
+                "(Get-Item '{}').LastWriteTime = [DateTime]::FromFileTimeUtc({})",
+                path.to_string_lossy().replace('\'', "''"),
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    .wrapping_add(11644473600)
+            ))
+            .output();
+    }
+
+    /// v2 端到端测试：直接探测真实运行的 Edge 后台驻留主进程
+    /// （要求测试机上有 Edge 在跑且默认目录近期有 profile 文件被改）
+    /// 不强制断言：取决于测试环境是否有 Edge 在跑
+    #[test]
+    #[cfg(windows)]
+    fn test_edge_default_dir_running_detection_e2e() {
+        let edge_dir = dirs::data_local_dir()
+            .map(|d| d.join("Microsoft").join("Edge").join("User Data"));
+        let Some(edge_dir) = edge_dir else { return; };
+        let edge_dir_str = edge_dir.to_string_lossy().to_string();
+
+        // 仅当本机装了 Edge 且默认目录有近期活动才断言
+        if !edge_dir.exists() || !default_dir_has_recent_activity(&edge_dir_str, 60) {
+            eprintln!("[skip] Edge default dir not active on this machine");
+            return;
+        }
+
+        let profiles = vec![(edge_dir_str.clone(), "Default".to_string())];
+        let result = detect_browser_running_processes(&profiles);
+        let default_state = result
+            .iter()
+            .find(|s| s.user_data_dir.eq_ignore_ascii_case(&edge_dir_str) && s.profile_id == "Default")
+            .expect("Edge Default profile should be in result");
+
+        eprintln!(
+            "[e2e] Edge Default profile: is_running={}, confidence={}, debug_port={:?}, running_kind={}",
+            default_state.is_running,
+            default_state.detection_confidence,
+            default_state.debug_port,
+            default_state.running_kind
+        );
+
+        // 关键断言：Edge 在跑 + 默认目录有活动 → 必然识别为 running
+        assert!(
+            default_state.is_running,
+            "Edge 默认目录有近期活动时应被识别为 running，但返回 is_running=false。"
+        );
+        assert!(
+            default_state.detection_confidence == "heuristic"
+                || default_state.detection_confidence == "exact",
+            "detection_confidence 必须是 heuristic 或 actual，得到: {}",
+            default_state.detection_confidence
+        );
     }
 }
