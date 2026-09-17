@@ -30,8 +30,17 @@ export function usePlatformOptions(
     return selectedCardKeys
       .filter(key => {
         const parts = key.split("|");
+        const bt = parts[0];
+        const udDir = parts[1];
+        const pid = parts[2];
         // 主程序入口 profile（如 id=Default）由业务侧 isMainEntry 判定，不作为平台绑定目标
-        return !(getBrowserUIExtension(parts[0])?.isMainEntry?.(parts[2]) === true);
+        if (getBrowserUIExtension(bt)?.isMainEntry?.(pid) === true) return false;
+        // 过滤残留 key：profile 已被删除/重命名（browserStore 中不存在）时，
+        // CurrentBrowserCards 不显示勾选，下拉框也应同步隐藏，避免幽灵选项。
+        return browsers.some(b =>
+          b.browser_type === bt &&
+          (b.profiles || []).some(p => p.user_data_dir === udDir && p.id === pid)
+        );
       })
       .map(key => {
         const parts = key.split("|");
