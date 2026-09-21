@@ -19,3 +19,4 @@ scripts/            构建/工具脚本
 - **保持业务无关**：不引入具体业务概念；新能力先讨论归属（core / automation / ui）再实现。
 - 改动影响面大（glbt-apps 等引用方）：**讨论先行**，改后同步验证引用方构建。
 - git 规范：`<type>(<scope>): 中文`；改 Rust 必须 `cargo check` 通过。
+- **多人共用 worktree 协作纪律**（2026-09-21 真实事故教训）：commit 前**必看** `git status` + `git diff --cached --stat`，确认 staged 只含自己的改动——`git checkout HEAD -- <file>` / `git restore <file>` 会**静默覆盖** worktree 里**任何人未提交的本地修改**（git 不可逆）。详细 → `../my-skills/git-工作流/references/多人协作-worktree事故教训.md`。
