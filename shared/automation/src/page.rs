@@ -99,6 +99,24 @@ impl<'a> Page<'a> {
         commands::runtime_evaluate(self.cdp, js).await
     }
 
+    /// 执行 JavaScript（带超时兜底）
+    ///
+    /// CDP `Runtime.evaluate` 无短超时（默认等全局 90s）——页面导航/SPA 加载期
+    /// evaluate 会长时间挂起。本方法用单次 `tokio::time::timeout` 包裹，
+    /// 超时返回 anyhow 错误（`caller.ok()` 兜底）。
+    ///
+    /// 推荐与 `Tab::wait_ready` 配合：开页后先 `wait_ready`，业务期间 evaluate
+    /// 直接用 `evaluate` 即可；只有在"必须在加载期探测"的场景（极少数）才用本方法。
+    pub async fn evaluate_with_timeout(
+        &self,
+        js: &str,
+        timeout: std::time::Duration,
+    ) -> Result<serde_json::Value> {
+        let snippet = truncate_at_char_boundary(js, 60);
+        debug!("执行 JS（{}ms 超时）: {}...", timeout.as_millis(), snippet);
+        commands::runtime_evaluate_with_timeout(self.cdp, js, timeout).await
+    }
+
     /// 执行异步 JavaScript（支持 Promise/async/await）
     pub async fn evaluate_async(&self, js: &str) -> Result<serde_json::Value> {
         let snippet = truncate_at_char_boundary(js, 60);

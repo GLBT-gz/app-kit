@@ -552,6 +552,19 @@ impl Tab {
         Ok(result["value"].as_str().unwrap_or("").to_string())
     }
 
+    /// 等待页面加载完成（readyState=complete）。
+    ///
+    /// `open_tab` 的 `Page.navigate` 是**异步发起**就返回的——若新开/复用的 tab
+    /// 仍在导航/SPA 加载，立即 evaluate 会因 CDP Runtime.evaluate 无短超时
+    /// 而长时间挂起（实测 27s+ 无任何日志）。本函数用单次探测 5s 超时的轮询等
+    /// `readyState==='complete'`，从根上消除"新页导航期 evaluate 挂起"问题。
+    ///
+    /// 调用方应在 `open_tab`/`CdpConnection::connect(ws)` 之后**立即**调用本函数，
+    /// 再做任何 evaluate / 切公司 / 下载模板等业务操作。
+    pub async fn wait_ready(&self, timeout: Duration) -> Result<()> {
+        commands::page_load_event_with_timeout(&self.cdp, timeout).await
+    }
+
     /// 关闭标签页
     pub async fn close(self) -> Result<()> {
         // Tab 的 drop 时会自动断开 WebSocket

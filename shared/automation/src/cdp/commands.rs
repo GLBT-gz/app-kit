@@ -256,6 +256,26 @@ pub async fn runtime_evaluate(conn: &CdpConnection, expression: &str) -> Result<
     Ok(result.get("result").cloned().unwrap_or(serde_json::Value::Null))
 }
 
+/// 执行 JavaScript（带超时兜底）
+///
+/// CDP 的 `Runtime.evaluate` **没有短超时**（默认等全局 90s）——页面仍在导航/
+/// SPA 加载时 evaluate 会长时间挂起。本函数用 `tokio::time::timeout` 包裹，
+/// 超时返回 anyhow 错误，调用方可以 `.ok()` 兜底（参考 `page_load_event_with_timeout`
+/// 同样的模式：探测 + 单次短超时 + 失败重试）。
+///
+/// 调用方应在页面加载完成（`Tab::wait_ready`）后再 evaluate；若必须在加载期
+/// 探测，推荐配合 5s 单次超时 + 失败时重试。
+pub async fn runtime_evaluate_with_timeout(
+    conn: &CdpConnection,
+    expression: &str,
+    timeout: std::time::Duration,
+) -> Result<Value> {
+    match tokio::time::timeout(timeout, runtime_evaluate(conn, expression)).await {
+        Ok(r) => r,
+        Err(_) => anyhow::bail!("Runtime.evaluate 超时（{}ms）", timeout.as_millis()),
+    }
+}
+
 /// 执行 JavaScript（支持 async/await）
 /// 与 runtime_evaluate 的区别在于使用 awaitPromise: true 等待 Promise 完成
 pub async fn runtime_evaluate_async(conn: &CdpConnection, expression: &str) -> Result<Value> {
