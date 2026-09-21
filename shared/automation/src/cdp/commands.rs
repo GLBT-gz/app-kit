@@ -54,26 +54,42 @@ pub async fn page_load_event(conn: &CdpConnection) -> Result<()> {
 
 /// 等待页面加载完成（自定义超时）
 ///
+/// 每轮探测同时检查 `document.readyState==='complete'` **且** `location.href`
+/// 不以 `about:` 开头——`open_tab` 内部先 `Target.createTarget({url: "about:blank"})`
+/// 再 `Page.navigate(target)`，所以创建后立刻检查 readyState 会拿到 `complete`
+///（about:blank 默认 complete），但实际页面尚未导航到目标 URL，会让上层误判
+/// 「页面已加载」并立即 evaluate（找不到目标元素，重复超时浪费）。
+///
 /// 每次探测也设 5 秒超时：若 CDP 连接异常，单次 `Runtime.evaluate` 默认等
 /// 全局 90 秒超时会让调用方长时间占锁，这里用更短超时及时失败。
 pub async fn page_load_event_with_timeout(conn: &CdpConnection, timeout: std::time::Duration) -> Result<()> {
     conn.send_command("Page.enable", Value::Null).await?;
     let deadline = std::time::Instant::now() + timeout;
+    let probe = "(function() { return JSON.stringify({ ready: document.readyState, href: location.href }); })()";
     loop {
         if std::time::Instant::now() >= deadline {
             anyhow::bail!("等待页面加载超时 ({} 秒)", timeout.as_secs());
         }
-        let state = tokio::time::timeout(
+        let parsed = tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            runtime_evaluate(conn, "document.readyState"),
+            runtime_evaluate(conn, probe),
         )
         .await
         .ok()
         .and_then(|r| r.ok())
         .and_then(|v| v.get("value").and_then(|s| s.as_str()).map(|s| s.to_string()))
-        .unwrap_or_default();
-        if state == "complete" {
-            info!("页面加载完成 (readyState=complete)");
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        let (ready_state, href) = parsed
+            .as_ref()
+            .map(|v| {
+                (
+                    v.get("ready").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                    v.get("href").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                )
+            })
+            .unwrap_or_else(|| (String::new(), String::new()));
+        if ready_state == "complete" && !href.starts_with("about:") && !href.is_empty() {
+            info!("页面加载完成 (readyState=complete, href={})", &href[..href.len().min(80)]);
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
