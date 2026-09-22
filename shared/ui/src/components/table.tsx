@@ -11,11 +11,21 @@ export interface TableColumn<T> {
   onContextMenu?: (e: React.MouseEvent, row: T) => void;
 }
 
-/** 从渲染结果中递归提取纯文本（JSX / 函数组件 / 数组），用于 Ctrl+C 复制 */
+/** 从渲染结果中递归提取纯文本（JSX / 函数组件 / 数组），用于 Ctrl+C 复制
+ *  数组分支跳过 `data-nocopy="1"` 的元素（用于「去除货币单位」等模式：货币符号置灰+不可复制） */
 export function toText(v: React.ReactNode): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "string" || typeof v === "number") return String(v);
-  if (Array.isArray(v)) return v.map(toText).join("");
+  if (Array.isArray(v)) {
+    return v.map((child) => {
+      // 数组中的 data-nocopy="1" 元素跳过（不影响数组中其他兄弟节点）
+      if (typeof child === "object" && child !== null) {
+        const el = child as { props?: { "data-nocopy"?: string } };
+        if (el.props?.["data-nocopy"] === "1") return "";
+      }
+      return toText(child);
+    }).join("");
+  }
   // JSX 渲染的单元格（如 SkuCell 带高亮 span）：递归提取文本，保证 Ctrl+C 可复制
   if (typeof v === "object") {
     const el = v as { type?: unknown; props?: { children?: React.ReactNode } };
