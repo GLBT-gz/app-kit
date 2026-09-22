@@ -37,6 +37,11 @@ export interface PlatformDef {
   /**
    * 从 options（浏览器配置）中排除的浏览器类型（如 ["ziniao"] 让跨境平台
    * 下拉不出现紫鸟配置）。仅作用于 options；extraOptions（每平台专用选项源）不过滤。
+   *
+   * 最佳实践（2026-09 用户规范）：
+   * - `edge` / `chrome` 是通用自动化浏览器，每个平台默认就应可见 → 一般不写 excludeBt。
+   * - `ziniao` / `yideke` 等专属浏览器有自己的店铺范围判断逻辑（走本地缓存 / 嗅探），
+   *   不应混入通用平台的「当前浏览器配置」下拉 → 平台注册时建议加 `excludeBt: ["ziniao", "yideke"]`。
    */
   excludeBt?: string[];
 }
