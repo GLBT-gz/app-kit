@@ -26,6 +26,7 @@ fn main() {
         "get_data_directory",
         "get_install_directory",
         "save_file",
+        "get_update_base_url",
         // 数据库表管理（cmd-db）
         "get_db_tables",
         "clear_db_table",

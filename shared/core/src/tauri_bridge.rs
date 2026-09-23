@@ -354,6 +354,15 @@ fn read_file_base64(path: String) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+/// 获取版本服务器基础 URL（AboutPanel 显示用）。
+/// 值来源：runtime OS env `GLBT_UPDATE_BASE_URL` → compile-time 注入。
+/// 返回原始 base URL（含 scheme/host/port），前端按需要自行拼路径。
+#[cfg(feature = "cmd-utils")]
+#[tauri::command]
+fn get_update_base_url() -> String {
+    crate::update_server::update_base_url()
+}
+
 // ── 数据库表管理（cmd-db）──
 
 /// SQLite 数据库表信息
@@ -477,6 +486,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             get_install_directory,
             #[cfg(feature = "cmd-utils")]
             save_file,
+            #[cfg(feature = "cmd-utils")]
+            get_update_base_url,
             // ── 数据库表管理（cmd-db）──
             #[cfg(feature = "cmd-db")]
             get_db_tables,
