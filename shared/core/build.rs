@@ -77,5 +77,26 @@ permissions = [{permissions}]"#,
 
     // 输出 PERMISSION_FILES_PATH，让 Cargo 传递给依赖 crate 的 build script
     println!("cargo:PERMISSION_FILES_PATH={}", json_index.display());
+
+    // ── GLBT_UPDATE_BASE_URL 编译时注入 ──
+    // 用途：update_server::update_base_url() 的 fallback 来源；
+    //       详见 shared/core/src/update_server.rs 护照。
+    // 优先级：OS env GLBT_UPDATE_BASE_URL → 占位 placeholder。
+    // 占位仅确保未设 env 时 build 也成功；生产部署前必须设置真实版本服务器 URL。
+    let base = std::env::var("GLBT_UPDATE_BASE_URL").unwrap_or_else(|_| {
+        eprintln!("");
+        eprintln!("================================================================");
+        eprintln!("! GLBT_UPDATE_BASE_URL not set; using placeholder URL.");
+        eprintln!("!   placeholder: http://version-server.glbt-internal:8080");
+        eprintln!("!   For production builds set:");
+        eprintln!("!     GLBT_UPDATE_BASE_URL=http://<your-version-server>:8080 \\");
+        eprintln!("!       cargo tauri build");
+        eprintln!("================================================================");
+        eprintln!("");
+        "http://version-server.glbt-internal:8080".to_string()
+    });
+    println!("cargo:rustc-env=GLBT_UPDATE_BASE_URL={}", base);
+    println!("cargo:rerun-if-env-changed=GLBT_UPDATE_BASE_URL");
+
     println!("cargo:rerun-if-changed=build.rs");
 }
