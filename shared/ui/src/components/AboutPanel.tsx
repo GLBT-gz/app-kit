@@ -32,7 +32,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const [installing, setInstalling] = useState<string | null>(null);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [updateBaseUrl, setUpdateBaseUrl] = useState<string>("");
+  const [updateBaseUrl, setUpdateBaseUrl] = useState<string>("http://192.168.10.28:8080");
   const unlistenRef = useRef<(() => void) | null>(null);
   const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
@@ -46,7 +46,10 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       } catch { setAppVersion("0.1.0"); }
       try { setDataDir(await getDataDirectory()); } catch {}
       try { setInstallDir(await getInstallDirectory()); } catch {}
-      try { setUpdateBaseUrl(await invoke<string>("get_update_base_url")); } catch {}
+      try {
+        const v = await invoke<string>("get_update_base_url");
+        if (v) setUpdateBaseUrl(v);
+      } catch {}
     })();
     fetchVersions();
   }, []);
@@ -114,7 +117,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         </div>
         <div className="about-info-row">
           <span className="about-label">更新服务器</span>
-          <span className="about-value"><code>{updateBaseUrl || "(待配置 GLBT_UPDATE_BASE_URL)"}</code></span>
+          <span className="about-value"><code>{updateBaseUrl || "http://192.168.10.28:8080（dev 默认值 / build.rs 注入；运行期可被 GLBT_UPDATE_BASE_URL env 覆盖）"}</code></span>
         </div>
         {installDir && (
           <div className="about-info-row">
