@@ -57,6 +57,15 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
 5. **前端 `plugin:appkit-core|xxx` 调用找不到命令 = not found**，编译期不报错。
    常见原因：命令未注册 / build.rs 未列出 / feature 未启用。
 
+6. **`<LogPanel>` / `<SheetTable>` 集成必须在 flex 容器直接子级**（016-自动提现 2026-09-24 实战教训）。
+   这两个组件内部用 `position: absolute; inset: 0` 撑满父级（`.log-panel-list` / `.sheet-table-scroll`），
+   依赖父级 chain `.log-panel-body` / `.log-panel` / `LogPanel` 都是 `flex: 1; min-height: 0`。
+   **禁止在父级与 LogPanel/SheetTable 之间包 `<div style="flex:1;min-height:0;overflow:auto">` 中间层**——
+   该中间层会打断 flex chain 导致子元素高度坍塌到 3px。
+   正确做法：LogPanel/SheetTable 直接放在外层 flex column 容器的子级，由 `.xxx-container > .log-panel` CSS
+   提供 `flex: 1; min-height: 0`。**排查指南**：日志/表格不可见时 DevTools 看 `.log-panel-list` 高度——
+   不是 0 / 满容器，而是 3px ~ 10px，几乎肯定是中间层 div 干扰。
+
 ## 命令一致性校验
 
 ```bash
