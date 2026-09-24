@@ -3,7 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { installVersion, getDataDirectory, getInstallDirectory, openDir } from "../api";
-import { appIdToDir, nasBaseDir } from "../data/nas-app-id";
+import { appIdToDir } from "../data/nas-app-id";
 import { Button } from "./controls/Button";
 
 interface VersionEntry {
@@ -39,7 +39,26 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const unlistenRef = useRef<(() => void) | null>(null);
   const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
-  const [openErr, setOpenErr] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<"nas" | "install" | "data" | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 复制按钮反馈：短暂显示 "已复制" / 复制错误; 组件卸载时清理 timer.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  const flashCopied = (key: "nas" | "install" | "data") => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    setCopiedKey(key);
+    setResultMsg(null);
+    copyTimerRef.current = setTimeout(() => setCopiedKey(null), 1500);
+  };
+
+  const flashCopyErr = (text: string) => {
+    setResultMsg({ type: "error", text });
+  };
 
   useEffect(() => {
     (async () => {
@@ -129,15 +148,18 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
               size="sm"
               style={{ marginLeft: 8 }}
               onClick={async () => {
-                setOpenErr(null);
                 try {
-                  await openDir(`${nasBaseDir}\\${appIdToDir(appId)}`);
+                  // 与 JSX `<code>\\Nas2025\...</code>` 字面一致（用户复制 = 看到）
+                  await navigator.clipboard.writeText(
+                    String.raw`\\Nas2025\Rpa数据\#软件发行\${appIdToDir(appId)}`
+                  );
+                  flashCopied("nas");
                 } catch (e: any) {
-                  setOpenErr(`打开更新来源失败：${String(e?.message || e)}`);
+                  flashCopyErr(`复制更新来源失败：${String(e?.message || e)}`);
                 }
               }}
             >
-              打开
+              {copiedKey === "nas" ? "已复制" : "复制"}
             </Button>
           </span>
         </div>
@@ -150,15 +172,15 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
                 size="sm"
                 style={{ marginLeft: 8 }}
                 onClick={async () => {
-                  setOpenErr(null);
                   try {
-                    await openDir(installDir);
+                    await navigator.clipboard.writeText(installDir);
+                    flashCopied("install");
                   } catch (e: any) {
-                    setOpenErr(`打开安装目录失败：${String(e?.message || e)}`);
+                    flashCopyErr(`复制安装目录失败：${String(e?.message || e)}`);
                   }
                 }}
               >
-                打开
+                {copiedKey === "install" ? "已复制" : "复制"}
               </Button>
             </span>
           </div>
@@ -172,22 +194,17 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
                 size="sm"
                 style={{ marginLeft: 8 }}
                 onClick={async () => {
-                  setOpenErr(null);
                   try {
-                    await openDir(dataDir);
+                    await navigator.clipboard.writeText(dataDir);
+                    flashCopied("data");
                   } catch (e: any) {
-                    setOpenErr(`打开数据目录失败：${String(e?.message || e)}`);
+                    flashCopyErr(`复制数据目录失败：${String(e?.message || e)}`);
                   }
                 }}
               >
-                打开
+                {copiedKey === "data" ? "已复制" : "复制"}
               </Button>
             </span>
-          </div>
-        )}
-        {openErr && (
-          <div style={{ fontSize: 12, color: "var(--error-color, #d4453d)", marginTop: 8 }}>
-            {openErr}
           </div>
         )}
       </div>
