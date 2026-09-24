@@ -29,6 +29,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const [dataDir, setDataDir] = useState("");
   const [installDir, setInstallDir] = useState("");
   const [versions, setVersions] = useState<VersionEntry[]>([]);
+  const [versionsErr, setVersionsErr] = useState<string>("");
   const [installing, setInstalling] = useState<string | null>(null);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -53,8 +54,14 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
     try {
       const text = await invoke<string>("fetch_versions");
       const data = JSON.parse(text);
-      if (Array.isArray(data)) setVersions(data);
-    } catch { /* 服务器未开或网络不可达 */ }
+      if (Array.isArray(data)) {
+        setVersions(data);
+      } else {
+        setVersionsErr("返回非数组: " + String(text).slice(0, 200));
+      }
+    } catch (e: any) {
+      setVersionsErr("fetch_versions ERR: " + String(e?.message || e));
+    }
   };
 
   const doDownload = async (v: VersionEntry) => {
@@ -195,7 +202,9 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
           </Button>
         </div>
         {versions.length === 0 ? (
-          <div className="about-history-empty">暂无版本记录（服务器未开启或网络不可达）</div>
+          <div className="about-history-empty">
+              {versionsErr ? `错误: ${versionsErr}` : "暂无版本记录（服务器未开启或网络不可达）"}
+            </div>
         ) : (
           versions.map((v) => {
             const isCurrent = v.version === appVersion;
