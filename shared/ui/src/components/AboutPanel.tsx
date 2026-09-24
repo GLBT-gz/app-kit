@@ -11,6 +11,8 @@ interface VersionEntry {
   pub_date: string;
   url: string;
   signature: string;
+  /** SMB 直读路径（ca72113b release 重构后引入；旧版本可缺省回退 url） */
+  smb_path?: string;
 }
 
 function formatDate(isoStr: string): string {
@@ -73,7 +75,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       const nameClean = appName.replace(/[^a-zA-Z\u4e00-\u9fff0-9]+/g, "-").replace(/^-|-$/g, "");
       // 默认文件名直接取安装包原名（versions.json 的 url 最后一段），
       // 与发布流程「安装包保持打包原名」一致，避免硬编码前缀导致命名不一致
-      const urlName = v.smb_path.split(/[\\/]/).pop();
+      const urlName = (v.smb_path || v.url).split(/[\\/]/).pop();
       const defaultName = urlName ? decodeURIComponent(urlName) : `${nameClean}-${v.version}-x64-setup.exe`;
       const savePath = await save({
         defaultPath: defaultName,
