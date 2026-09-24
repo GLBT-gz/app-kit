@@ -149,9 +149,10 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
               style={{ marginLeft: 8 }}
               onClick={async () => {
                 try {
-                  // 与 JSX `<code>\\Nas2025\...</code>` 字面一致（用户复制 = 看到）
+                  // 与 JSX `<code>\\Nas2025\Rpa数据\#软件发行\{dir}</code>` 字面一致（用户复制 = 看到）
+                  // 普通模板字符串精确控制反斜杠转义: \\ → 字面 1 个 \ (JSX 文本里 \\ 也是字面, \X 是字面)
                   await navigator.clipboard.writeText(
-                    String.raw`\\Nas2025\Rpa数据\#软件发行\${appIdToDir(appId)}`
+                    `\\\\Nas2025\\Rpa数据\\#软件发行\\${appIdToDir(appId)}`
                   );
                   flashCopied("nas");
                 } catch (e: any) {
