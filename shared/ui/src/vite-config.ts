@@ -182,7 +182,9 @@ export function createViteConfig(options: ViteConfigOptions) {
   const effectiveStrictPort = process.env.PORT ? true : strictPort;
 
   const root = realpathSync(process.cwd());
-  const host = process.env.TAURI_DEV_HOST || false;
+  // 默认绑 IPv4 (127.0.0.1) 而非 OS 解析的 localhost，避免 Windows 上 Vite 默认 bind 到 IPv6 ::1 而 WebView2 解析 localhost 优先 IPv4 导致 dev 窗口白屏。
+  // 想绑所有接口可显式 `set TAURI_DEV_HOST=0.0.0.0`（Tauri mobile / 跨机调试场景）。
+  const host = process.env.TAURI_DEV_HOST || '127.0.0.1';
 
   const plugins: any[] = [react(), ...extraPlugins];
   if (enableFonts) plugins.push(copyFontsPlugin());
