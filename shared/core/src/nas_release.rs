@@ -60,10 +60,10 @@ pub fn versions_path(app_id: &str) -> std::path::PathBuf {
 }
 
 /// 从 NAS 读取 versions.json 原始字符串（**strip UTF-8 BOM**）。
-/// 失败时 err 包含路径，方便同事看到具体哪个 app/路径读不到。
-/// BOM 处理：versions.json 文件以 UTF-8 with BOM 保存（之前 glbt-releases 仓的版本习惯）；
-/// std::fs::read_to_string 用 utf-8 解码会**保留 BOM** (U+FEFF)，客户端 JS JSON.parse 看到 BOM 直接抛错。
-/// 改为先读 bytes + strip prefix BOM 后再 to_string。
+/// 从 NAS 读取 versions.json 字符串（strip UTF-8 BOM，UTF-8 解码）。
+/// 项目 versions.json 全部统一为 UTF-8 编码（2026-01-25 修复 commit 引入）。
+/// std::fs::read_to_string 默认 UTF-8 解码 — 保留 BOM (U+FEFF) 客户端 JSON.parse 失败，
+/// 所以先读 bytes + strip BOM 后再 to_string。
 pub fn read_versions(app_id: &str) -> Result<String, String> {
     let p = versions_path(app_id);
     let bytes = std::fs::read(&p).map_err(|e| {
@@ -82,6 +82,9 @@ pub fn read_versions(app_id: &str) -> Result<String, String> {
             e
         )
     })?;
+    // strip UTF-8 BOM if present
+    Ok(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
+}
     // strip leading UTF-8 BOM (U+FEFF) if present
     Ok(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
 }
