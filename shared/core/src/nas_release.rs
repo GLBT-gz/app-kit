@@ -59,18 +59,31 @@ pub fn versions_path(app_id: &str) -> std::path::PathBuf {
         .join("versions.json")
 }
 
-/// 从 NAS 读取 versions.json 原始字符串（utf-8-sig 处理 BOM）。
+/// 从 NAS 读取 versions.json 原始字符串（**strip UTF-8 BOM**）。
 /// 失败时 err 包含路径，方便同事看到具体哪个 app/路径读不到。
+/// BOM 处理：versions.json 文件以 UTF-8 with BOM 保存（之前 glbt-releases 仓的版本习惯）；
+/// std::fs::read_to_string 用 utf-8 解码会**保留 BOM** (U+FEFF)，客户端 JS JSON.parse 看到 BOM 直接抛错。
+/// 改为先读 bytes + strip prefix BOM 后再 to_string。
 pub fn read_versions(app_id: &str) -> Result<String, String> {
     let p = versions_path(app_id);
-    std::fs::read_to_string(&p).map_err(|e| {
+    let bytes = std::fs::read(&p).map_err(|e| {
         format!(
             "读取发行包元数据失败: app_id={} path={} err={}",
             app_id,
             p.display(),
             e
         )
-    })
+    })?;
+    let text = std::str::from_utf8(&bytes).map_err(|e| {
+        format!(
+            "解码 versions.json UTF-8 失败: app_id={} path={} err={}",
+            app_id,
+            p.display(),
+            e
+        )
+    })?;
+    // strip leading UTF-8 BOM (U+FEFF) if present
+    Ok(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
 }
 
 /// 从 SMB 路径复制安装包到本地目标路径。简单 std::fs::copy（NAS 是内网，千兆带宽瞬时完成，无流式进度需求）。
