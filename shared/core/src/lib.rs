@@ -2,7 +2,6 @@ pub mod config;
 pub mod encoding;
 pub mod store;
 pub mod system;
-pub mod update_server;
 
 /// 浏览器检测/配置/进程管理（仅启用 `cmd-browser` 时编译）
 #[cfg(feature = "cmd-browser")]

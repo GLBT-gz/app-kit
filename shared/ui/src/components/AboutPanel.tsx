@@ -32,7 +32,6 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const [installing, setInstalling] = useState<string | null>(null);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [updateBaseUrl, setUpdateBaseUrl] = useState<string>("http://192.168.10.28:8080");
   const unlistenRef = useRef<(() => void) | null>(null);
   const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
@@ -46,10 +45,6 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       } catch { setAppVersion("0.1.0"); }
       try { setDataDir(await getDataDirectory()); } catch {}
       try { setInstallDir(await getInstallDirectory()); } catch {}
-      try {
-        const v = await invoke<string>("get_update_base_url");
-        if (v) setUpdateBaseUrl(v);
-      } catch {}
     })();
     fetchVersions();
   }, []);
@@ -71,7 +66,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       const nameClean = appName.replace(/[^a-zA-Z\u4e00-\u9fff0-9]+/g, "-").replace(/^-|-$/g, "");
       // 默认文件名直接取安装包原名（versions.json 的 url 最后一段），
       // 与发布流程「安装包保持打包原名」一致，避免硬编码前缀导致命名不一致
-      const urlName = v.url.split("/").pop();
+      const urlName = v.smb_path.split(/[\\/]/).pop();
       const defaultName = urlName ? decodeURIComponent(urlName) : `${nameClean}-${v.version}-x64-setup.exe`;
       const savePath = await save({
         defaultPath: defaultName,
@@ -116,8 +111,8 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
           <span className="about-value">{appVersion}</span>
         </div>
         <div className="about-info-row">
-          <span className="about-label">更新服务器</span>
-          <span className="about-value"><code>{updateBaseUrl || "http://192.168.10.28:8080（dev 默认值 / build.rs 注入；运行期可被 GLBT_UPDATE_BASE_URL env 覆盖）"}</code></span>
+          <span className="about-label">更新来源</span>
+          <span className="about-value"><code>\\Nas2025\Rpa数据\#软件发行</code></span>
         </div>
         {installDir && (
           <div className="about-info-row">
