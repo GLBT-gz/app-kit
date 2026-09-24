@@ -85,9 +85,6 @@ pub fn read_versions(app_id: &str) -> Result<String, String> {
     // strip UTF-8 BOM if present
     Ok(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
 }
-    // strip leading UTF-8 BOM (U+FEFF) if present
-    Ok(text.strip_prefix('\u{FEFF}').unwrap_or(text).to_string())
-}
 
 /// 从 SMB 路径复制安装包到本地目标路径。简单 std::fs::copy（NAS 是内网，千兆带宽瞬时完成，无流式进度需求）。
 /// 若以后需大文件 + 进度回调，再换 Read+Seek+emit。
