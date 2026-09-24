@@ -121,7 +121,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         </div>
         <div className="about-info-row">
           <span className="about-label">更新来源</span>
-          <span className="about-value"><code>\\Nas2025\Rpa数据\#软件发行</code></span>
+          <span className="about-value"><code>\\Nas2025\Rpa数据\#软件发行\{appId}</code></span>
         </div>
         {installDir && (
           <div className="about-info-row">
