@@ -299,7 +299,13 @@ fn list_database_files() -> Result<Vec<DatabaseFileEntry>, String> {
 #[cfg(feature = "cmd-utils")]
 #[tauri::command]
 fn open_directory(path: String) -> Result<String, String> {
-    opener::open(&path).map_err(|e| format!("打开目录失败: {}", e))?;
+    // explorer.exe 直接接受 UNC 路径（opener::ShellExecuteW 在 UNC 路径上
+    // 返回 ERROR_FILE_NOT_FOUND — 2026-09-24 主 NAS 共享盘复现）; open_directory
+    // 语义是目录, 用 explorer 比 opener 更直接.
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("打开目录失败: {}", e))?;
     Ok(path)
 }
 
