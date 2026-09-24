@@ -1,5 +1,6 @@
 pub mod config;
 pub mod encoding;
+pub mod nas_release;
 pub mod store;
 pub mod system;
 
