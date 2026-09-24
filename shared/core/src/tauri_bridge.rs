@@ -354,6 +354,15 @@ fn read_file_base64(path: String) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+/// 获取当前应用在 NAS 上的发行包目录路径（AboutPanel 显示用）。
+/// 返回完整 SMB UNC 路径：`<nas_base>\<mapped_app_id>\`
+/// app_id 自动经 APP_ID_MAP 映射（历史短名 → NAS 目录名）。
+#[cfg(feature = "cmd-utils")]
+#[tauri::command]
+fn get_app_nas_path(app_id: String) -> String {
+    crate::nas_release::app_nas_path(&app_id)
+}
+
 // ── 数据库表管理（cmd-db）──
 
 /// SQLite 数据库表信息
@@ -477,6 +486,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             get_install_directory,
             #[cfg(feature = "cmd-utils")]
             save_file,
+            #[cfg(feature = "cmd-utils")]
+            get_app_nas_path,
             // ── 数据库表管理（cmd-db）──
             #[cfg(feature = "cmd-db")]
             get_db_tables,
