@@ -379,7 +379,7 @@
   display: grid;
   grid-template-columns: max-content 1fr;
   align-items: center;
-  padding: 10px 30px;
+  padding: 0 30px;
   row-gap: 0;
 }
 
@@ -393,12 +393,14 @@
   color: var(--text-primary);
   white-space: nowrap;
   text-align: left;
+  padding: 10px 0;
 }
 
 .platform-picker-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 10px 0;
 }
 
 .platform-picker-clear {
