@@ -38,6 +38,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const unlistenRef = useRef<(() => void) | null>(null);
   const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
+  const [openErr, setOpenErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -121,13 +122,43 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         </div>
         <div className="about-info-row">
           <span className="about-label">更新来源</span>
-          <span className="about-value"><code>\\Nas2025\Rpa数据\#软件发行\{appId}</code></span>
+          <span className="about-value">
+            <code>\\Nas2025\Rpa数据\#软件发行\{appId}</code>
+            <Button
+              size="sm"
+              style={{ marginLeft: 8 }}
+              onClick={async () => {
+                setOpenErr(null);
+                try {
+                  await openDir(`\\Nas2025\\Rpa数据\\#软件发行\\${appId}`);
+                } catch (e: any) {
+                  setOpenErr(`打开更新来源失败：${String(e?.message || e)}`);
+                }
+              }}
+            >
+              打开
+            </Button>
+          </span>
         </div>
         {installDir && (
           <div className="about-info-row">
             <span className="about-label">安装目录</span>
             <span className="about-value">
               <code style={{ fontSize: 11 }} className="selectable">{installDir}</code>
+              <Button
+                size="sm"
+                style={{ marginLeft: 8 }}
+                onClick={async () => {
+                  setOpenErr(null);
+                  try {
+                    await openDir(installDir);
+                  } catch (e: any) {
+                    setOpenErr(`打开安装目录失败：${String(e?.message || e)}`);
+                  }
+                }}
+              >
+                打开
+              </Button>
             </span>
           </div>
         )}
@@ -136,7 +167,26 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
             <span className="about-label">数据目录</span>
             <span className="about-value">
               <code style={{ fontSize: 11 }} className="selectable">{dataDir}</code>
+              <Button
+                size="sm"
+                style={{ marginLeft: 8 }}
+                onClick={async () => {
+                  setOpenErr(null);
+                  try {
+                    await openDir(dataDir);
+                  } catch (e: any) {
+                    setOpenErr(`打开数据目录失败：${String(e?.message || e)}`);
+                  }
+                }}
+              >
+                打开
+              </Button>
             </span>
+          </div>
+        )}
+        {openErr && (
+          <div style={{ fontSize: 12, color: "var(--error-color, #d4453d)", marginTop: 8 }}>
+            {openErr}
           </div>
         )}
       </div>
