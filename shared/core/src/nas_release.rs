@@ -22,9 +22,41 @@ pub fn nas_base() -> &'static str {
     r"\\Nas2025\Rpa数据\#软件发行"
 }
 
-/// 给定 app_id，构造 versions.json 的完整 SMB 路径。
+/// 历史短名（Rust 端 `const APP_ID`） → NAS 目录名（`000-template` / `016-auto-withdraw` 等）。
+/// 17 fork 项目的 `const APP_ID` 都是历史短名（"template" / "withdraw" 等），本表把它们映射到 NAS 实际目录。
+/// fallback：app_id 若不在表中，原样返回（假设调用方已传完整目录名）。
+const APP_ID_MAP: &[(&str, &str)] = &[
+    ("template", "000-template"),
+    ("dxm-purchase", "001-dxm-purchase"),
+    ("temu-ops", "002-temu-ops"),
+    ("reorder-stock", "003-reorder-stock"),
+    ("dxm-cost", "004-dxm-cost"),
+    ("profit-calc", "005-profit-calc"),
+    ("excel-ops", "005-excel-ops"),
+    ("overseas-stock-sync", "006-overseas-stock-sync"),
+    ("product-listing", "010-product-listing"),
+    ("inventory-turnover", "007-inventory-turnover"),
+    ("ziniao-ops", "008-ziniao-ops"),
+    ("withdraw", "016-auto-withdraw"),
+    ("software-manager", "900-software-manager"),
+    ("agent", "999-agent"),
+];
+
+/// 历史短名 → NAS 目录名（未命中时原样返回）。
+pub fn app_id_to_dir(app_id: &str) -> &str {
+    APP_ID_MAP
+        .iter()
+        .find(|(k, _)| *k == app_id)
+        .map(|(_, v)| *v)
+        .unwrap_or(app_id)
+}
+
+/// 给定 app_id（历史短名或完整目录名），构造 versions.json 的完整 SMB 路径。
+/// 自动经 APP_ID_MAP 映射 → 与 NAS 实际目录一致。
 pub fn versions_path(app_id: &str) -> std::path::PathBuf {
-    std::path::PathBuf::from(nas_base()).join(app_id).join("versions.json")
+    std::path::PathBuf::from(nas_base())
+        .join(app_id_to_dir(app_id))
+        .join("versions.json")
 }
 
 /// 从 NAS 读取 versions.json 原始字符串（utf-8-sig 处理 BOM）。
