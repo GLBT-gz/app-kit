@@ -131,12 +131,16 @@ async function main() {
   if (isDev) {
     const port = await getFreePort();
     tmpConfig = join(tmpdir(), `tauri-dev-${process.pid}.json`);
+    // 强制用 127.0.0.1 而非 localhost：WebView2/Chromium 在 Windows 解析 localhost
+    // 走 Happy Eyeballs 默认 IPv6 first（[System.Net.Dns]::GetHostAddresses('localhost')
+    // 返回 ::1 在前），即使 Vite bind IPv4，WebView2 会先试 ::1:port → TCP RST → 白屏。
+    // 127.0.0.1 直接连 IPv4，绕开解析不确定性。
     writeFileSync(
       tmpConfig,
-      JSON.stringify({ build: { devUrl: `http://localhost:${port}` } })
+      JSON.stringify({ build: { devUrl: `http://127.0.0.1:${port}` } })
     );
     env.PORT = String(port);
-    console.log(`[tauri-dev] 动态端口 = ${port}（devUrl=http://localhost:${port}）`);
+    console.log(`[tauri-dev] 动态端口 = ${port}（devUrl=http://127.0.0.1:${port}）`);
     // 先结束旧实例，避免 debug exe 被锁导致 cargo 无法覆盖（拒绝访问）
     killRunningInstance();
   }
