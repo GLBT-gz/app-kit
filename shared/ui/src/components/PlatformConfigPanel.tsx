@@ -16,8 +16,26 @@
  *   import { PlatformConfigPanel } from "@appkit/ui";
  *   <PlatformConfigPanel />
  */
+import { useMemo } from "react";
 import { useData } from "../data";
 import { CustomSelect, CustomMultiSelect } from "./CustomSelect";
+
+/**
+ * 用 canvas measureText 测量文本渲染宽度（与 .platform-picker-label 的
+ * font: 600 13px system-ui 保持一致）。用作最长 label 宽度，用于统一
+ * 所有 picker 的 label 列宽——避免"固定 min-width 100px"导致长短
+ * label 不齐，或"grid max-content 跨行共享"在 Chromium 实际渲染中
+ * 不可靠的问题（8953b58 回归实测）。
+ */
+let _measureCanvas: HTMLCanvasElement | null = null;
+function measureLabel(text: string, fontSize = 13, fontWeight = 600): number {
+  if (typeof document === "undefined") return 0;
+  _measureCanvas ??= document.createElement("canvas");
+  const ctx = _measureCanvas.getContext("2d");
+  if (!ctx) return 0;
+  ctx.font = `${fontWeight} ${fontSize}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  return ctx.measureText(text).width;
+}
 
 // ── 类型定义 ──
 
@@ -173,6 +191,15 @@ export interface PlatformConfigPanelProps {
 export function PlatformConfigPanel({ options, extraOptions }: PlatformConfigPanelProps) {
   const platforms = getRegisteredPlatforms();
 
+  // ── 测量最长 label 实际像素宽度，注入 CSS 变量统一所有 picker 的 label 列宽 ──
+  // 不用 grid max-content 的原因：8953b58 实测 Chromium 渲染中 grid track width
+  // 按各 grid item 内容独立计算，未真正跨行共享——导致 label 列宽按行变化、
+  // 下拉框起点不齐。flex + 显式 --max-label-width 变量是稳定方案。
+  const maxLabelWidth = useMemo(() => {
+    if (platforms.length === 0) return 0;
+    return Math.max(...platforms.map((p) => Math.ceil(measureLabel(p.label))));
+  }, [platforms]);
+
   // 每个平台对应一个 useData hook
   const selections: Record<string, string | null> = {};
   const setters: Record<string, (v: string | null) => void> = {};
@@ -210,7 +237,10 @@ export function PlatformConfigPanel({ options, extraOptions }: PlatformConfigPan
   return (
     <div className="platform-section">
       <div className="platform-section-title">请为每个平台指定一个浏览器环境</div>
-      <div className="platform-selectors">
+      <div
+        className="platform-selectors"
+        style={{ "--max-label-width": `${maxLabelWidth}px` } as React.CSSProperties}
+      >
         {platforms.map((p) => (
           <PlatformProfileSelector
             key={p.key}

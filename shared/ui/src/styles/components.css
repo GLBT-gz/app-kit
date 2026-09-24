@@ -378,6 +378,7 @@
 .platform-selectors {
   display: flex;
   flex-direction: column;
+  padding: 0 30px;
   gap: 0;
 }
 
@@ -385,17 +386,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 30px;
+  padding: 10px 0;
 }
 
 .platform-picker-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  min-width: 100px;
+  width: var(--max-label-width, auto);
+  min-width: var(--max-label-width, auto);
   flex-shrink: 0;
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
 }
 
 .platform-picker-row {
