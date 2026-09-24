@@ -376,31 +376,33 @@
 }
 
 .platform-selectors {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  align-items: center;
-  padding: 0 30px;
-  row-gap: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .platform-picker {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 30px;
 }
 
 .platform-picker-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 100px;
+  flex-shrink: 0;
   white-space: nowrap;
-  text-align: left;
-  padding: 10px 0;
+  text-align: right;
 }
 
 .platform-picker-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
+  flex: 1;
 }
 
 .platform-picker-clear {

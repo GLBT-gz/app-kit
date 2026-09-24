@@ -32,7 +32,6 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
   const [installDir, setInstallDir] = useState("");
   const [versions, setVersions] = useState<VersionEntry[]>([]);
   const [versionsErr, setVersionsErr] = useState<string>("");
-  const [appNasPath, setAppNasPath] = useState<string>("");
   const [installing, setInstalling] = useState<string | null>(null);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -49,10 +48,6 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       } catch { setAppVersion("0.1.0"); }
       try { setDataDir(await getDataDirectory()); } catch {}
       try { setInstallDir(await getInstallDirectory()); } catch {}
-      try {
-        const p = await invoke<string>("get_app_nas_path", { appId });
-        if (p) setAppNasPath(p);
-      } catch {}
     })();
     fetchVersions();
   }, []);
@@ -126,7 +121,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         </div>
         <div className="about-info-row">
           <span className="about-label">更新来源</span>
-          <span className="about-value"><code>{appNasPath || `\\Nas2025\\Rpa数据\\#软件发行\\${appId}`}</code></span>
+          <span className="about-value"><code>\\Nas2025\Rpa数据\#软件发行</code></span>
         </div>
         {installDir && (
           <div className="about-info-row">

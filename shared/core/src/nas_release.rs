@@ -59,12 +59,6 @@ pub fn versions_path(app_id: &str) -> std::path::PathBuf {
         .join("versions.json")
 }
 
-/// 给定 app_id（历史短名或完整目录名），构造该 app 在 NAS 上**发行包目录**的完整 SMB 路径。
-/// 自动经 APP_ID_MAP 映射（template → 000-template 等）。AboutPanel 显示用。
-pub fn app_nas_path(app_id: &str) -> String {
-    format!("{}\\{}", nas_base(), app_id_to_dir(app_id))
-}
-
 /// 从 NAS 读取 versions.json 原始字符串（**strip UTF-8 BOM**）。
 /// 失败时 err 包含路径，方便同事看到具体哪个 app/路径读不到。
 /// BOM 处理：versions.json 文件以 UTF-8 with BOM 保存（之前 glbt-releases 仓的版本习惯）；
