@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { installVersion, getDataDirectory, getInstallDirectory, openDir } from "../api";
+import { appIdToDir, nasBaseDir } from "../data/nas-app-id";
 import { Button } from "./controls/Button";
 
 interface VersionEntry {
@@ -123,14 +124,14 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
         <div className="about-info-row">
           <span className="about-label">更新来源</span>
           <span className="about-value">
-            <code>\\Nas2025\Rpa数据\#软件发行\{appId}</code>
+            <code>\\Nas2025\Rpa数据\#软件发行\{appIdToDir(appId)}</code>
             <Button
               size="sm"
               style={{ marginLeft: 8 }}
               onClick={async () => {
                 setOpenErr(null);
                 try {
-                  await openDir(`\\Nas2025\\Rpa数据\\#软件发行\\${appId}`);
+                  await openDir(`${nasBaseDir}\\${appIdToDir(appId)}`);
                 } catch (e: any) {
                   setOpenErr(`打开更新来源失败：${String(e?.message || e)}`);
                 }
