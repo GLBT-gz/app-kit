@@ -209,7 +209,8 @@ impl BrowserInstance {
                             target_key, existing_port,
                             if running_headless { "是" } else { "否" }
                         );
-                        return Self::connect("127.0.0.1", *existing_port).await;
+                        // 情况 1：已确认 headless 匹配 + 端口就绪 → connect_fast（< 500ms）
+                        return Self::connect_fast("127.0.0.1", *existing_port).await;
                     }
                 }
                 // ── 情况 2: 已有实例 + 无调试端口 → 杀旧进程 → 重新启动 ──
@@ -295,17 +296,30 @@ impl BrowserInstance {
         Self::start(browser_type, exe_path, port, profile, headless).await
     }
 
-    /// 连接到已运行的浏览器
+    /// 快速连接到已运行浏览器（5s 单次探测，不重试）
     ///
-    /// 注意：浏览器 DevTools HTTP 服务可能在 TCP 端口就绪后尚未完全初始化，
-    /// 因此 /json/version 请求会内置重试（最多 10 次，间隔 500ms）以应对竞态。
-    pub async fn connect(host: &str, port: u16) -> Result<Self> {
+    /// 适用场景：业务项目已确认浏览器进程存在 + 调试端口已分配，希望最小延迟连接。
+    /// 实测「已开店铺」< 500ms（vs 老 `connect` 8~12s 的根因 = 30 次重试 × 1s sleep）。
+    ///
+    /// 探测失败立即报错，**不重试**；要兼容冷启动竞态 / 网络抖动请用 [`connect_with_retry`]。
+    pub async fn connect_fast(host: &str, port: u16) -> Result<Self> {
+        Self::connect_with_retry(host, port, 1).await
+    }
+
+    /// 带重试的连接（兼容冷启动竞态 / 网络抖动）
+    ///
+    /// 默认 `max_retries = 30`，最坏 30 秒。**业务项目首选 [`connect_fast`]**
+    /// （已开店铺场景不需要重试）；本函数用于「刚启动浏览器立即连」的竞态兼容。
+    pub async fn connect_with_retry(
+        host: &str,
+        port: u16,
+        max_retries: u32,
+    ) -> Result<Self> {
         let version_url = format!("http://{}:{}/json/version", host, port);
 
         // ── 重试获取 WebSocket URL ──
         // 浏览器进程启动后，TCP 端口先就绪，但 DevTools HTTP 处理程序可能稍后才准备好，
         // 此时 /json/version 可能返回空或非 JSON 内容，导致"解析 JSON 失败"。
-        let max_retries = 30;
         let mut ws_url = None;
         for attempt in 1..=max_retries {
             match Self::fetch_ws_url(&version_url).await {
@@ -362,6 +376,18 @@ impl BrowserInstance {
             cdp: Some(cdp),
             ws_url,
         })
+    }
+
+    /// 连接到已运行的浏览器
+    ///
+    /// ⚠️ **DEPRECATED**：请用 [`connect_fast`]（已开店铺场景）或 [`connect_with_retry`]（需要重试）。
+    /// 保留本函数作向后兼容，内部转调 `connect_with_retry(host, port, 30)`（保留老行为）。
+    #[deprecated(
+        since = "0.2.0",
+        note = "请用 connect_fast (已开店铺场景 < 500ms) 或 connect_with_retry (需要显式重试)"
+    )]
+    pub async fn connect(host: &str, port: u16) -> Result<Self> {
+        Self::connect_with_retry(host, port, 30).await
     }
 
     /// 内部：请求 /json/version 并解析 WebSocket URL
