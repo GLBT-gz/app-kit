@@ -270,6 +270,10 @@ const LEVEL_COLORS: Record<LogLevel, { text: string; badge: string; label: strin
 //   R2: 任何「日志面板」必须有「清除日志」按钮（产品级硬规则 R-LOG-1）
 //       调用 logCtx.clear()（来自 useLog 返回的 clear 方法）。
 //       排查：grep "<LogPanel .* hideHeader" + 外层 grep "logCtx.clear()"
+//   R3: 清除按钮**必须在 ViewToggle 行同一栏的右侧**（不是内容上方另开 header 栏）——见
+//       app-kit/README.md §关键坑点 #9。016-自动提现 2026-09-27 反模式：.temu-table-header
+//       只有 ViewToggle + 内容上方另开 .temu-log-header 放清除按钮——已修。
+//       正确模式仿 006/007/013：.inventory-table-header 含 ViewToggle + count + 清除按钮
 // @接口清单
 //   useLog({ eventName?, storageKey? }) → { logs, log, clear, logEndRef, count }
 //   <LogPanel log={useLog(...)} /> 或 <LogPanel log={...} title="..." hideHeader ... />

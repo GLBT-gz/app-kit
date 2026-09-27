@@ -100,6 +100,37 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
    008 weekly-data/sample, 001 App, 004 App, 002 weekly/measure/weee/settlement/billing,
    003 多个, 010 listing。**修复时按项目拆 commit，仿 schedule.tsx 模式**。
 
+9. **清除日志/清除表格按钮位置——必须在 ViewToggle 行（同一栏）的右侧，不要在内容上方/下方另开 header 栏**（016-自动提现 2026-09-27 实战教训）。
+   错误反模式（016 Temu 修复前）：
+   ```tsx
+   <div className="temu-right-panel">
+     <div className="temu-table-header">
+       <ViewToggle ... />   ← ViewToggle 在这里
+     </div>
+     <div className="temu-right-content">
+       <div className="temu-log-header">           {/* ❌ 又开一个 header 栏 */}
+         <Button onClick={clear}>清除日志</Button>
+       </div>
+       <LogPanel hideHeader ... />
+     </div>
+   </div>
+   ```
+   正确模式（仿 006 kdocs.tsx / 007 haiduoke.tsx / 013 waybill-page.tsx）：
+   ```tsx
+   <div className="inventory-table-header" onWheel={...}>
+     <ViewToggle ... />
+     <span style={{ flex: 1 }} />
+     <span>{logCtx.count}条日志</span>            {/* count 显示 */}
+     {view === "log" && (
+       <Button onClick={() => log.clear()}>清除日志</Button>   {/* 按钮在 ViewToggle 行右侧 */}
+     )}
+   </div>
+   <LogPanel hideHeader showCount={false} ... /> {/* 无外层 header */}
+   ```
+   **排查口诀**：看到 `.inventory-table-header` / `.temu-table-header` → 检查内部是否**同时**包含
+   ViewToggle + 清除按钮；只在内容上方另开的 header（无 ViewToggle）放清除按钮 = 反模式。
+   **跨项目一致性**：006/007/013 等项目已用正确模式，016 是唯一反模式（已修）。
+
 ## 命令一致性校验
 
 ```bash
