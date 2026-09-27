@@ -27,6 +27,16 @@ pub struct CdpConnection {
     pending: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Value>>>,
     /// CDP 事件广播通道（非命令响应的消息）
     event_tx: broadcast::Sender<Value>,
+    /// 当前 page-level session（2026-09-27 新增）
+    ///
+    /// CDP `Runtime.evaluate` / `Page.navigate` 等 page-specific 命令必须在 page-level
+    /// session 才能调——`Target.attachToTarget({ targetId, flatten: true })` 后拿到
+    /// sessionId，存到本字段。`send_command` 自动注入到 params.sessionId。
+    ///
+    /// 不调 `attach_page_target` 直接 `send_command("Runtime.evaluate", ...)` 会报
+    /// `'Runtime.evaluate' wasn't found` (code -32601)——browser-level session 不识别
+    /// page-only domain。
+    page_session_id: Mutex<Option<String>>,
 }
 
 impl CdpConnection {
@@ -51,6 +61,7 @@ impl CdpConnection {
             next_id: AtomicU64::new(1),
             pending: Mutex::new(HashMap::new()),
             event_tx,
+            page_session_id: Mutex::new(None),
         });
 
         // 启动后台消息读取循环
@@ -66,7 +77,20 @@ impl CdpConnection {
     }
 
     /// 发送 CDP 命令并等待响应
-    pub async fn send_command(&self, method: &str, params: Value) -> Result<Value> {
+    ///
+    /// **2026-09-27 新增**：自动注入 `params.sessionId`（如果有 page session）——
+    /// CDP 协议要求 page-specific 命令（Runtime.evaluate / Page.navigate 等）
+    /// 在 attachToTarget 后的 sessionId 下调用。
+    pub async fn send_command(&self, method: &str, mut params: Value) -> Result<Value> {
+        // 自动注入 sessionId（如果之前 attach 过 page target）
+        if let Some(ref sid) = *self.page_session_id.lock().await {
+            // params 必须是 object（CDP 命令都是 object）
+            if let Some(obj) = params.as_object_mut() {
+                obj.entry("sessionId".to_string())
+                    .or_insert_with(|| Value::String(sid.clone()));
+            }
+        }
+
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
         let command = serde_json::json!({
@@ -157,7 +181,15 @@ impl CdpConnection {
     }
 
     /// 发送 CDP 命令但不需要等待响应
-    pub async fn send_command_no_wait(&self, method: &str, params: Value) -> Result<()> {
+    pub async fn send_command_no_wait(&self, method: &str, mut params: Value) -> Result<()> {
+        // 自动注入 sessionId（同 send_command 逻辑）
+        if let Some(ref sid) = *self.page_session_id.lock().await {
+            if let Some(obj) = params.as_object_mut() {
+                obj.entry("sessionId".to_string())
+                    .or_insert_with(|| Value::String(sid.clone()));
+            }
+        }
+
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
         let command = serde_json::json!({
@@ -171,5 +203,107 @@ impl CdpConnection {
         writer.send(Message::Text(cmd_str.into())).await?;
 
         Ok(())
+    }
+
+    /// 附加到 page target（2026-09-27 新增）
+    ///
+    /// CDP page-specific 命令（Runtime.evaluate / Page.navigate 等）**必须**
+    /// 在 attachToTarget 后的 page-level session 才能调——否则 browser-level
+    /// session 返回 `'Runtime.evaluate' wasn't found` (code -32601)。
+    ///
+    /// 内部步骤：
+    /// 1. 调 `Target.attachToTarget({ targetId, flatten: true })` 拿 sessionId
+    /// 2. sessionId 存到 `page_session_id` Mutex
+    /// 3. 后续 `send_command` 自动注入 `params.sessionId`
+    ///
+    /// 如果已经 attach 过，再调用会**覆盖** sessionId（不报错——切 page target 用）。
+    pub async fn attach_page_target(&self, target_id: &str) -> Result<String> {
+        let result = self
+            .send_command_without_session(
+                "Target.attachToTarget",
+                serde_json::json!({
+                    "targetId": target_id,
+                    "flatten": true,
+                }),
+            )
+            .await?;
+
+        let session_id = result["sessionId"]
+            .as_str()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Target.attachToTarget 未返回 sessionId（response: {}）",
+                    result
+                )
+            })?
+            .to_string();
+
+        *self.page_session_id.lock().await = Some(session_id.clone());
+        info!(
+            "✅ 已 attach 到 page target: targetId={}, sessionId={}",
+            target_id, session_id
+        );
+        Ok(session_id)
+    }
+
+    /// 列出可用 page targets（辅助 attach）
+    ///
+    /// 返回所有 type=page 的 target 列表（含 targetId / url / title）——业务侧
+    /// 选合适的 target 后调 `attach_page_target(targetId)`。
+    pub async fn list_page_targets(&self) -> Result<Vec<Value>> {
+        let result = self
+            .send_command_without_session(
+                "Target.getTargets",
+                serde_json::Value::Null,
+            )
+            .await?;
+        let targets = result["targetInfos"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Target.getTargets 未返回 targetInfos"))?
+            .clone();
+
+        // 过滤 type=page
+        Ok(targets
+            .into_iter()
+            .filter(|t| t["type"].as_str() == Some("page"))
+            .collect())
+    }
+
+    /// 内部：发送 CDP 命令**不**自动注入 sessionId（用于 Target.getTargets /
+    /// Target.attachToTarget 等本身是 browser-level 的元命令）
+    async fn send_command_without_session(
+        &self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value> {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let command = serde_json::json!({
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut pending = self.pending.lock().await;
+            pending.insert(id, tx);
+        }
+        let cmd_str = serde_json::to_string(&command)?;
+        {
+            let mut writer = self.writer.lock().await;
+            writer.send(Message::Text(cmd_str.into())).await?;
+        }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(90), rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("CDP 命令超时 ({}): 90秒内无响应", method))?
+            .map_err(|_| anyhow::anyhow!("CDP 响应通道关闭"))?;
+        if let Some(error) = result.get("error") {
+            anyhow::bail!("CDP 命令 {} 失败: {:?}", method, error);
+        }
+        Ok(result["result"].clone())
+    }
+
+    /// 拿当前 page_session_id（用于调试 / 日志）
+    pub async fn current_page_session_id(&self) -> Option<String> {
+        self.page_session_id.lock().await.clone()
     }
 }
