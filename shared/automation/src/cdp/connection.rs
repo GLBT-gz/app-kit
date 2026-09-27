@@ -207,16 +207,21 @@ impl CdpConnection {
 
     /// 附加到 page target（2026-09-27 新增）
     ///
-    /// CDP page-specific 命令（Runtime.evaluate / Page.navigate 等）**必须**
-    /// 在 attachToTarget 后的 page-level session 才能调——否则 browser-level
-    /// session 返回 `'Runtime.evaluate' wasn't found` (code -32601)。
+    /// ⚠️ DEPRECATED (2026-09-27): 此方法在本机 Edge 实测**完全不可用**——
+    /// `Target.attachToTarget + 手动 sessionId` 4 种 attach 模式 Runtime.evaluate
+    /// 全部 -32601（详见 glbt-apps/projects/016-自动提现/docs/Temu登录问题-根因分析-2026-09-27.md
+    /// §三实测表）。**唯一可行方案是 page-level ws_url 直连**（绕开 attach + sessionId 整个机制）——
+    /// start_temu_browser 启动后用 reqwest GET /json/list 拿 page target 的
+    /// `webSocketDebuggerUrl` 覆盖 WsUrlCache；前端 invoke get_cdp_ws_url 拿到的
+    /// 就是 page ws_url，Runtime.evaluate / Page.navigate 等 page-specific 命令**不需要 sessionId**
+    /// （conn.send 第三参数传空字符串 falsy → 不注入 sessionId）。
     ///
-    /// 内部步骤：
-    /// 1. 调 `Target.attachToTarget({ targetId, flatten: true })` 拿 sessionId
-    /// 2. sessionId 存到 `page_session_id` Mutex
-    /// 3. 后续 `send_command` 自动注入 `params.sessionId`
-    ///
-    /// 如果已经 attach 过，再调用会**覆盖** sessionId（不报错——切 page target 用）。
+    /// 保留仅作向后兼容 + 防止未来 AI 误以为这是标准做法；新代码**禁止**调用。
+    /// 详见 `app-kit/README.md §关键坑点 #11`。
+    #[deprecated(
+        since = "2026-09-27",
+        note = "attachToTarget + 手动 sessionId 在本机 Edge 不可用（-32601）；改用 page-level ws_url 直连"
+    )]
     pub async fn attach_page_target(&self, target_id: &str) -> Result<String> {
         let result = self
             .send_command_without_session(

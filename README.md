@@ -163,6 +163,13 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
     - 业务配置：credentials 加载 / cdpPort 拿
     - ❌ 业务层不再做：登录保护 / 直接 CDP eval XHR / 检查 session
 
+11. **`Target.attachToTarget + 手动 sessionId` 在本机 Edge 完全不可用**——Runtime.evaluate 4 种 attach 模式实测全部 -32601 Method not found（2026-09-27 本机 Edge 实测，016-自动提现 项目验证）。
+    - **正确**：直接用 `page-level ws_url` 直连（start_temu_browser 启动后 reqwest GET `/json/list` 拿 page target `webSocketDebuggerUrl`，覆盖 `WsUrlCache`；前端 invoke `get_cdp_ws_url` 拿到的就是 page ws_url）
+    - **错误**：`CdpConnection::connect(browser_ws_url)` + `attach_page_target(targetId)` + `send_command` 自动注入 sessionId → Runtime.evaluate -32601
+    - **`app-kit/shared/automation/src/cdp/connection.rs::attach_page_target`** 已加 `#[deprecated]`（2026-09-27）；保留仅作向后兼容，新代码**禁止**调用
+    - **关联**：cydia-glbt-apps/projects/016-自动提现/docs/Temu登录问题-根因分析-2026-09-27.md §三实测表 + 016 AGENTS.md 已知坑 §R-LOGIN-1
+    - **排查口诀**：调 Runtime.evaluate 报 -32601 → 看 cdp 连接用的 ws_url 是 page-level 还是 browser-level；是 browser-level → 改用 page-level ws_url 直连
+
 ## 命令一致性校验
 
 ```bash
