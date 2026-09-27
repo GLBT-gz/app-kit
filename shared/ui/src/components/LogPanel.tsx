@@ -259,6 +259,25 @@ const LEVEL_COLORS: Record<LogLevel, { text: string; badge: string; label: strin
   debug:   { text: "var(--text-muted)",    badge: "var(--bg-badge)",        label: "DEBUG" },
 };
 
+// ============================================================
+// 模块护照：LogPanel
+// @responsibility 日志面板 UI 组件 + useLog hook（log/clear/count/listen Tauri 事件/localStorage 持久化）
+// @hard-rules
+//   R1: titleExtra 与 hideHeader 互斥——hideHeader=true 时 titleExtra 被静默吞掉（见 line ~325）
+//       2026-09-27 016-自动提现 bug：之前 AI 写了 titleExtra={<Button>清除日志</Button>} + hideHeader，
+//       按钮渲染不到。dev 模式下本组件 console.warn 提示此互斥（不阻断渲染）。
+//       正确模式：hideHeader=true + 外层自渲染 header（仿 schedule.tsx / shopee.tsx）
+//   R2: 任何「日志面板」必须有「清除日志」按钮（产品级硬规则 R-LOG-1）
+//       调用 logCtx.clear()（来自 useLog 返回的 clear 方法）。
+//       排查：grep "<LogPanel .* hideHeader" + 外层 grep "logCtx.clear()"
+// @接口清单
+//   useLog({ eventName?, storageKey? }) → { logs, log, clear, logEndRef, count }
+//   <LogPanel log={useLog(...)} /> 或 <LogPanel log={...} title="..." hideHeader ... />
+//   跨仓引用：glbt-apps/projects/*/src/components/*.tsx（139+ 处）
+// @状态
+//   真机验证日期：2026-09-27（016-自动提现 dev 窗口实测，互斥 console.warn 工作正常）
+// ============================================================
+
 /**
  * 日志面板组件
  *
@@ -286,6 +305,18 @@ export function LogPanel({
   filterOverlay,
 }: LogPanelProps) {
   const { logs, clear, logEndRef, count } = log;
+
+  // 2026-09-27 新增：dev 模式警告 titleExtra + hideHeader 互斥（hard-rule R1）
+  // hideHeader=true 时 titleExtra 被静默吞掉，无任何视觉提示——新 AI 极易踩坑
+  // 只在 dev 模式（import.meta.env.DEV）+ titleExtra 非空时触发，不影响生产
+  if (import.meta.env.DEV && hideHeader && titleExtra) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[appkit/LogPanel] titleExtra 与 hideHeader 互斥！hideHeader=true 时整块标题栏 JSX 被跳过，" +
+        "titleExtra 静默不渲染。正确模式：hideHeader=true + 外层自渲染 header（含清除按钮）。" +
+        "详见 app-kit/README.md §关键坑点 #7 + 016-自动提现 AGENTS.md R-LOG-1。",
+    );
+  }
 
   // 过滤后的可见日志（并行多店铺时按店铺过滤）
   const visibleLogs = useMemo(

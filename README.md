@@ -66,6 +66,40 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
    提供 `flex: 1; min-height: 0`。**排查指南**：日志/表格不可见时 DevTools 看 `.log-panel-list` 高度——
    不是 0 / 满容器，而是 3px ~ 10px，几乎肯定是中间层 div 干扰。
 
+7. **`<LogPanel>` 的 `titleExtra` 与 `hideHeader` 互斥——`hideHeader=true` 时 `titleExtra` 被静默吞掉**（016-自动提现 2026-09-27 实战教训）。
+   LogPanel 内部（`shared/ui/src/components/LogPanel.tsx:312`）：
+   ```tsx
+   {!hideHeader && (
+     <div className="log-panel-header">
+       ...
+       {titleExtra}   ← line 335：titleExtra 在 !hideHeader 块内
+       ...
+     </div>
+   )}
+   ```
+   `hideHeader=true` 时整块标题栏 JSX 被跳过，**titleExtra 静默不渲染**——无报错无提示。
+   开发模式下 LogPanel 会 `console.warn` 提示此互斥，但**不阻止渲染**（不破坏现有调用）。
+   **正确模式**：`hideHeader=true` + 外层自渲染 header（含 count + 清除按钮）：
+   ```tsx
+   <div className="schedule-log-header">
+     <span>{logCtx.count}条日志</span>
+     <Button onClick={() => logCtx.clear()}>清除日志</Button>
+   </div>
+   <LogPanel log={logCtx} hideHeader />
+   ```
+   参考：016 `schedule.tsx:577-585` / `shopee.tsx:152-160`。
+   **产品级硬规则 R-LOG-1**：任何「日志面板」必须有「清除日志」按钮（用 `logCtx.clear()`）。
+
+8. **跨项目一致性检查命令**——排查上述两条坑点的系统性 bug：
+   ```bash
+   # 找所有用 hideHeader 的 LogPanel 调用，看外层是否有清除按钮
+   grep -rn '<LogPanel .* hideHeader' glbt-apps/projects --include='*.tsx' | \
+     xargs -I {} sh -c 'echo "=== {} ===; grep -E "logCtx\.clear\(\)|log-panel-clear-btn" $(echo {} | cut -d: -f1) || echo MISSING'
+   ```
+   已知漏点（2026-09-27 调研）：015 shops/auto-reply, 013 waybill, 007 kdocs,
+   008 weekly-data/sample, 001 App, 004 App, 002 weekly/measure/weee/settlement/billing,
+   003 多个, 010 listing。**修复时按项目拆 commit，仿 schedule.tsx 模式**。
+
 ## 命令一致性校验
 
 ```bash
