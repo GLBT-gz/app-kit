@@ -131,6 +131,38 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
    ViewToggle + 清除按钮；只在内容上方另开的 header（无 ViewToggle）放清除按钮 = 反模式。
    **跨项目一致性**：006/007/013 等项目已用正确模式，016 是唯一反模式（已修）。
 
+10. **平台 API 调用必须走 framework safe_xhr_post（带登录保护）**——不要业务侧直接 CDP eval XHR（016-自动提现 2026-09-27 实战教训）。
+    现象：Temu dryRun 探测 11 个店铺**全部失败**（API status 403）。user："它退出了登录，没有识别到登录状态"。
+    根因：
+    - 业务页面 URL（`/labor/withdraw/apply`）没变，但 session cookie 失效
+    - 016 业务层 `fetchTemuBalance` 直接 CDP eval 同步 XHR——绕过 framework
+    - framework `ensure_not_login` 按 **URL 模式** 检测登录页，业务页面 URL 没变 → 检测不到 401/403
+    - URL 模式检测 + session 失效是**两个独立维度**
+
+    正确模式（仿 002 / 007）：
+    ```ts
+    // 业务侧 invoke 而非 CDP eval XHR
+    const data = await invoke<TemuApiResponse>("temu_safe_fetch", {
+      port: cdpPort,
+      url: "https://agentseller.temu.com/api/...",
+      body: { mall_id: "xxx" },
+      phone: "...", password: "...",
+    });
+    ```
+
+    framework 端（`platform-temu/src/safe_request.rs`）的"主动 navigate 触发登录检查"机制：
+    1. attempt 1：直接 ensure_not_login + XHR
+    2. 401/403 → **主动 navigate 到 `agentseller.temu.com/auth/authentication`** 让 URL 变登录页
+    3. ensure_not_login 检测到登录页 → auto_login 兜底
+    4. 仍 401/403 → `LoginProtectedFailed(2)` 抛错
+
+    排查口诀：grep `"XMLHttpRequest"` 找直接 XHR 调用 → 移到 invoke temu_safe_fetch
+    框架层 vs 业务层职责分工：
+    - framework 底层操作：登录检测 / auto_login / ensure_not_login / safe_xhr_post
+    - 业务执行器：编排步骤（不实现登录保护）
+    - 业务配置：credentials 加载 / cdpPort 拿
+    - ❌ 业务层不再做：登录保护 / 直接 CDP eval XHR / 检查 session
+
 ## 命令一致性校验
 
 ```bash
