@@ -1083,3 +1083,33 @@
 .appkit-tooltip:focus-within .appkit-tooltip-pop {
   opacity: 1;
 }
+
+/* ========================================
+   表格复制提示 —— hover popper（[2026-09-28] bug 修复）
+   framework table.tsx 在 Ctrl+C 复制成功时渲染 <div className="inventory-copy-tip">{sel.copyTip}</div>
+   之前漏 CSS，div fallback 到 document flow 直接显示在表格底部（user 反馈）
+   加 fixed 右下角浮动 + 黑底白字 + 圆角 + z-index 高 + 淡入动画（1500ms 后框架内自动 clear）
+   ======================================== */
+
+.inventory-copy-tip {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  padding: 8px 14px;
+  background: var(--bg-elevated, rgba(31, 41, 55, 0.95));
+  color: var(--text-inverse, #fff);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  pointer-events: none;       /* 提示不拦截鼠标（防挡到下一行复制手势） */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: inventory-copy-tip-in 0.18s ease-out;
+}
+
+@keyframes inventory-copy-tip-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
