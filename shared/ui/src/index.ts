@@ -66,6 +66,8 @@ export { CustomSelect, CustomMultiSelect, MultiSelect } from "./components/Custo
 export type { CustomSelectOption } from "./components/CustomSelect";
 export { ModeSwitch } from "./components/ModeSwitch";
 export type { ModeSwitchProps } from "./components/ModeSwitch";
+export { Tooltip } from "./components/Tooltip";
+export type { TooltipProps, TooltipPlacement } from "./components/Tooltip";
 export { CredentialsForm } from "./components/CredentialsForm";
 export type { CredentialField, CredentialGroup, CredentialsFormProps } from "./components/CredentialsForm";
 export {
@@ -184,6 +186,3 @@ export type { AutomationSettingsProps } from "./components/AutomationSettings";
 
 export { ContextMenu, openContextMenu, CTX_MENU_EVENT } from "./components/ContextMenu";
 export type { ContextMenuItem } from "./components/ContextMenu";
-// R-UI-3 配套（commit 框架漏 Tooltip 治本）：通用 Tooltip 组件 + 类型
-export { Tooltip } from "./components/Tooltip";
-export type { TooltipProps, TooltipPlacement } from "./components/Tooltip";

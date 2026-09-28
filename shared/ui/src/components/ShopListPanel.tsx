@@ -11,12 +11,20 @@ import { Switch } from "./controls/Switch";
 // ═══════════════════════════════════════════════════════════
 
 export interface ShopListShop {
+  /** 内部唯一 key（拖拽定位 / enabledMap / summaries / order）；不变（双建议）。
+   *  视觉上由 displayName 取代显示，**不要**直接修改此字段的拼接格式。 */
   mall_name: string;
   mall_id?: string;
   alias?: string;
   owner?: string;
   /** 已配置主体（用于「默认选择」按钮与「未配置主体」标签） */
   entity?: string;
+  /** 自定义主标题显示名（不传则回退 mall_name）。
+   *  用于把"内部 key 拼接格式"和"视觉显示标题"拆开——例如店铺 ID 不再挤进主标题。 */
+  displayName?: string;
+  /** 自定义底部附加行（不传则保持原 alias · owner 拼接）。
+   *  用于让调用方完全控制底部附加文字（如「广州·CNY·店铺ID」）。 */
+  bottomLine?: string;
 }
 
 export interface ShopListPanelProps {
@@ -38,6 +46,9 @@ export interface ShopListPanelProps {
   currentShop?: string | null;
   /** 顶部提示文字（如「拖拽排序 · 长按开关批量操作」） */
   hint?: string;
+  /** 隐藏列表总数（`.shop-card-count`）—— 业务侧 title ReactNode 已包含自身 count 时用，
+   *  避免和外层 count 重复（如 016 合并 header 行场景）。向后兼容：默认 false（仍显示）。 */
+  hideCount?: boolean;
   /** 显示 全选/全不选/默认选择 按钮组 */
   showBulkButtons?: boolean;
   /** 店铺无主体（entity）时显示「未配置主体」标签（仅 Temu 每周店铺分析等需要按主体核算的场景开启） */
@@ -78,6 +89,7 @@ export function ShopListPanel({
   shopSummaries,
   currentShop,
   hint,
+  hideCount = false,
   showBulkButtons = false,
   showNoEntity = false,
   onBatchToggle,
@@ -222,7 +234,7 @@ export function ShopListPanel({
     <div className={`shop-section${className ? ` ${className}` : ""}`}>
       <div className="shop-card-header">
         <span className="shop-card-title">{title}</span>
-        <span className="shop-card-count">{orderedShops.length}</span>
+        {!hideCount && <span className="shop-card-count">{orderedShops.length}</span>}
         <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
         {showBulkButtons && (
           <>
@@ -248,12 +260,13 @@ export function ShopListPanel({
               <div className="shop-drag-handle" onMouseDown={(e) => handleDotMouseDown(s.mall_name, e)}>⠿</div>
               <div className="shop-info">
                 <div className="shop-name">
-                  {s.mall_name}
+                  {s.displayName ?? s.mall_name}
                   {currentShop === s.mall_name && <span className="shop-running-indicator">▶ 处理中</span>}
                   {renderStatus?.(s)}
                 </div>
                 <div className="shop-meta">
                   <span className="shop-sub">{(s.alias || s.mall_name)}{s.owner ? ` · ${s.owner}` : ""}</span>
+                  {s.bottomLine && <span className="shop-bottom-line">{s.bottomLine}</span>}
                   {showNoEntity && !s.entity && <span className="shop-no-entity">未配置主体</span>}
                   {shopSummaries?.[s.mall_name] && <span className="shop-result">{shopSummaries[s.mall_name].text} · {fmtRelTime(shopSummaries[s.mall_name].time)}</span>}
                 </div>

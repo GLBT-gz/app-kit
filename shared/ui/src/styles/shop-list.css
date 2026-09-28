@@ -138,6 +138,13 @@
 .shop-info .shop-sub {
   flex-shrink: 0;
 }
+/* 自定义底部附加行（如「广州·CNY·店铺ID」）；不传 bottomLine 字段则整条不渲染。 */
+.shop-info .shop-bottom-line {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .shop-info .shop-result {
   color: var(--accent);
   overflow: hidden;

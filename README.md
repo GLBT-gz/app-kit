@@ -170,6 +170,39 @@ appkit-core = { path = "../../../../app-kit/shared/core", features = ["bridge", 
     - **关联**：cydia-glbt-apps/projects/016-自动提现/docs/Temu登录问题-根因分析-2026-09-27.md §三实测表 + 016 AGENTS.md 已知坑 §R-LOGIN-1
     - **排查口诀**：调 Runtime.evaluate 报 -32601 → 看 cdp 连接用的 ws_url 是 page-level 还是 browser-level；是 browser-level → 改用 page-level ws_url 直连
 
+12. **`VirtualTable` / `DataTable` 表格复制提示必须自带 `.inventory-copy-tip` CSS——不能依赖项目注入（016-自动提现 2026-09-28 user 红线）**。
+    - **现象**：表格 Ctrl+C 复制成功后，"✓ 已复制 X 个单元格"提示直接显示在表格底部，破坏布局
+    - **根因**：framework `table.tsx:417` 渲染 `<div className="inventory-copy-tip">{sel.copyTip}</div>`（hook `useTableSelectionCopy` 返回的 copyTip），**但 framework 自带 styles/components.css 漏这个 className CSS**——0 处 CSS 定义。fallback 到 document flow 后 `<div>` 作为 `<table>` 兄弟节点显示在底部
+    - **正确模式**：framework 自带 `.inventory-copy-tip` CSS（components.css 末尾）：
+      ```css
+      .inventory-copy-tip {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        padding: 8px 14px;
+        background: rgba(31, 41, 55, 0.95);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 13px;
+        pointer-events: none;
+        animation: inventory-copy-tip-in 0.18s ease-out;
+      }
+      @keyframes inventory-copy-tip-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      ```
+    - **业务项目侧禁用**：自行渲染 `sel.copyTip`（违反 framework-first 原则） / 用 `window.alert` 替代（破坏 UX）
+    - **项目自查**：
+      ```bash
+      # 业务侧有没有自行渲染 copyTip（应 0 命中——框架自带）
+      grep -rn 'inventory-copy-tip' glbt-apps/projects/*/src --include='*.ts' --include='*.tsx'
+      ```
+    - **framework 自查**：任何渲染的 className 必须在 styles/components.css（或对应 .css）里有定义——**禁止**渲染 className 但没 CSS（会 fallback 到默认布局）
+    - **跨项目影响**：CSS 加在 framework 后**所有引用 `app-kit/ui` 的项目**（016/008/013/015 等）下次运行时自动生效——零项目端 commit 配套
+    - **关联**：016 AGENTS.md R-UI-3 硬规则 + 已知坑「framework 表格复制提示自带 CSS 缺失设计缺陷」+ commit c74420d
+
 ## 命令一致性校验
 
 ```bash
