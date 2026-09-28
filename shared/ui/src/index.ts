@@ -66,6 +66,8 @@ export { CustomSelect, CustomMultiSelect, MultiSelect } from "./components/Custo
 export type { CustomSelectOption } from "./components/CustomSelect";
 export { ModeSwitch } from "./components/ModeSwitch";
 export type { ModeSwitchProps } from "./components/ModeSwitch";
+export { Tooltip } from "./components/Tooltip";
+export type { TooltipProps, TooltipPlacement } from "./components/Tooltip";
 export { CredentialsForm } from "./components/CredentialsForm";
 export type { CredentialField, CredentialGroup, CredentialsFormProps } from "./components/CredentialsForm";
 export {
