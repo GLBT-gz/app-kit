@@ -20,6 +20,8 @@ sha2.workspace = true
 rand.workspace = true
 opener.workspace = true
 winreg.workspace = true
+# commit 12：withRetry 抽象需要 tokio::time::sleep（异步等间隔）
+tokio = { workspace = true, features = ["time"] }
 tauri = { version = "2", optional = true }
 # SQLite 数据库表管理（仅 cmd-db 启用时编译，项目按需启用）
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }

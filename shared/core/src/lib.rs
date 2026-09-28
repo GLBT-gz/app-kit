@@ -3,6 +3,7 @@ pub mod encoding;
 pub mod nas_release;
 pub mod store;
 pub mod system;
+pub mod util;
 
 /// 浏览器检测/配置/进程管理（仅启用 `cmd-browser` 时编译）
 #[cfg(feature = "cmd-browser")]
@@ -15,6 +16,7 @@ pub use config::*;
 pub use encoding::*;
 pub use store::*;
 pub use system::*;
+pub use util::*;
 
 #[cfg(feature = "cmd-browser")]
 pub use browser::*;
