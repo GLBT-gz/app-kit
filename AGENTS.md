@@ -35,3 +35,4 @@ scripts/            构建/工具脚本
 - git 规范：`<type>(<scope>): 中文`；改 Rust 必须 `cargo check` 通过。
 - **多人共用 worktree 协作纪律**（2026-09-21 真实事故教训）：commit 前**必看** `git status` + `git diff --cached --stat`，确认 staged 只含自己的改动——`git checkout HEAD -- <file>` / `git restore <file>` 会**静默覆盖** worktree 里**任何人未提交的本地修改**（git 不可逆）。详细 → `../my-skills/git-工作流/references/多人协作-worktree事故教训.md`。
 - **协作纪律总则（2026-09-22 立，覆盖多 AI 并行 / 多工具 / 多机器）**：本条目是「动手前」纪律，全局版在 [`../my-skills/docs/AI协作纪律.md`](../my-skills/docs/AI协作纪律.md)——核心两点：**未提交改动 = 必须 commit 再 pull，禁止静默覆盖**；**多 AI 并行时看到非自己改动 → 停下问用户**。
+- **开发规范继承**：app-kit 仓**不**重复一份「行数硬限制 / 函数 ≤80 行 / 命名」开发规范（避免 DRY 违反）—— 引用工作区权威 `../../AI_DEVELOPMENT_RULES.md`（line 3 自述"唯一权威"）。本仓纪律只补 framework 特有项（业务无关 / cargo check / 保持 tauri-bridge 命令注册唯一入口）。
