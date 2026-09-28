@@ -46,6 +46,9 @@ export interface ShopListPanelProps {
   currentShop?: string | null;
   /** 顶部提示文字（如「拖拽排序 · 长按开关批量操作」） */
   hint?: string;
+  /** 隐藏列表总数（`.shop-card-count`）—— 业务侧 title ReactNode 已包含自身 count 时用，
+   *  避免和外层 count 重复（如 016 合并 header 行场景）。向后兼容：默认 false（仍显示）。 */
+  hideCount?: boolean;
   /** 显示 全选/全不选/默认选择 按钮组 */
   showBulkButtons?: boolean;
   /** 店铺无主体（entity）时显示「未配置主体」标签（仅 Temu 每周店铺分析等需要按主体核算的场景开启） */
@@ -86,6 +89,7 @@ export function ShopListPanel({
   shopSummaries,
   currentShop,
   hint,
+  hideCount = false,
   showBulkButtons = false,
   showNoEntity = false,
   onBatchToggle,
@@ -230,7 +234,7 @@ export function ShopListPanel({
     <div className={`shop-section${className ? ` ${className}` : ""}`}>
       <div className="shop-card-header">
         <span className="shop-card-title">{title}</span>
-        <span className="shop-card-count">{orderedShops.length}</span>
+        {!hideCount && <span className="shop-card-count">{orderedShops.length}</span>}
         <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
         {showBulkButtons && (
           <>
