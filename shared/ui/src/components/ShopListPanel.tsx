@@ -51,6 +51,16 @@ export interface ShopListPanelProps {
   hideCount?: boolean;
   /** 显示 全选/全不选/默认选择 按钮组 */
   showBulkButtons?: boolean;
+  /**
+   * 紧凑批量按钮模式（2026-09-29 user 反馈）：开启后只渲染「全选/全不选」(toggle 单按钮) +
+   * 「默认排序」2 个按钮；隐藏「默认选择」「全选」「全不选」三个独立按钮。
+   * 行为说明：
+   *   - 「全选/全不选」按钮文字动态切换：全部已选 → 「取消全选」；否则 → 「全选」
+   *   - derived state 自动响应单店 toggle（enabledMap 变化时自动重算 allSelected）
+   *   - 默认 false —— 保持现有 4 按钮行为不变；现有 002/009/015 项目不受影响
+   * 适用场景：业务方不需要「默认选择」（按 entity 过滤）能力时，减少视觉拥挤。
+   */
+  compactBulkButtons?: boolean;
   /** 店铺无主体（entity）时显示「未配置主体」标签（仅 Temu 每周店铺分析等需要按主体核算的场景开启） */
   showNoEntity?: boolean;
   /** 批量切换开始时回调（003 用于写日志） */
@@ -91,6 +101,7 @@ export function ShopListPanel({
   hint,
   hideCount = false,
   showBulkButtons = false,
+  compactBulkButtons = false,
   showNoEntity = false,
   onBatchToggle,
   onBatchEnd,
@@ -230,13 +241,34 @@ export function ShopListPanel({
     if (wasBatch) onBatchEnd?.();
   }, [onToggle, onBatchEnd]);
 
+  // ── [2026-09-29] compactBulkButtons 模式：全选/全不选 toggle 单按钮 ──
+  // derived state 直接算（无需 useState）—— enabledMap 变化时自动重算
+  const compactAllSelected = compactBulkButtons
+    && orderedShops.length > 0
+    && orderedShops.every((s) => !!enabledMap[s.mall_name]);
+  const handleCompactSelectAllToggle = useCallback(() => {
+    // 当前全选 → 点 → 全不选；否则 → 全选（保留 1-3 切换语义）
+    const target = !compactAllSelected;
+    orderedShops.forEach((s) => onToggle(s.mall_name, target));
+  }, [compactAllSelected, orderedShops, onToggle]);
+
   return (
     <div className={`shop-section${className ? ` ${className}` : ""}`}>
       <div className="shop-card-header">
         <span className="shop-card-title">{title}</span>
         {!hideCount && <span className="shop-card-count">{orderedShops.length}</span>}
         <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
-        {showBulkButtons && (
+        {compactBulkButtons ? (
+          // [2026-09-29] 紧凑模式：单按钮 toggle（避免按钮组拥挤；016 用户反馈）
+          <button
+            className="shop-select-all-btn"
+            onClick={handleCompactSelectAllToggle}
+            disabled={orderedShops.length === 0}
+            title={compactAllSelected ? "取消全选" : "全选"}
+          >
+            {compactAllSelected ? "取消全选" : "全选"}
+          </button>
+        ) : showBulkButtons && (
           <>
             <button className="shop-default-select-btn" onClick={() => { orderedShops.forEach(s => { if (s.entity) onToggle(s.mall_name, true); }); }} title="仅选择已配置主体的店铺">默认选择</button>
             <button className="shop-select-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, true)); }} title="全选">全选</button>
