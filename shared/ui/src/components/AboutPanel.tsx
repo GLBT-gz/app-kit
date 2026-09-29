@@ -94,7 +94,7 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
     setIsDownloading(true);
     try {
       const nameClean = appName.replace(/[^a-zA-Z\u4e00-\u9fff0-9]+/g, "-").replace(/^-|-$/g, "");
-      // 默认文件名直接取安装包原名（versions.json 的 url 最后一段），
+      // 默认文件名直接取安装包原名（优先 smb_path，fallback url），
       // 与发布流程「安装包保持打包原名」一致，避免硬编码前缀导致命名不一致
       const urlName = (v.smb_path || v.url).split(/[\\/]/).pop();
       const defaultName = urlName ? decodeURIComponent(urlName) : `${nameClean}-${v.version}-x64-setup.exe`;
@@ -109,7 +109,10 @@ export function AboutPanel({ appId = "template", appName = "GLBT" }: AboutPanelP
       });
       unlistenRef.current = unlisten;
 
-      const result = await installVersion(v.url, savePath);
+      // v0.2.6+ versions.json NAS-only entry 没有 url 字段（只有 smb_path），
+      // 传 undefined 给 Rust 命令会报 "missing required key url"。
+      // 优先 smb_path，fallback url（兼容老版本 entry）
+      const result = await installVersion(v.smb_path || v.url, savePath);
       setDownloadPercent(100);
 
       setResultMsg({
