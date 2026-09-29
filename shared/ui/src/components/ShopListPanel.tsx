@@ -257,22 +257,31 @@ export function ShopListPanel({
       <div className="shop-card-header">
         <span className="shop-card-title">{title}</span>
         {!hideCount && <span className="shop-card-count">{orderedShops.length}</span>}
-        <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
+        {/* [2026-09-29 user feedback v2] compactBulkButtons 模式顺序：「全选/取消全选」在前，「默认排序」在后（user 反馈更顺手）；
+            showBulkButtons（4 按钮）模式顺序保持原状「默认排序 | 默认选择 | 全选 | 全不选」不影响 002/009/015 项目 */}
         {compactBulkButtons ? (
-          // [2026-09-29] 紧凑模式：单按钮 toggle（避免按钮组拥挤；016 用户反馈）
-          <button
-            className="shop-select-all-btn"
-            onClick={handleCompactSelectAllToggle}
-            disabled={orderedShops.length === 0}
-            title={compactAllSelected ? "取消全选" : "全选"}
-          >
-            {compactAllSelected ? "取消全选" : "全选"}
-          </button>
-        ) : showBulkButtons && (
+          // 紧凑模式：单按钮 toggle（避免按钮组拥挤；016 用户反馈）
           <>
-            <button className="shop-default-select-btn" onClick={() => { orderedShops.forEach(s => { if (s.entity) onToggle(s.mall_name, true); }); }} title="仅选择已配置主体的店铺">默认选择</button>
-            <button className="shop-select-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, true)); }} title="全选">全选</button>
-            <button className="shop-deselect-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, false)); }} title="全不选">全不选</button>
+            <button
+              className="shop-select-all-btn"
+              onClick={handleCompactSelectAllToggle}
+              disabled={orderedShops.length === 0}
+              title={compactAllSelected ? "取消全选" : "全选"}
+            >
+              {compactAllSelected ? "取消全选" : "全选"}
+            </button>
+            <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
+          </>
+        ) : (
+          <>
+            <button className="shop-restore-btn" onClick={onRestore} title="恢复默认排序">默认排序</button>
+            {showBulkButtons && (
+              <>
+                <button className="shop-default-select-btn" onClick={() => { orderedShops.forEach(s => { if (s.entity) onToggle(s.mall_name, true); }); }} title="仅选择已配置主体的店铺">默认选择</button>
+                <button className="shop-select-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, true)); }} title="全选">全选</button>
+                <button className="shop-deselect-all-btn" onClick={() => { orderedShops.forEach(s => onToggle(s.mall_name, false)); }} title="全不选">全不选</button>
+              </>
+            )}
           </>
         )}
         {hint && <span className="shop-card-hint">{hint}</span>}
